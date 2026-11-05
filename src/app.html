@@ -289,6 +289,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .rrow b{font-size:18px}
 .rrow span{font-size:15px;color:var(--muted)}
 .rrow.off{opacity:.45}
+.away-ev{background:repeating-linear-gradient(135deg,var(--c) 0 10px,color-mix(in srgb,var(--c) 55%,#fff) 10px 20px)}
 .tabbar{display:none}
 @media (max-width:900px){
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
@@ -650,8 +651,25 @@ const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p
 function itemsForDay(key){
   const out=[];
   for(const e of S.events) if(shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
-  for(const f of S.flights){ if(!shown([f.who])) continue; const s=new Date(f.start); if(dk(s)===key) out.push({k:'fl',sort:String(s.getHours()).padStart(2,'0')+':'+String(s.getMinutes()).padStart(2,'0'),f}); }
+  const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const flyers=new Set();
+  for(const f of S.flights){ if(!shown([f.who])) continue; const s=new Date(f.start), e=new Date(f.end);
+    if(dk(s)===key){ out.push({k:'fl',sort:hhmm(s),f}); flyers.add(f.who); }
+    if(dk(e)===key&&dk(s)!==key){ out.push({k:'arr',sort:hhmm(e),f}); flyers.add(f.who); } }
+  // whole days away: show where they are, so a trip reads as one continuous stretch until they land
+  for(const pid of new Set(S.flights.map(f=>f.who))){ if(flyers.has(pid)||!shown([pid])) continue;
+    const w=whereAt(pid,new Date(key+'T12:00')); if(w) out.push({k:'away',sort:'00:00',who:pid,w}); }
   return out.sort((a,b)=>a.sort.localeCompare(b.sort));
+}
+// where a person is at a moment, from their flights: null = home
+function whereAt(pid,t){
+  let loc=null;
+  for(const f of S.flights.filter(x=>x.who===pid).sort((a,b)=>new Date(a.start)-new Date(b.start))){
+    const s=new Date(f.start), e=new Date(f.end);
+    if(s<=t&&t<e) return {air:f};
+    if(e<=t) loc=f.to; else break;
+  }
+  return loc&&!HOME.includes(loc)&&AIRPORTS[loc]?{code:loc}:null;
 }
 function evBg(whos){ const cs=whos.map(col); if(cs.length<2) return cs[0]||'#e5e7eb'; const step=100/cs.length; return `linear-gradient(135deg,${cs.map((c,i)=>`${c} ${(i*step).toFixed(0)}%,${c} ${((i+1)*step).toFixed(0)}%`).join(',')})`; }
 function evHTML(it,compact){
@@ -660,6 +678,17 @@ function evHTML(it,compact){
     if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
     const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
     return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${e.time?t12(e.time):'All day'}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}</button>`;
+  }
+  if(it.k==='away'){
+    const c=col(it.who), a=it.w.code?AIRPORTS[it.w.code]:null, txt=a?`💼 In ${esc(a[0])} ${a[3]}`:`✈️ Flying ${esc(it.w.air.from)}→${esc(it.w.air.to)}`;
+    if(compact) return `<div class="mpill" style="background:${c};opacity:.75">${txt}</div>`;
+    return `<button class="ev away-ev" style="--c:${c}" data-where="1"><small>All day · ${esc(nm(it.who))}</small>${txt}</button>`;
+  }
+  if(it.k==='arr'){
+    const f=it.f, b=AIRPORTS[f.to], e=new Date(f.end), home=HOME.includes(f.to);
+    const lbl=`🛬 ${home?'Home':'Lands '+esc(b?b[0]:f.to)} ${fmtTime(e,'Pacific/Auckland')}`;
+    if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
+    return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(e,'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')} lands</small>${lbl}<small>✈️ ${esc(f.from)}→${esc(f.to)}${b&&b[1]!=='Pacific/Auckland'?` · ${new Intl.DateTimeFormat('en-NZ',{timeZone:b[1],weekday:'short'}).format(e)} ${fmtTime(e,b[1])} ${esc(b[0])} time`:''}${f.signOut&&home?` · signs out ${fmtTime(new Date(f.signOut),'Pacific/Auckland')}`:''}</small></button>`;
   }
   const f=it.f, lbl=`✈️ ${esc(f.from)}→${esc(f.to)}`;
   if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
@@ -687,6 +716,7 @@ function renderCal(){
   }
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
   cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
   cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
 }
 
