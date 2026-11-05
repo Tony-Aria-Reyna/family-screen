@@ -1544,6 +1544,21 @@ else {
   SYNC.watchAuth(u=>{ if(!u){ SYNC.stop(); gate('signin'); } else enterHome(); });
 }
 setInterval(renderClock,15000);
+/* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
+const FS_VERSION='/*@VERSION@*/';
+let updateReady=false;
+async function checkUpdate(){
+  if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
+  try{ const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); const v=(await r.json()).version; if(v&&v!==FS_VERSION){ updateReady=true; applyUpdate(); } }catch(e){}
+}
+function applyUpdate(){
+  if(!updateReady) return;
+  const busy=(drag&&drag.live)||$('#layer').innerHTML||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  if(busy){ setTimeout(applyUpdate,30000); return; }
+  location.reload();
+}
+setInterval(checkUpdate,5*60e3); setTimeout(checkUpdate,20e3);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkUpdate(); });
 let lastDay=dk(new Date()); setInterval(()=>{ if(dk(new Date())!==lastDay){ lastDay=dk(new Date()); renderCal(); renderTodo(); } },60000);
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
