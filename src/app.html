@@ -282,6 +282,13 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .io-go{background:var(--accent);border-radius:14px;padding:12px 22px;font-size:18px;font-weight:800}
 .io-no{background:var(--soft);border-radius:14px;padding:8px 14px;font-size:15px}
 @media (max-width:900px){ .instOffer{left:10px;right:10px;bottom:90px} }
+.rlist{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.rrow{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--line);border-radius:16px;padding:10px 14px;cursor:pointer}
+.rrow input{width:24px;height:24px;margin-top:2px;flex:none}
+.rrow div{display:flex;flex-direction:column;gap:2px}
+.rrow b{font-size:18px}
+.rrow span{font-size:15px;color:var(--muted)}
+.rrow.off{opacity:.45}
 .tabbar{display:none}
 @media (max-width:900px){
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
@@ -340,6 +347,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 
 <script>/*@LIBS@*/</script>
 <script>/*@SYNC@*/</script>
+<script>/*@ROSTER@*/</script>
 <script>const WORLD=/*@WORLD@*/;</script>
 <script>
 /* ================= storage ================= */
@@ -503,13 +511,13 @@ function travellerNow(now){
   const tp=traveller(); if(!tp) return null;
   if(S.override){ if(S.override.code==='HOME') return null; const a=AIRPORTS[S.override.code]; return a?{tp,code:S.override.code,a,manual:true}:null; }
   const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>new Date(a.start)-new Date(b.start));
-  let loc=null, inAir=null;
-  for(const f of fl){ const s=new Date(f.start), e=new Date(f.end); if(s<=now&&now<e){ inAir=f; break; } if(e<=now) loc=f.to; }
+  let loc=null, inAir=null, last=null;
+  for(const f of fl){ const s=new Date(f.start), e=new Date(f.end); if(s<=now&&now<e){ inAir=f; break; } if(e<=now){ loc=f.to; last=f; } }
   const next=fl.find(f=>new Date(f.start)>now);
   if(inAir){ return {tp,air:inAir,code:inAir.to,a:AIRPORTS[inAir.to]||null,from:AIRPORTS[inAir.from]||null,next}; }
   if(!loc||HOME.includes(loc)) return null;
   const a=AIRPORTS[loc]; if(!a) return null;
-  return {tp,code:loc,a,next};
+  return {tp,code:loc,a,next,last};
 }
 
 /* ================= clocks ================= */
@@ -651,11 +659,12 @@ function evHTML(it,compact){
     const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
     if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
     const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
-    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${e.time?t12(e.time):'All day'}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}</button>`;
+    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${e.time?t12(e.time):'All day'}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}</button>`;
   }
   const f=it.f, lbl=`✈️ ${esc(f.from)}→${esc(f.to)}`;
   if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
-  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(new Date(f.start),'Pacific/Auckland')} · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}</button>`;
+  const fa=AIRPORTS[f.from], loc=fa&&fa[1]!=='Pacific/Auckland'?`<small>${new Intl.DateTimeFormat('en-NZ',{timeZone:fa[1],weekday:'short'}).format(new Date(f.start))} ${fmtTime(new Date(f.start),fa[1])} ${esc(fa[0])} time</small>`:'';
+  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(new Date(f.start),'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}${loc}</button>`;
 }
 function renderCal(){
   const cal=$('#cal'), todayKey=dk(new Date());
@@ -943,7 +952,8 @@ function openFlight(f){
     m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>
     <p style="font-size:21px">Leaves <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
     Lands <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
-    <p class="note">From the roster. To change it, load an updated roster in 🔗 Calendars.</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
+    ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time':''}<br>`:''}${f.hotel?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
+    <p class="note">From the roster. To change it, load an updated roster (📄 Load roster PDF).</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
     m.querySelector('#ok').onclick=close;
   });
 }
@@ -1008,7 +1018,7 @@ function openGlobe(){
       <div class="t" style="font-size:28px">Lands in ${relTime(new Date(r.air.end),now)}</div>
       <div class="s">Somewhere ${whereOver(planeLL)} (estimated)<br>Lands ${fmtTime(new Date(r.air.end),r.a[1])} ${esc(r.a[0])} time · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ time</div>
       <div class="bar2" style="height:8px;border-radius:99px;background:rgba(255,255,255,.7);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${(frac*100).toFixed(0)}%;background:#2b2f3a"></i></div></div>`;
-    return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away</div></div>`;
+    return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away${r.last&&r.last.hotel?`<br>🏨 Staying at ${esc(r.last.hotel.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))}`:''}${r.next&&r.next.pickup?`<br>🚐 Pick-up ${fmtD(new Date(r.next.pickup),{weekday:'short'})} ${fmtTime(new Date(r.next.pickup),r.a[1])} ${esc(r.a[0])} time`:''}</div></div>`;
   };
   const homeT=hm(now,'Pacific/Auckland');
   const etaCard=eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
@@ -1018,7 +1028,7 @@ function openGlobe(){
      ${herCard()}${etaCard}
      <div class="icard" style="background:#fff6d6"><div class="c">🏠 Home · Auckland 🇳🇿</div><div class="t" style="font-size:30px">${homeT.txt}<small style="font-size:18px">${homeT.ap}</small></div><div class="s">${dateIn(now,'Pacific/Auckland')}</div></div>
      <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(new Date(r.next.start),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?'The plane position is worked out from the rostered times, so it is an estimate. ':''}The shaded side is night time. Drag the globe to spin it.</span></div>
-     <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button class="close" id="gClose">✕ Back</button></div>
+     <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button id="gPdf">📄 Load new roster</button><button class="close" id="gClose">✕ Back</button></div>
    </div></div>`;
 
   const stage=$('#stage'), rect=stage.getBoundingClientRect();
@@ -1088,6 +1098,7 @@ function openGlobe(){
   svg.addEventListener('pointerup',()=>dg=null); svg.addEventListener('pointercancel',()=>dg=null);
   $('#gSpin').onclick=()=>spinTo(target,1400);
   $('#gSet').onclick=()=>openWhere(()=>{ openGlobe(); });
+  $('#gPdf').onclick=()=>{ cancelAnimationFrame(globeTimer); L.innerHTML=''; pickRosterPdf(); };
   $('#gClose').onclick=()=>{ cancelAnimationFrame(globeTimer); L.innerHTML=''; };
 }
 
@@ -1233,6 +1244,63 @@ function openAddLink(who){
   });
 }
 
+/* ================= roster PDF import ================= */
+async function pdfLines(file){
+  const pdfjs=await import(new URL('lib/pdf.min.mjs',location.href).href);
+  pdfjs.GlobalWorkerOptions.workerSrc=new URL('lib/pdf.worker.min.mjs',location.href).href;
+  const doc=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  const lines=[];
+  for(let p=1;p<=doc.numPages;p++){ const pg=await doc.getPage(p); const tc=await pg.getTextContent(); const rows={};
+    tc.items.filter(i=>i.str).forEach(i=>{ const y=Math.round(i.transform[5]); (rows[y]=rows[y]||[]).push(i); });
+    Object.keys(rows).map(Number).sort((a,b)=>b-a).forEach(y=>lines.push(rows[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(''))); }
+  return lines;
+}
+const DUTY_NAMES={CBT:'Training (CBT)',LOF:'LOF',SBY:'Standby',RES:'Reserve',AL:'Annual leave',SIC:'Sick leave',TRG:'Training',GND:'Ground duty',MTG:'Meeting'};
+function pickRosterPdf(who){
+  const tp=who?person(who):traveller(); if(!tp){ toast('In ⚙️ Settings, tick who travels for work first'); return; }
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf,.pdf';
+  inp.onchange=()=>{ const f=inp.files[0]; if(f) importRosterPdf(f,tp.id); }; inp.click();
+}
+async function importRosterPdf(file,who){
+  toast('Reading the roster…');
+  let r;
+  try{ r=parseRosterLines(await pdfLines(file),{airports:AIRPORTS}); }
+  catch(e){ console.error(e); toast('Could not read that PDF'); return; }
+  if(!r.legs.length&&!r.duties.length){ modal((m,close)=>{ m.innerHTML=`<h2>Hmm, no flights found</h2><p class="note">That PDF doesn't look like a crew roster this reader knows. Send it to Claude so the reader can learn its layout.</p>${r.warnings.length?`<p class="note">${r.warnings.map(esc).join('<br>')}</p>`:''}<div class="mact"><button class="save" id="ok">OK</button></div>`; m.querySelector('#ok').onclick=close; }); return; }
+  const nzT=d=>fmtD(d,{weekday:'short',day:'numeric',month:'short'})+' '+fmtTime(d,'Pacific/Auckland');
+  const lt=(d,code)=>{ const a=AIRPORTS[code]; return a&&a[1]!=='Pacific/Auckland'?`${new Intl.DateTimeFormat('en-NZ',{timeZone:a[1],weekday:'short'}).format(d)} ${fmtTime(d,a[1])} ${a[0]} time`:''; };
+  const keep=r.legs.map(()=>true), keepD=r.duties.map(()=>true);
+  const tpName=esc(tName(person(who)));
+  modal((m,close)=>{ const draw=()=>{
+    m.innerHTML=`<h2>📄 Check ${tpName}'s roster</h2>
+    <p class="note">${esc(r.name||file.name)} · ${r.first?fmtD(kd(r.first),{day:'numeric',month:'short'}):''} – ${r.last?fmtD(kd(r.last),{day:'numeric',month:'short'}):''} · ${r.legs.length} flights${r.duties.length?` · ${r.duties.length} other duties`:''}. Untick anything that's wrong. All times are worked out for NZ, with local time beside them.</p>
+    <div class="rlist">${r.legs.map((l,i)=>{ const a=AIRPORTS[l.from], b=AIRPORTS[l.to]; return `<label class="rrow ${keep[i]?'':'off'}"><input type="checkbox" data-k="${i}" ${keep[i]?'checked':''}>
+      <div><b>${new Intl.DateTimeFormat('en-NZ',{timeZone:a?a[1]:'Pacific/Auckland',weekday:'short',day:'numeric',month:'short'}).format(l.dep)} · ${esc(l.flight||'✈️')} ${a?a[3]:''} ${esc(a?a[0]:l.from)} → ${b?b[3]:''} ${esc(b?b[0]:l.to)}</b>
+      <span>${l.fromPrevious?'From last roster · ':''}${l.pickup?`Pick-up ${fmtTime(l.pickup,a[1])} · `:''}${l.report?`Report ${fmtTime(l.report,a[1])} · `:''}Departs ${fmtTime(l.dep,a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}</span>
+      <span>Lands ${nzT(l.arr)} NZ${lt(l.arr,l.to)?' · '+lt(l.arr,l.to):''}${l.signOut?` · signs out ${fmtTime(l.signOut,b[1])}`:''}</span>
+      ${l.hotel?`<span>🏨 ${esc(l.hotel)}</span>`:''}</div></label>`; }).join('')}
+    ${r.duties.map((d,i)=>`<label class="rrow ${keepD[i]?'':'off'}"><input type="checkbox" data-d="${i}" ${keepD[i]?'checked':''}><div><b>${fmtD(kd(d.date),{weekday:'short',day:'numeric',month:'short'})} · ${esc(DUTY_NAMES[d.code]||d.code)}</b><span>${d.start?t12(d.start)+(d.end?' – '+t12(d.end):''):'All day'}${d.venue?' · '+esc(d.venue):''}</span></div></label>`).join('')}</div>
+    ${r.warnings.length?`<p class="note">⚠️ ${r.warnings.map(esc).join('<br>⚠️ ')}</p>`:''}
+    <p class="note">This replaces anything already on ${tpName}'s calendar from an earlier roster for these dates.</p>
+    <div class="mact"><button class="cancel" id="rc">Cancel</button><button class="save" id="rs">✓ Add to the calendar</button></div>`;
+    m.querySelectorAll('[data-k]').forEach(x=>x.onchange=()=>{ keep[+x.dataset.k]=x.checked; draw(); });
+    m.querySelectorAll('[data-d]').forEach(x=>x.onchange=()=>{ keepD[+x.dataset.d]=x.checked; draw(); });
+    m.querySelector('#rc').onclick=close;
+    m.querySelector('#rs').onclick=()=>{
+      const lo=r.first?kd(r.first).getTime()-DAYMS:0, hi=r.last?kd(r.last).getTime()+2*DAYMS:0;
+      const inRange=t=>t>=lo&&t<=hi;
+      S.flights=S.flights.filter(f=>!(f.who===who&&inRange(new Date(f.start).getTime())));
+      S.events=S.events.filter(e=>!(e.roster&&e.whos.includes(who)&&inRange(kd(e.date).getTime())));
+      const sid=uid(), iso=d=>d?d.toISOString():null;
+      r.legs.forEach((l,i)=>{ if(!keep[i]) return; S.flights.push({id:'r-'+who+'-'+(l.flight||l.from)+'-'+l.dep.getTime().toString(36),who,src:sid,flight:l.flight,from:l.from,to:l.to,start:iso(l.dep),end:iso(l.arr),report:iso(l.report),signOut:iso(l.signOut),pickup:iso(l.pickup),hotel:l.hotel||'',ac:l.ac||''}); });
+      r.duties.forEach((d,i)=>{ if(!keepD[i]) return; S.events.push({id:'r-'+who+'-'+d.date+'-'+d.code,whos:[who],title:DUTY_NAMES[d.code]||d.code,date:d.date,time:d.start,src:sid,roster:true,note:[d.end?'until '+t12(d.end):'',d.venue].filter(Boolean).join(' · ')}); });
+      const used=new Set([...S.flights.map(f=>f.src),...S.events.map(e=>e.src)]); S.sources=S.sources.filter(s=>used.has(s.id)||s.url);
+      S.sources.push({id:sid,who,type:'roster',label:file.name.replace(/\.pdf$/i,''),count:keep.filter(Boolean).length+keepD.filter(Boolean).length,at:Date.now(),pdf:true});
+      S.override=null; save(); close(); renderAll(); toast(`Added ${keep.filter(Boolean).length} flights to ${tName(person(who))}'s calendar`);
+    };
+  }; draw(); });
+}
+
 /* ================= calendar setup tool ================= */
 function openSync(){
   modal((m,close)=>{ const draw=()=>{
@@ -1248,12 +1316,12 @@ function openSync(){
     ${S.people.map(p=>`<div class="srccard"><h4><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</h4>
       ${srcs(p.id).map(s=>`<div class="srcline"><span>${s.type==='roster'?'✈️ Work roster':s.type==='school'?'🏫 School':'📅 Calendar'}: <b>${esc(s.label)}</b></span>
         ${s.url?(s.err?`<span class="pill-wait">⚠️ ${esc(s.err)}</span>`:`<span class="pill-ok">🔗 live · ${s.count||0} entries · updated ${s.at?fmtTime(new Date(s.at),'Pacific/Auckland'):'—'}</span>`)
-               :`<span class="pill-ok">📂 ${s.count} entries · loaded ${s.at?fmtD(s.at,{day:'numeric',month:'short'}):''}</span>`}
+               :`<span class="pill-ok">${s.pdf?'📄':'📂'} ${s.count} entries · loaded ${s.at?fmtD(s.at,{day:'numeric',month:'short'}):''}</span>`}
         ${s.url?`<button class="xbtn" data-refresh="${s.id}">🔄 Update now</button>`:''}<button class="xbtn" data-rm="${s.id}">Remove</button></div>`).join('')||'<div class="srcline note">Nothing connected yet.</div>'}
       <div class="srcline">
         <button class="xbtn" data-link="${p.id}">🔗 Add a live link</button>
         <label class="xbtn">📂 Load a calendar file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="cal" style="display:none"></label>
-        ${p.traveller?`<label class="xbtn">✈️ Load roster file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="roster" style="display:none"></label>`:''}
+        ${p.traveller?`<button class="xbtn" data-pdf="${p.id}" style="background:#ffe5a8;font-weight:800">📄 Load roster PDF</button>`:''}
         <label class="xbtn">🏫 School calendar file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="school" style="display:none"></label>
       </div></div>`).join('')}
     <div class="step">Where to find a calendar's link</div>
@@ -1265,6 +1333,7 @@ function openSync(){
     <div class="mact"><button class="save" id="ok">Done</button></div>`;
     const hg=m.querySelector('#helperGo')||m.querySelector('#helperRe'); if(hg) hg.onclick=()=>{ close(); openHelperSetup(()=>openSync()); };
     m.querySelectorAll('[data-link]').forEach(b=>b.onclick=()=>{ close(); openAddLink(b.dataset.link); });
+    m.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>{ close(); pickRosterPdf(b.dataset.pdf); });
     m.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=async()=>{ const src=S.sources.find(x=>x.id===b.dataset.refresh); b.textContent='Updating…';
       try{ const t=await fetchLink(src); applySource(src,parseICS(t,src.who,src.type==='roster',src.id)); src.err=''; toast(`Updated: ${src.count} entries`); }catch(e){ src.err=e.message||'could not update'; toast('Could not update: '+src.err); }
       save(); renderAll(); draw(); });

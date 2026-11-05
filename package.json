@@ -15,6 +15,7 @@
     "d3-geo": "^3.1.2",
     "esbuild": "^0.28.2",
     "firebase": "^12.19.0",
+    "pdfjs-dist": "^4.10.38",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
   },
