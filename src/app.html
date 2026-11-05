@@ -1500,7 +1500,7 @@ function syncChanged(what,err){
 function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLinks(false),4000); }
 
 /* ================= boot ================= */
-function renderAll(){ if(!S.people.length) return; renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); }
+function renderAll(){ if(!S.people.length) return; if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=openSettings;
 $('#globeBtn').onclick=openGlobe;

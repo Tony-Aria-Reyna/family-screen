@@ -67,7 +67,8 @@ function parseRosterLines(lines, opts) {
       }
       continue;
     }
-    if (actC && !/^[\/\\]$/.test(actC) && /^[A-Z][A-Z0-9-]{1,9}$/.test(actC)) {  // other duties: training, standby, leave…
+    const DAYS_OFF = ['LOF'];                                  // roster codes that just mean a day off
+    if (actC && !/^[\/\\]$/.test(actC) && !DAYS_OFF.includes(actC) && /^[A-Z][A-Z0-9-]{1,9}$/.test(actC)) {  // other duties: training, standby, leave…
       const venue = (notesC.match(/Venue:\s*(.+)/) || [])[1] || '';
       const s = rep[1], e = rep[2];
       const allDay = !s || s === '0000' && (!e || e === '2359');
