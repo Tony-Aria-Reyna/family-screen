@@ -290,6 +290,20 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .rrow span{font-size:15px;color:var(--muted)}
 .rrow.off{opacity:.45}
 .away-ev{background:repeating-linear-gradient(135deg,var(--c) 0 10px,color-mix(in srgb,var(--c) 55%,#fff) 10px 20px)}
+.modal.wide{width:min(1180px,97vw)}
+.addgrid{display:grid;grid-template-columns:1.2fr 1fr;gap:0 30px}
+.whatwhere{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
+@media (min-width:901px){
+  .modal.wide{padding:18px 26px}
+  .modal.wide .step{margin:10px 0 6px}
+  .modal.wide .opt{padding:9px 14px;font-size:18px;min-width:0;border-width:2px}
+  .modal.wide .txt{padding:11px 14px;font-size:21px}
+  .modal.wide .mact{margin-top:12px}
+  .modal.wide .wheel{height:168px}.modal.wide .wheel .pad,.modal.wide .wi{height:56px}.modal.wide .wheels:before{height:56px;margin-top:-28px}
+}
+@media (max-width:900px){ .addgrid,.whatwhere{display:block} }
+.addr{color:#1f6feb!important;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.navbtn{text-decoration:none;color:var(--ink);white-space:nowrap;flex:none}
 .tabbar{display:none}
 @media (max-width:900px){
   body{font-size:18px}
@@ -483,6 +497,9 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function at(d,h,m){ const x=new Date(d); x.setHours(h,m||0,0,0); return x; }
 function monday(d){ const x=new Date(d); x.setHours(12,0,0,0); return addDays(x,-((x.getDay()+6)%7)); }
 const uid=()=>Math.random().toString(36).slice(2,10);
+const navUrl=a=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(a);
+function endOf(hm,dur){ const [h,m]=hm.split(':').map(Number), t=Math.min(23*60+59,h*60+m+(dur||0)); return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
+function tRange(e){ return e.time?t12(e.time)+(e.dur?'–'+t12(endOf(e.time,e.dur)):''):'All day'; }
 function t12(hm){ if(!hm) return ''; const [h,m]=hm.split(':').map(Number); return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?'am':'pm'); }
 const fmtD=(d,o)=>new Date(d).toLocaleDateString('en-NZ',o);
 
@@ -735,7 +752,7 @@ function evHTML(it,compact){
     const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
     if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
     const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
-    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${e.time?t12(e.time):'All day'}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}</button>`;
+    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${tRange(e)}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}${e.addr?`<small class="addr" data-nav="${esc(e.addr)}">📍 ${esc(e.addr)}</small>`:''}</button>`;
   }
   if(it.k==='away'){
     const c=col(it.who), a=it.w.code?AIRPORTS[it.w.code]:null, txt=a?`💼 In ${esc(a[0])} ${a[3]}`:`✈️ Flying ${esc(it.w.air.from)}→${esc(it.w.air.to)}`;
@@ -772,6 +789,7 @@ function renderCal(){
     }
     cal.innerHTML=h+'</div>';
   }
+  if(isPhone()&&$('#pcal')) renderPCal();
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
   cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
@@ -780,7 +798,7 @@ function renderCal(){
 
 /* ================= press-and-drag (touch: press & hold; mouse: just drag) ================= */
 let drag=null, suppressClick=false;
-window.addEventListener('click',e=>{ if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
+window.addEventListener('click',e=>{ const nv=e.target.closest&&e.target.closest('[data-nav]'); if(nv&&!suppressClick){ e.stopPropagation(); e.preventDefault(); window.open(navUrl(nv.dataset.nav),'_blank','noopener'); return; } if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
 document.addEventListener('touchmove',e=>{ if(drag&&drag.live) e.preventDefault(); },{passive:false});
 document.addEventListener('contextmenu',e=>{ if(e.target.closest('[data-lift]')) e.preventDefault(); });
 function liftable(el,opts){
@@ -950,24 +968,32 @@ function renderShop_(){
 
 /* ================= time wheels (like the Android alarm) ================= */
 function makeWheel(values,idx,onPick,cls){
-  const w=document.createElement('div'); w.className='wheel'+(cls?' '+cls:''); const H=64;
+  const w=document.createElement('div'); w.className='wheel'+(cls?' '+cls:''); const hh=()=>{ const el=w.querySelector('.wi'); return (el&&el.getBoundingClientRect().height)||64; };
   w.innerHTML='<div class="pad"></div>'+values.map((v,i)=>`<div class="wi" data-i="${i}">${v}</div>`).join('')+'<div class="pad"></div>';
   const mark=i=>w.querySelectorAll('.wi').forEach((el,j)=>el.classList.toggle('sel',j===i));
   let t, cur=idx; mark(idx);
-  w.addEventListener('scroll',()=>{ const i=Math.max(0,Math.min(values.length-1,Math.round(w.scrollTop/H))); if(i!==cur){ cur=i; mark(i); } clearTimeout(t); t=setTimeout(()=>onPick(cur),80); });
-  w.querySelectorAll('.wi').forEach(el=>el.onclick=()=>w.scrollTo({top:+el.dataset.i*H,behavior:'smooth'}));
-  w.setTo=i=>{ w.scrollTop=i*H; cur=i; mark(i); };
+  w.addEventListener('scroll',()=>{ const i=Math.max(0,Math.min(values.length-1,Math.round(w.scrollTop/hh()))); if(i!==cur){ cur=i; mark(i); } clearTimeout(t); t=setTimeout(()=>onPick(cur),80); });
+  w.querySelectorAll('.wi').forEach(el=>el.onclick=()=>w.scrollTo({top:+el.dataset.i*hh(),behavior:'smooth'}));
+  w.setTo=i=>{ w.scrollTop=i*hh(); cur=i; mark(i); };
   requestAnimationFrame(()=>w.setTo(idx));
   return w;
 }
 function timePicker(box,st){
   const draw=()=>{
-    box.innerHTML=`<div class="opts" style="margin-bottom:12px"><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button></div><div id="tpArea"></div>`;
+    box.innerHTML=`<div class="opts" style="margin-bottom:12px"><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button></div><div id="tpArea"></div><div id="durBox"></div>`;
     box.querySelectorAll('[data-allday]').forEach(b=>b.onclick=()=>{ if(b.dataset.allday==='1') st.time=''; else if(!st.time) st.time='09:00'; draw(); });
     if(!st.time) return;
     const area=box.querySelector('#tpArea');
     let [H,M]=st.time.split(':').map(Number);
-    const setT=()=>{ st.time=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'); };
+    const setT=()=>{ st.time=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'); endLbl(); };
+    const DUR=[15,30,45,60,90,120,180,240], dtxt=n=>n<60?n+' min':n%60?Math.floor(n/60)+'½ hr':(n/60)+' hr'+(n>60?'s':'');
+    if(!st.dur) st.dur=60;
+    const endLbl=()=>{ const e=box.querySelector('#endTxt'); if(e) e.textContent='Ends '+t12(endOf(st.time,st.dur)); };
+    const drawDur=()=>{ const db=box.querySelector('#durBox');
+      db.innerHTML=`<div class="step" style="margin-top:12px">How long? <span id="endTxt" style="font-weight:800;color:var(--ink);margin-left:8px"></span></div><div class="opts">${DUR.map(n=>`<button class="opt ${st.dur===n?'on':''}" data-dur="${n}">${dtxt(n)}</button>`).join('')}</div>`;
+      db.querySelectorAll('[data-dur]').forEach(b=>b.onclick=()=>{ st.dur=+b.dataset.dur; drawDur(); }); endLbl(); };
+    if(!DUR.includes(st.dur)) DUR.push(st.dur), DUR.sort((a,b)=>a-b);
+    drawDur();
     if(st.typing){
       area.innerHTML=`<div class="timewrap"><div class="typed"><input id="hh" inputmode="numeric" maxlength="2" value="${(H%12)||12}"><span class="colon">:</span><input id="mm" inputmode="numeric" maxlength="2" value="${String(M).padStart(2,'0')}"></div>
         <div class="opts"><button class="opt ${H<12?'on':''}" data-ap="am">am</button><button class="opt ${H>=12?'on':''}" data-ap="pm">pm</button></div>
@@ -996,19 +1022,24 @@ function timePicker(box,st){
 /* ================= add / edit calendar entry ================= */
 function openAdd(existing,onSaved,heading,opt){
   const isNew=!existing||!existing.id;
-  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',date:existing?.date||dk(new Date()),time:existing?.time||'',typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
+  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing?.time||'',dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
   const canRepeat=!(opt&&opt.noRepeat)&&!(existing&&existing.todoId);
   const t=new Date(), dayOpts=[];
   for(let i=0;i<8;i++){ const d=addDays(t,i); dayOpts.push([dk(d),i===0?'Today':i===1?'Tomorrow':fmtD(d,{weekday:'short',day:'numeric',month:'short'})]); }
   const ensure=()=>{ if(!dayOpts.some(o=>o[0]===st.date)) dayOpts.unshift([st.date,fmtD(new Date(st.date+'T12:00'),{weekday:'short',day:'numeric',month:'short'})]); };
   ensure();
   modal((m,close)=>{
+    m.classList.add('wide');
     m.innerHTML=`<div class="row" style="justify-content:space-between"><h2>${heading||(isNew?'Add to the calendar':'Change this')}</h2>${isNew&&!heading&&traveller()?`<button class="xbtn" id="addPdf" style="background:#ffe5a8;font-weight:800">📄 Load ${esc(tName(traveller()))}'s roster PDF</button>`:''}</div>
-    <div class="step">1. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
-    <div class="step">2. What is it?</div><input class="txt" id="evTitle" value="${esc(st.title)}" placeholder="e.g. Doctor, school trip, swimming">
+    <div class="whatwhere"><div><div class="step">1. What is it?</div><input class="txt" id="evTitle" value="${esc(st.title)}" placeholder="e.g. Doctor, school trip, swimming"></div>
+    <div><div class="step">📍 Where? <span style="font-weight:500">(optional)</span></div><div class="row" style="flex-wrap:nowrap"><input class="txt" id="evAddr" value="${esc(st.addr)}" placeholder="Address or place">${st.addr?`<a class="xbtn navbtn" href="${navUrl(st.addr)}" target="_blank" rel="noopener">🧭 Go</a>`:''}</div></div></div>
+    <div class="addgrid"><div>
+    <div class="step">2. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
     <div class="step">3. Which day?</div><div class="opts" id="dayBox"></div>
-    <div class="step">4. What time?</div><div id="timeBox"></div>
-    ${canRepeat?'<div class="step">5. Does it repeat?</div><div id="rptBox"></div>':''}
+    ${canRepeat?'<div class="step">Does it repeat?</div><div id="rptBox"></div>':''}
+    </div><div>
+    <div class="step">4. What time, and how long?</div><div id="timeBox"></div>
+    </div></div>
     <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
     const drawWho=()=>{ const b=m.querySelector('#whoBox');
       b.innerHTML=S.people.map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
@@ -1020,13 +1051,14 @@ function openAdd(existing,onSaved,heading,opt){
     const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); pickRosterPdf(); };
     drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),st); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
     const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
+    const ad=m.querySelector('#evAddr'); ad.oninput=()=>st.addr=ad.value;
     m.querySelector('#cBtn').onclick=close;
     if(!isNew) m.querySelector('#dBtn').onclick=()=>{ S.events=S.events.filter(e=>e.id!==existing.id); const tj=todoOf(existing); if(tj) tj.eventId=null; save(); close(); renderCal(); renderTodo(); toast(tj?'Taken off the calendar, back on the to-do list':'Deleted'); };
     const db=m.querySelector('#doneBtn'); if(db) db.onclick=()=>{ const tj=todoOf(existing); close(); if(tj) markDone(tj,true); else { existing.done=true; save(); renderCal(); } toast('Nice one ✓'); };
     m.querySelector('#sBtn').onclick=()=>{
       if(!st.whos.length){ toast('Tap who it is for'); return; }
       if(!st.title.trim()){ toast('Type what it is'); ti.focus(); return; }
-      const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),date:st.date,time:st.time};
+      const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),addr:st.addr.trim(),date:st.date,time:st.time,dur:st.time?st.dur||60:0};
       if(canRepeat){ if(st.rpt){ if(st.rpt.until&&st.rpt.until<st.date){ toast('The end date is before the start'); return; } rec.rpt=st.rpt; } else if(existing) delete existing.rpt; }
       let ev; if(isNew){ ev=Object.assign({id:uid()},rec); if(existing&&existing.todoId) ev.todoId=existing.todoId; S.events.push(ev); } else { ev=Object.assign(existing,rec); const tj=todoOf(ev); if(tj) tj.title=ev.title; }
       save(); close(); renderCal(); renderTodo(); toast(isNew?'Added to the calendar':'Saved'); if(onSaved) onSaved(ev);
@@ -1239,7 +1271,9 @@ function parseICS(text,who,isRoster,sid){
     const m=isRoster&&(sum+' '+(e.LOCATION?.v||'')+' '+(e.DESCRIPTION?.v||'')).match(/\b([A-Z]{3})\s*(?:-|–|→|>|to|\/)\s*([A-Z]{3})\b/);
     if(m&&(AIRPORTS[m[1]]||AIRPORTS[m[2]])){ flights.push({id,who,src:sid,flight:((sum.match(/\b(NZ\s?\d{1,4})\b/)||[])[1]||'').replace(' ',''),from:m[1],to:m[2],start:s.toISOString(),end:en.toISOString()}); continue; }
     if(!sum) continue;
-    const ev={id,whos:[who],title:sum,date:k,time:e.DTSTART.v.includes('T')?hhmm(s):'',src:sid};
+    const loc=(e.LOCATION?.v||'').replace(/\\,/g,',').replace(/\\n/g,' ').replace(/\\;/g,';').trim();
+    const dur=e.DTSTART.v.includes('T')&&en>s?Math.round((en-s)/6e4):0;
+    const ev={id,whos:[who],title:sum,date:k,time:e.DTSTART.v.includes('T')?hhmm(s):'',dur:dur&&dur<24*60?dur:0,src:sid}; if(loc&&!/^https?:/.test(loc)) ev.addr=loc;
     if(rp&&rp!=='unsupported'){ ev.rpt=rp; if(e.UID) masters[e.UID.v]=ev; }
     others.push(ev);
     if(e['RECURRENCE-ID']&&e.UID) ev._moved={uid:e.UID.v,from:toDate(e['RECURRENCE-ID'])};
@@ -1384,11 +1418,81 @@ async function importRosterPdf(file,who){
       S.events=S.events.filter(e=>!(e.roster&&e.whos.includes(who)&&inRange(kd(e.date).getTime())));
       const sid=uid(), iso=d=>d?d.toISOString():null;
       r.legs.forEach((l,i)=>{ if(!keep[i]) return; S.flights.push({id:'r-'+who+'-'+(l.flight||l.from)+'-'+l.dep.getTime().toString(36),who,src:sid,flight:l.flight,from:l.from,to:l.to,start:iso(l.dep),end:iso(l.arr),report:iso(l.report),signOut:iso(l.signOut),pickup:iso(l.pickup),hotel:l.hotel||'',ac:l.ac||''}); });
-      r.duties.forEach((d,i)=>{ if(!keepD[i]) return; S.events.push({id:'r-'+who+'-'+d.date+'-'+d.code,whos:[who],title:DUTY_NAMES[d.code]||d.code,date:d.date,time:d.start,src:sid,roster:true,note:[d.end?'until '+t12(d.end):'',d.venue].filter(Boolean).join(' · ')}); });
+      r.duties.forEach((d,i)=>{ if(!keepD[i]) return; const dur=d.start&&d.end?((+d.end.slice(0,2))*60+(+d.end.slice(3)))-((+d.start.slice(0,2))*60+(+d.start.slice(3))):0; S.events.push({id:'r-'+who+'-'+d.date+'-'+d.code,whos:[who],title:DUTY_NAMES[d.code]||d.code,date:d.date,time:d.start,dur:dur>0?dur:0,src:sid,roster:true,note:d.venue||''}); });
       const used=new Set([...S.flights.map(f=>f.src),...S.events.map(e=>e.src)]); S.sources=S.sources.filter(s=>used.has(s.id)||s.url);
       S.sources.push({id:sid,who,type:'roster',label:file.name.replace(/\.pdf$/i,''),count:keep.filter(Boolean).length+keepD.filter(Boolean).length,at:Date.now(),pdf:true});
       S.override=null; save(); close(); renderAll(); toast(`Added ${keep.filter(Boolean).length} flights to ${tName(person(who))}'s calendar`);
     };
+  }; draw(); });
+}
+
+/* ================= phone notifications ================= */
+const NOTIFIER=/*@NOTIFIER@*/null;
+const deviceLabel=()=>{ const ua=navigator.userAgent; return /Android/.test(ua)?'Android phone':/iPhone|iPad/.test(ua)?'iPhone':/Windows/.test(ua)?'Windows computer':/Mac/.test(ua)?'Mac':'Device'; };
+const myPush=()=>{ const h=lsGet('fs.pushHash',''); return h&&SYNC.getDevices()[h]?h:''; };
+async function turnOnPush(){
+  if(!('Notification' in window)||!('serviceWorker' in navigator)){ toast('This browser can’t show notifications'); return false; }
+  if(!S.vapidKey){ toast('Finish the one-off Firebase step first'); return false; }
+  if(!(await SYNC.pushSupported())){ toast('Notifications aren’t supported here. Install the app first (⚙️ → Install)'); return false; }
+  const perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('Notifications were blocked. Allow them in the phone’s settings for this app.'); return false; }
+  const reg=await navigator.serviceWorker.ready; const token=await SYNC.pushToken(S.vapidKey,reg);
+  const hash=hashStr(token), me=SYNC.me(), mine=S.people.find(p=>p.email===me);
+  await SYNC.saveDevice(hash,{token,email:me,label:deviceLabel()+(me?' · '+me:''),people:mine?[mine.id,'all']:[],lead:30,remind:true,morning:true,jobs:true,at:Date.now()});
+  const old=lsGet('fs.pushHash',''); if(old&&old!==hash){ try{ await SYNC.removeDevice(old); }catch(e){} }
+  lsSet('fs.pushHash',hash); return true;
+}
+async function refreshPushToken(){ // keep this phone's address up to date
+  try{ if(LOCAL||!S.vapidKey||!lsGet('fs.pushHash','')||Notification.permission!=='granted') return;
+    const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(S.vapidKey,reg), hash=hashStr(token), old=lsGet('fs.pushHash',''), dev=SYNC.getDevices()[old];
+    if(hash!==old&&dev){ await SYNC.saveDevice(hash,Object.assign({},dev,{token,at:Date.now()})); await SYNC.removeDevice(old); lsSet('fs.pushHash',hash); } }catch(e){}
+}
+function openNotify(){
+  if(LOCAL){ modal((m,close)=>{ m.innerHTML='<h2>🔔 Notifications</h2><p class="note">Notifications work in the real app once you’re signed in, not in the demo.</p><div class="mact"><button class="save" id="ok">OK</button></div>'; m.querySelector('#ok').onclick=close; }); return; }
+  modal((m,close)=>{ const draw=()=>{
+    const hash=myPush(), dev=hash?SYNC.getDevices()[hash]:null, nt=SYNC.getNotifier(), running=nt&&nt.lastRun&&Date.now()-nt.lastRun<20*60e3;
+    const devs=Object.entries(SYNC.getDevices());
+    const fileText=f=>NOTIFIER?(f==='code'?NOTIFIER.code.replace('__PROJECT_ID__',CONFIG.projectId).replace('__APP_URL__',location.origin+location.pathname):NOTIFIER.manifest):'';
+    m.innerHTML=`<h2>🔔 Notifications</h2>
+    <p class="note">Reminders before calendar entries, a 7am “today” summary, and a nudge when a booked job’s time has passed. Each phone chooses what it hears about.</p>
+    ${!S.vapidKey?`<div class="srccard" style="background:#fff7e6"><h4>Step 1 · One-off Firebase key</h4>
+      <ol class="note" style="margin:4px 0 8px 18px;padding:0"><li>Open Firebase → ⚙️ <b>Project settings</b> → <b>Cloud Messaging</b> tab.</li><li>Scroll to <b>Web configuration → Web Push certificates</b> and click <b>Generate key pair</b>.</li><li>Copy the long key (it starts with <b>B</b>) and paste it here.</li></ol>
+      <div class="row"><input class="txt" id="vk" placeholder="Paste the key pair here" style="font-size:16px"><button class="save" id="vkS" style="border-radius:14px;padding:12px 18px;font-weight:800">Save</button></div></div>`:''}
+    <div class="srccard"><h4>📱 This ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</h4>
+      ${dev?`<div class="srcline"><span class="pill-ok">🔔 Notifications on</span><button class="xbtn" id="nTest">Send a test</button><button class="xbtn" id="nOff">Turn off</button></div>
+        <div class="step" style="margin-top:8px">Tell me about entries for</div>
+        <div class="opts">${S.people.map(p=>`<button class="opt ${(!dev.people||!dev.people.length||dev.people.includes(p.id))?'on':''}" data-np="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
+        <div class="step">Remind me</div>
+        <div class="opts">${[0,15,30,60].map(n=>`<button class="opt ${(dev.remind===false?0:(dev.lead||30))===n?'on':''}" data-nl="${n}">${n?n+' min before':'No reminders'}</button>`).join('')}</div>
+        <div class="step">Also</div>
+        <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button></div>`
+      :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
+        <p class="note">Do this on each phone. On Android, install Family Screen first (⚙️ → 📲 Install) so notifications arrive even when it’s closed.</p>`}
+    </div>
+    <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}</h4>
+      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}
+      ${running?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':`
+      <p class="note">One-off, on a computer, about 10 minutes. It runs free in your Google account and sends the reminders.</p>
+      <ol style="font-size:16px;line-height:1.55;margin:6px 0 10px 18px;padding:0">
+        <li>Go to <b>script.google.com</b> (same Google account as Firebase) → <b>New project</b>. Click “Untitled project” and name it <b>Family Screen helper</b>.</li>
+        <li>Click ⚙️ <b>Project Settings</b> (left) and tick <b>Show “appsscript.json” manifest file in editor</b>.</li>
+        <li>Back in <b>Editor</b> (&lt;&gt; on the left): click <b>appsscript.json</b>, select all, and paste the <b>settings file</b> (button below). Save 💾.</li>
+        <li>Click <b>Code.gs</b>, select all, and paste the <b>helper code</b> (button below). Save 💾.</li>
+        <li>In the bar at the top, choose <b>setup</b> and click <b>▶ Run</b>. Allow access (if Google warns you: <b>Advanced → Go to Family Screen helper → Allow</b>; it's your own script).</li>
+        <li>This box turns green within 5 minutes.</li></ol>
+      <div class="row"><button class="xbtn" data-copy="manifest">📋 Copy settings file</button><button class="xbtn" data-copy="code">📋 Copy helper code</button></div>`}
+    </div>
+    ${devs.length?`<div class="step">Phones with notifications on</div>${devs.map(([k,d])=>`<div class="srcline"><span>${esc(d.label||'Device')}${k===hash?' <b>(this one)</b>':''}</span><span class="note">${d.people&&d.people.length?d.people.map(nm).filter(Boolean).join(', '):'everyone'}</span></div>`).join('')}`:''}
+    <div class="mact"><button class="save" id="ok">Done</button></div>`;
+    const upd=async ch=>{ try{ await SYNC.saveDevice(hash,Object.assign({},dev,ch)); setTimeout(draw,250); }catch(e){ toast('Could not save'); } };
+    const vk=m.querySelector('#vkS'); if(vk) vk.onclick=()=>{ const v=m.querySelector('#vk').value.trim(); if(!/^B[A-Za-z0-9_-]{60,}$/.test(v)){ toast('That doesn’t look like the key pair (it starts with B)'); return; } S.vapidKey=v; save(); toast('Saved'); setTimeout(draw,300); };
+    const on=m.querySelector('#nOn'); if(on) on.onclick=async()=>{ on.textContent='Turning on…'; try{ if(await turnOnPush()){ toast('Notifications on for this phone'); } }catch(e){ console.error(e); toast('Could not turn on: '+(e.code||e.message||'')); } setTimeout(draw,400); };
+    const off=m.querySelector('#nOff'); if(off) off.onclick=async()=>{ try{ await SYNC.removeDevice(hash); }catch(e){} lsSet('fs.pushHash',''); setTimeout(draw,250); };
+    const ts=m.querySelector('#nTest'); if(ts) ts.onclick=async()=>{ try{ await SYNC.requestTest(hash); toast(running?'A test notification will arrive within 5 minutes':'Set up the helper first, then the test will arrive'); }catch(e){ toast('Could not ask for a test'); } };
+    m.querySelectorAll('[data-np]').forEach(b=>b.onclick=()=>{ const all=S.people.map(p=>p.id); let ps=dev.people&&dev.people.length?[...dev.people]:[...all]; const id=b.dataset.np; ps=ps.includes(id)?ps.filter(x=>x!==id):[...ps,id]; if(!ps.length){ toast('Pick at least one'); return; } upd({people:ps.length===all.length?[]:ps}); });
+    m.querySelectorAll('[data-nl]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.nl; upd(n?{remind:true,lead:n}:{remind:false}); });
+    m.querySelectorAll('[data-nt]').forEach(b=>b.onclick=()=>{ const k=b.dataset.nt; upd({[k]:dev[k]===false}); });
+    m.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ try{ navigator.clipboard.writeText(fileText(b.dataset.copy)).then(()=>toast(b.dataset.copy==='code'?'Helper code copied':'Settings file copied')); }catch(e){ toast('Copy didn’t work on this device. Use a computer.'); } });
+    m.querySelector('#ok').onclick=close;
   }; draw(); });
 }
 
@@ -1447,7 +1551,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&SYNC.getMembers().length>1?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -1483,6 +1587,7 @@ function openSettings(){
     m.querySelectorAll('[data-srm]').forEach(b=>b.onclick=()=>{ const id=b.dataset.srm; S.shops=S.shops.filter(s=>s.id!==id); const fb=S.shops[S.shops.length-1].id; S.groceries.forEach(g=>{ if(g.shop===id) g.shop=fb; }); if(S.shopTab===id) S.shopTab='all'; re(); draw(); });
     m.querySelector('#sadd').onclick=()=>{ S.shops.push({id:uid(),name:'New shop',color:PASTELS[S.shops.length%8]}); re(); draw(); };
     m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
+    m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     if(!LOCAL){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
@@ -1588,7 +1693,7 @@ function syncChanged(what,err){
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
 }
-function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLinks(false),4000); }
+function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLinks(false),4000); setTimeout(refreshPushToken,8000); }
 
 /* ================= phone: header, calendar, swipes, back button ================= */
 const isPhone=()=>matchMedia('(max-width:900px)').matches;
@@ -1650,15 +1755,15 @@ function agendaHTML(key){
   const all=[], timed=[];
   for(const it of its){
     if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=e.todoId?(e.done?'✅ ':'☐ '):'';
-      const o={bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁 '+rptText(e.rpt):'',names,e.note||''].filter(Boolean).join(' · '),attr:`data-ev="${e.id}" data-occ="${key}"`};
-      if(e.time){ o.t=t12(e.time); timed.push(o); } else all.push(o); }
+      const o={bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁 '+rptText(e.rpt):'',names,e.note||''].filter(Boolean).join(' · '),addr:e.addr||'',attr:`data-ev="${e.id}" data-occ="${key}"`};
+      if(e.time){ o.t=t12(e.time); if(e.dur) o.sub=[tRange(e),o.sub].filter(Boolean).join(' · '); timed.push(o); } else all.push(o); }
     else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day · tap to see where',attr:'data-where="1"'}); }
     else if(it.k==='arr'){ const f=it.f, b=AIRPORTS[f.to], e=new Date(f.end); timed.push({t:fmtTime(e,'Pacific/Auckland'),bg:col(f.who),title:`🛬 ${tName(person(f.who))} ${HOME.includes(f.to)?'home':'lands in '+(b?b[0]:f.to)}`,sub:`${f.flight||''} ${f.from}→${f.to}${b&&b[1]!=='Pacific/Auckland'?' · '+fmtTime(e,b[1])+' local':''}${f.signOut&&HOME.includes(f.to)?' · signs out '+fmtTime(new Date(f.signOut),'Pacific/Auckland'):''}`,attr:`data-fl="${f.id}"`}); }
     else { const f=it.f, a=AIRPORTS[f.from], s=new Date(f.start); timed.push({t:fmtTime(s,'Pacific/Auckland'),bg:col(f.who),title:`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${AIRPORTS[f.to]?AIRPORTS[f.to][0]:f.to}`,sub:`${tName(person(f.who))}${f.report&&a?' · report '+fmtTime(new Date(f.report),a[1]):''}${a&&a[1]!=='Pacific/Auckland'?' · '+fmtTime(s,a[1])+' '+a[0]+' time':''}`,attr:`data-fl="${f.id}"`}); }
   }
   return `<div class="pa-head"><b>${d.getDate()}</b><span>${fmtD(d,{weekday:'short'})}</span></div>`+
-    all.map(o=>`<button class="pa-allday" style="background:${o.bg}" ${o.attr}><b>${esc(o.title)}</b><small>${esc(o.sub||'All day')}</small></button>`).join('')+
-    timed.map(o=>`<button class="pa-row" ${o.attr}><span class="t">${o.t}</span><i class="bar" style="background:${o.bg}"></i><span><b>${esc(o.title)}</b>${o.sub?`<small>${esc(o.sub)}</small>`:''}</span></button>`).join('')+
+    all.map(o=>`<button class="pa-allday" style="background:${o.bg}" ${o.attr}><b>${esc(o.title)}</b><small>${esc(o.sub||'All day')}</small>${o.addr?`<small class="addr" data-nav="${esc(o.addr)}">📍 ${esc(o.addr)} · 🧭 Go</small>`:''}</button>`).join('')+
+    timed.map(o=>`<button class="pa-row" ${o.attr}><span class="t">${o.t}</span><i class="bar" style="background:${o.bg}"></i><span><b>${esc(o.title)}</b>${o.sub?`<small>${esc(o.sub)}</small>`:''}${o.addr?`<small class="addr" data-nav="${esc(o.addr)}">📍 ${esc(o.addr)} · 🧭 Go</small>`:''}</span></button>`).join('')+
     (its.length?'':'<div class="pa-empty">Nothing on. Tap “Add” below to put something in.</div>');
 }
 function wireAgenda(box){

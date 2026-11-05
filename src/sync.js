@@ -5,11 +5,12 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut as fbSignOut, connectAuthEmulator, signInWithCredential, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection,
-  onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+  onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField } from 'firebase/firestore';
+import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
 const COLS = ['events', 'flights', 'groceries', 'todos', 'sources'];
 
-let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null;
+let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null, devices = {}, notifier = null;
 
 const clean = o => JSON.parse(JSON.stringify(o));                 // drops undefined + functions
 const stripPeople = ps => ps.map(p => { const c = Object.assign({}, p); delete c.show; return c; });
@@ -68,11 +69,11 @@ export function start(householdId, state, changed) {
   synced = { settings: null, cols: Object.fromEntries(COLS.map(c => [c, new Map()])) };
   unsub.push(onSnapshot(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
-    const d = snap.data(); members = d.members || []; owner = d.owner || null;
+    const d = snap.data(); members = d.members || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id)); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
-    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null;
+    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || '';
     synced.settings = JSON.stringify(settingsOf(S));
     onChange('settings');
   }, err => onChange('error', err)));
@@ -86,7 +87,7 @@ export function start(householdId, state, changed) {
   }
 }
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; }
-const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null });
+const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '' });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
 // Write whatever changed since the last sync. Called after every edit; cheap when nothing changed.
@@ -111,3 +112,12 @@ export function push() {
     b.commit().catch(e => onChange('error', e));
   }
 }
+
+/* ---------- phone notifications ---------- */
+export async function pushSupported() { try { return await isSupported(); } catch (e) { return false; } }
+export async function pushToken(vapidKey, reg) { return getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: reg }); }
+export const getDevices = () => devices;
+export const getNotifier = () => notifier;
+export const saveDevice = (hash, data) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: clean(data) });
+export const removeDevice = hash => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: deleteField() });
+export const requestTest = hash => updateDoc(doc(db, 'households', hid), { testPing: { hash, at: Date.now() } });
