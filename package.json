@@ -1,0 +1,25 @@
+{
+  "name": "family-screen",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "node build.js && cp dist/* .",
+    "test:build": "MOCK=1 node build.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "d3-array": "^3.2.5",
+    "d3-geo": "^3.1.2",
+    "esbuild": "^0.28.2",
+    "firebase": "^12.19.0",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.35.0"
+  },
+  "private": true
+}

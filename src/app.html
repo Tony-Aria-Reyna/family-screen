@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Screen</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#9fd8cf">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#faf7f2; --card:#ffffff; --ink:#2b2f3a; --muted:#7a7f8c; --line:#ece6dc; --soft:#f4efe8;
+  --accent:#9fd8cf; --accent-deep:#5fb3a6; --danger:#c2453b; --r:20px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:20px;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,select{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:1fr 400px;height:100vh;padding:14px;gap:12px}
+.leftcol{display:grid;grid-template-rows:auto auto 1fr;gap:12px;min-height:0;min-width:0}
+.calbody{flex:1;min-height:0;display:flex;flex-direction:column}
+.calbody>.week{flex:1}
+.calhead{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.calhead .lbl{font-size:19px;font-weight:800;margin-right:auto;padding-left:6px}
+.calhead .arrow{background:var(--soft);border-radius:999px;width:40px;height:40px;font-size:22px}
+.calhead .pill{background:var(--soft);border-radius:999px;padding:7px 14px;font-size:16px}
+.calhead .seg{background:var(--soft)}
+
+/* ---------- top bar & clocks ---------- */
+.top{display:flex;align-items:center;gap:10px;min-width:0}
+.cc{position:relative;overflow:hidden;flex:1 1 0;min-width:215px;max-width:310px;height:112px;border-radius:24px;padding:10px 16px;display:flex;flex-direction:column;justify-content:center;text-align:left;box-shadow:0 2px 0 rgba(0,0,0,.04);transition:background 1s}
+.cc .city{font-size:16px;font-weight:700;letter-spacing:.01em;position:relative;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 40px)}
+.cc .time{font-size:40px;font-weight:800;line-height:1.02;font-variant-numeric:tabular-nums;letter-spacing:-1px;position:relative;z-index:2}
+.cc .time small{font-size:20px;font-weight:700;margin-left:3px;letter-spacing:0}
+.cc .sub{font-size:14px;font-weight:600;opacity:.85;position:relative;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc .orb{position:absolute;width:30px;height:30px;border-radius:50%;z-index:1;transition:left 1s,top 1s}
+.cc .orb.sun{background:radial-gradient(circle at 35% 35%,#fff6c4,#ffd45c 60%,#ffbf3c);box-shadow:0 0 22px 8px rgba(255,214,92,.55)}
+.cc .orb.moon{background:#fbf6df;box-shadow:inset -9px -4px 0 0 #e3ddc0,0 0 18px 4px rgba(255,255,255,.25)}
+.cc .stars{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1s}
+.cc .stars i{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;opacity:.85}
+.cc.night .stars{opacity:1}
+.cc .hill{position:absolute;right:-30px;bottom:-40px;width:170px;height:80px;border-radius:50%;z-index:1;opacity:.55}
+.cc.dawn{background:linear-gradient(160deg,#ffd9cf,#ffeccc)}
+.cc.day{background:linear-gradient(160deg,#cfe9f8,#eef8fd)}
+.cc.dusk{background:linear-gradient(160deg,#f7c6d5,#d9c9f6)}
+.cc.night{background:linear-gradient(160deg,#2f3571,#4d509a);color:#fff}
+.cc.dawn .hill{background:#f3b9a6}.cc.day .hill{background:#b9e2c6}.cc.dusk .hill{background:#c4a9e6}.cc.night .hill{background:#262a5c}
+.cc .badge{position:absolute;right:12px;top:10px;z-index:3;font-size:13px;font-weight:700;background:rgba(255,255,255,.7);color:var(--ink);border-radius:999px;padding:3px 9px}
+.globebtn{width:112px;height:112px;border-radius:24px;flex:none;background:radial-gradient(circle at 35% 30%,#d6f0ff,#9ccfe8 55%,#7fb6d6);font-size:50px;display:grid;place-items:center;box-shadow:0 2px 0 rgba(0,0,0,.05);position:relative}
+.globebtn span{position:absolute;bottom:7px;left:4px;right:4px;text-align:center;line-height:1.1;font-size:11px;font-weight:800;color:#1f4d66;letter-spacing:.04em}
+.spacer{flex:1}
+.iconbtn{background:var(--card);border-radius:16px;padding:14px 14px;font-size:24px;flex:none;box-shadow:0 1px 0 var(--line)}
+.bigadd b{font-size:40px;font-weight:800}
+.bigadd{display:flex;align-items:center;gap:8px;height:112px;line-height:1.1;text-align:left;background:var(--accent);border-radius:var(--r);padding:0 18px;font-size:19px;font-weight:800;white-space:nowrap}
+
+/* ---------- people + nav ---------- */
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{display:flex;align-items:center;gap:7px;background:var(--card);border-radius:999px;padding:7px 13px 7px 9px;font-size:17px}
+.dot{width:22px;height:22px;border-radius:50%;display:inline-block;flex:none;border:1px solid rgba(0,0,0,.06)}
+.chip.off{opacity:.38}
+.nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.nav .pill{background:var(--card);border-radius:999px;padding:8px 16px;font-size:17px}
+.nav .arrow{background:var(--card);border-radius:999px;width:44px;height:44px;font-size:22px}
+.nav .lbl{font-size:17px;font-weight:700;min-width:100px;text-align:center}
+.seg{display:flex;background:var(--card);border-radius:999px;padding:4px}
+.seg button{padding:7px 16px;border-radius:999px;font-size:17px}
+.seg button.on{background:var(--ink);color:#fff}
+
+/* ---------- main layout ---------- */
+.right{display:grid;grid-template-rows:1fr 1.1fr;gap:12px;min-height:0}
+@media (min-width:1500px){ .app{grid-template-columns:1fr 340px 360px} .right{display:contents} }
+.panel{background:var(--card);border-radius:var(--r);min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.ph{display:flex;align-items:center;gap:10px;padding:10px 14px 2px}
+.ph .tip{font-size:12px;color:var(--muted);margin-left:auto;text-align:right;line-height:1.2;max-width:150px}
+.ph .clr{background:var(--soft);border-radius:10px;padding:6px 10px;font-size:13px;flex:none}
+.ph h2{margin:0;font-size:22px;white-space:nowrap}
+.ph .n{color:var(--muted);font-size:16px}
+
+/* ---------- week ---------- */
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));height:100%;min-height:0}
+.day{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;transition:background .12s}
+.day:last-child{border-right:0}
+.day h3{margin:0;padding:12px 10px 8px;font-size:16px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
+.day h3 b{display:block;font-size:25px;color:var(--ink);white-space:nowrap}
+.day.today h3{background:#e8f6f3}
+.day.today h3 b{color:#2f8f82}
+.day.wkend{background:#fdfbf8}
+.evs{padding:7px;display:flex;flex-direction:column;gap:7px;overflow-y:auto;flex:1}
+.ev{border-radius:12px;padding:7px 9px;font-size:17px;line-height:1.2;text-align:left;width:100%;color:var(--ink);position:relative}
+.ev small{display:block;font-size:13px;opacity:.75;font-weight:700}
+.ev .dots{display:flex;gap:3px;margin-top:5px}
+.ev .dots i{width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.9)}
+.addday{margin-top:auto;color:var(--muted);font-size:16px;padding:8px;border-top:1px dashed var(--line)}
+body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9e4;outline-offset:-3px}
+.drop-on{background:#e0f3ef !important;outline:3px dashed var(--accent-deep) !important;outline-offset:-3px}
+/* month */
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.mhead{font-size:15px;color:var(--muted);text-align:center;padding:6px;border-bottom:1px solid var(--line)}
+.mbody{flex:1;min-height:0;grid-auto-rows:1fr}
+.mcell{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;overflow:hidden;text-align:left;display:flex;flex-direction:column;gap:3px;min-height:0}
+.mcell .n{font-size:18px;font-weight:700}
+.mcell.today .n{background:var(--accent);border-radius:999px;width:32px;text-align:center}
+.mcell.other{background:#fbf9f5;color:var(--muted)}
+.mpill{font-size:13px;border-radius:6px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+
+/* ---------- lists ---------- */
+.addrow{display:flex;gap:8px;padding:6px 14px 6px}
+.addrow input{flex:1;min-width:0;border:2px solid var(--line);border-radius:14px;padding:9px 14px;font-size:19px;user-select:text;-webkit-user-select:text;background:#fff}
+.addrow button{background:var(--accent);border-radius:14px;padding:0 18px;font-size:26px;font-weight:800}
+.shops{display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 6px}
+.shops button{border-radius:999px;padding:4px 10px;font-size:14px;background:var(--soft);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.shops button .dot{width:12px;height:12px}
+.shops button.on{background:var(--ink);color:#fff}
+.hint{font-size:13px;color:var(--muted);padding:0 16px 6px}
+.list{overflow-y:auto;flex:1;padding:0 8px 8px}
+.grp{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 8px 4px;font-weight:800;display:flex;align-items:center;gap:8px;border-radius:10px}
+.grp .tag{width:12px;height:12px;border-radius:4px}
+.item{display:flex;align-items:center;gap:12px;padding:7px 8px;border-bottom:1px solid var(--line);width:100%;text-align:left;font-size:20px;background:#fff;border-radius:8px;cursor:pointer}
+.item.lifted{opacity:.35}
+.box{width:32px;height:32px;border-radius:9px;border:3px solid #c9c1b4;flex:none;display:grid;place-items:center;font-size:19px;background:#fff}
+.done .box{background:var(--accent);border-color:var(--accent-deep)}
+.done .nm{text-decoration:line-through;color:var(--muted)}
+.item .nm{flex:1;min-width:0}
+.item .sub{font-size:13px;color:var(--muted);text-align:right}
+.item .who{font-size:13px;color:var(--muted);display:block}
+.item .cal{background:var(--soft);border-radius:12px;padding:7px 10px;font-size:15px;flex:none}
+.foot{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:10px}
+.foot button{background:var(--soft);border-radius:12px;padding:9px 14px;font-size:15px}
+.tray{position:absolute;left:0;right:0;bottom:0;top:96px;background:rgba(250,247,242,.97);z-index:6;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;overflow:auto}
+.tray .tt{grid-column:1/-1;font-size:15px;font-weight:800;color:var(--muted)}
+.tile{border-radius:16px;padding:16px 14px;font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;border:3px dashed rgba(0,0,0,.08)}
+.sect{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 8px 4px;font-weight:800}
+.sect.warn{color:#b45309}
+.chk{background:#fff7e6;border-radius:14px;margin:4px 0;padding:8px 10px;border:2px solid #fde3b0}
+.chk .q{font-size:15px;color:#92400e;font-weight:700}
+.chk .t{font-size:19px;margin:2px 0 6px}
+.chk .acts{display:flex;gap:6px;flex-wrap:wrap}
+.chk .acts button{background:#fff;border-radius:10px;padding:7px 10px;font-size:15px;font-weight:700;border:2px solid #f4d9a4}
+.chk .acts .ok{background:#dff3e6;border-color:#bfe5cb}
+.item .when{font-size:13px;color:#2f8f82;font-weight:700;display:block}
+.ev.task.check{outline:3px dashed #f59e0b;outline-offset:-3px}
+.ev.done-ev{opacity:.6;text-decoration:line-through}
+.cc .sub2{font-size:13px;font-weight:700;opacity:.9;position:relative;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc .bar2{height:6px;border-radius:99px;background:rgba(255,255,255,.6);margin-top:4px;position:relative;z-index:2;overflow:hidden}
+.cc .bar2 i{display:block;height:100%;background:#2b2f3a;border-radius:99px}
+.homecard{background:#c3e8cc}
+.ghost{position:fixed;z-index:60;pointer-events:none;background:#fff;border-radius:14px;padding:10px 16px;font-size:20px;box-shadow:0 12px 30px rgba(0,0,0,.2);transform:translate(-30px,-60%) rotate(-2deg)}
+/* shop chooser */
+.chooser{position:absolute;inset:0;background:rgba(255,255,255,.97);z-index:5;padding:18px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.chooser h3{margin:0;font-size:22px}
+.chooser .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chooser .opt{text-align:left;display:flex;align-items:center;gap:10px}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(43,47,58,.35);display:grid;place-items:center;z-index:20;padding:16px}
+.modal{background:var(--card);border-radius:26px;width:min(920px,100%);max-height:94vh;overflow:auto;padding:22px 28px}
+.modal h2{margin:0 0 4px;font-size:30px}
+.step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
+.opts{display:flex;flex-wrap:wrap;gap:10px}
+.opt{border:3px solid var(--line);border-radius:16px;padding:12px 18px;font-size:21px;background:#fff;min-width:96px}
+.opt.on{border-color:var(--ink);background:var(--soft);font-weight:700}
+.opt .dot{vertical-align:-4px;margin-right:8px}
+.opt .tick{display:inline-block;width:22px;font-weight:800}
+.txt{width:100%;border:3px solid var(--line);border-radius:16px;padding:14px;font-size:25px;user-select:text;-webkit-user-select:text}
+.mact{display:flex;gap:12px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
+.mact button{border-radius:16px;padding:15px 26px;font-size:21px;font-weight:800}
+.save{background:var(--accent)}
+.cancel{background:var(--soft)}
+.del{background:#fde7e4;color:var(--danger);margin-right:auto}
+.note{font-size:16px;color:var(--muted);line-height:1.45}
+/* time wheels */
+.timewrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.wheels{position:relative;display:flex;align-items:center;gap:4px;background:var(--soft);border-radius:22px;padding:6px 14px}
+.wheels:before{content:"";position:absolute;left:10px;right:10px;top:50%;height:64px;margin-top:-32px;border-radius:16px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.wheel{position:relative;height:192px;width:96px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);touch-action:pan-y}
+.wheel::-webkit-scrollbar{display:none}
+.wheel .pad{height:64px}
+.wi{height:64px;scroll-snap-align:center;display:grid;place-items:center;font-size:28px;color:#a8a29a;font-variant-numeric:tabular-nums;cursor:pointer}
+.wi.sel{font-size:42px;color:var(--ink);font-weight:800}
+.wheel.ampm{width:82px}
+.wheel.ampm .wi{font-size:22px}.wheel.ampm .wi.sel{font-size:28px}
+.colon{position:relative;font-size:40px;font-weight:800}
+.typed{display:flex;align-items:center;gap:8px}
+.typed input{width:96px;height:72px;font-size:40px;font-weight:800;text-align:center;border:3px solid var(--line);border-radius:16px;user-select:text;-webkit-user-select:text}
+.linkbtn{background:var(--soft);border-radius:14px;padding:10px 16px;font-size:18px}
+/* settings */
+.prow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+.prow input[type=text],.prow input[type=url]{border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:210px;user-select:text;-webkit-user-select:text}
+.sw{width:32px;height:32px;border-radius:50%;border:3px solid transparent}
+.sw.on{border-color:var(--ink)}
+.small{font-size:15px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.xbtn{background:var(--soft);border-radius:10px;padding:8px 12px;font-size:15px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.srccard{border:2px solid var(--line);border-radius:18px;padding:14px 16px;margin:10px 0}
+.srccard h4{margin:0 0 6px;font-size:20px;display:flex;align-items:center;gap:8px}
+.srcline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;padding:6px 0;border-top:1px dashed var(--line)}
+.srcline:first-of-type{border-top:0}
+.pill-ok{background:#dff3e6;color:#1d6b3a;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
+.pill-wait{background:#fff3cf;color:#7a5b00;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
+details.how{background:var(--soft);border-radius:14px;padding:10px 14px;margin:8px 0;font-size:16px}
+details.how summary{font-weight:700;cursor:pointer}
+details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
+.banner{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:14px;font-size:18px;z-index:70}
+.proto{font-size:12px;color:var(--muted);background:#fff6d6;border-radius:8px;padding:3px 8px;max-width:100px;line-height:1.2}
+
+/* ---------- globe screen ---------- */
+.space{position:fixed;inset:0;z-index:40;background:radial-gradient(ellipse at 50% 40%,#2a2f6b 0%,#161a3d 60%,#0d1029 100%);color:#fff;display:grid;grid-template-columns:1fr 360px;gap:0;overflow:hidden}
+.space .starsbg{position:absolute;inset:0;pointer-events:none}
+.space .starsbg i{position:absolute;border-radius:50%;background:#fff}
+.space .stage{position:relative;display:grid;place-items:center;min-height:0}
+.space svg{touch-action:none;cursor:grab;max-width:100%;max-height:100%}
+.space .info{position:relative;padding:28px 26px;display:flex;flex-direction:column;gap:14px;overflow:auto;background:rgba(255,255,255,.04)}
+.space h2{margin:0;font-size:30px}
+.space .icard{border-radius:20px;padding:14px 18px;color:var(--ink)}
+.space .icard .c{font-size:15px;font-weight:700}
+.space .icard .t{font-size:44px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+.space .icard .s{font-size:15px;font-weight:600;opacity:.85}
+.space .stat{font-size:17px;opacity:.9;line-height:1.5}
+.space .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto}
+.space .btns button{background:rgba(255,255,255,.14);color:#fff;border-radius:14px;padding:12px 16px;font-size:17px}
+.space .btns .close{background:#fff;color:var(--ink);font-weight:800}
+.lbl-bg{fill:#fff;opacity:.95}
+.arc{fill:none;stroke:#ffd45c;stroke-width:3;stroke-dasharray:8 8;animation:dash 1.2s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-16}}
+.pulse{animation:pulse 1.8s ease-out infinite;transform-origin:center;transform-box:fill-box}
+@keyframes pulse{0%{opacity:.8;transform:scale(.6)}100%{opacity:0;transform:scale(2.4)}}
+
+#gate{position:fixed;inset:0;z-index:90;background:linear-gradient(160deg,#cfe9f8,#faf7f2 55%,#f9e3ea);display:grid;place-items:center;padding:20px}
+#gate[hidden]{display:none}
+.gcard{background:#fff;border-radius:28px;padding:34px 32px;max-width:520px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(43,47,58,.12)}
+.gcard h1{margin:6px 0 10px;font-size:34px}
+.gcard p{font-size:19px;line-height:1.45}
+.glogo{font-size:44px;letter-spacing:6px}
+.gbtn{display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:#fff;border-radius:16px;padding:15px 24px;font-size:20px;font-weight:800;margin:6px}
+.gbtn span{background:#fff;color:#4285f4;border-radius:50%;width:30px;height:30px;display:grid;place-items:center;font-weight:900}
+.gbtn.ghostb{background:var(--soft);color:var(--ink)}
+.gerr{color:var(--danger);font-weight:700}
+.gcard a{color:#2f8f82}
+.tabbar{display:none}
+@media (max-width:900px){
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:22px;padding:4px;border-radius:12px}
+  .tabbar button span{font-size:12px;font-weight:700;color:var(--muted)}
+  .tabbar button.on{background:var(--soft)}
+  .app{padding-bottom:84px}
+  body[data-tab="cal"] .right{display:none}
+  body[data-tab="todo"] #calWrap,body[data-tab="shop"] #calWrap,body[data-tab="todo"] #bar,body[data-tab="shop"] #bar{display:none}
+  body[data-tab="todo"] #shopPanel,body[data-tab="shop"] #todoPanel{display:none}
+  .right .panel{min-height:calc(100vh - 260px)}
+  .top{gap:8px}
+  .bar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .chip{flex:none}
+  .calhead{flex-wrap:wrap}
+  .cc{min-width:0;height:96px;padding:8px 12px}
+  .cc .time{font-size:30px}
+  .globebtn,.iconbtn{display:none}
+  .bigadd{height:auto;padding:12px 14px}
+  .tray{top:96px}
+
+  body{font-size:18px}
+  .top{flex-wrap:wrap}
+  .app{grid-template-columns:1fr}
+  .right{grid-template-rows:auto auto}
+  .week{grid-template-columns:1fr}
+  .day{border-right:0;border-bottom:1px solid var(--line)}
+  .app{height:auto;min-height:100vh}
+  .panel{min-height:380px}
+  .space{grid-template-columns:1fr;grid-template-rows:55vh auto;overflow:auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="leftcol">
+    <div class="top">
+      <button class="cc" id="homeClock" aria-label="Open the globe"></button>
+      <div id="awayBox" style="display:contents"></div>
+      <button class="globebtn" id="globeBtn" aria-label="Where is everyone">🌏<span id="globeLbl">WHERE?</span></button>
+      <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
+      <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
+    </div>
+    <div class="bar" id="bar"></div>
+    <div class="panel" id="calWrap"><div class="calhead" id="calhead"></div><div class="calbody" id="cal"></div></div>
+  </div>
+  <div class="right">
+    <div class="panel" id="todoPanel"></div>
+    <div class="panel" id="shopPanel"></div>
+  </div>
+</div>
+<nav class="tabbar"><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="where">🌏<span>Where?</span></button></nav>
+<div id="gate" hidden></div>
+<div id="layer"></div>
+<div id="spaceLayer"></div>
+
+<script>/*@LIBS@*/</script>
+<script>/*@SYNC@*/</script>
+<script>const WORLD=/*@WORLD@*/;</script>
+<script>
+/* ================= storage ================= */
+// Synced mode (normal): data lives in the family's Firebase database and syncs live to every device.
+// Demo mode (?demo, or no Firebase config yet): sample data kept on this device only.
+const CONFIG=/*@CONFIG@*/null;
+const EMU=/[?&]emu=1/.test(location.search);
+const LOCAL=!CONFIG||/[?&]demo/.test(location.search);
+const KEY='familyScreen.demo'; let mem=null;
+function load(){ try{ const s=localStorage.getItem(KEY); return s?JSON.parse(s):null; }catch(e){ return mem; } }
+function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function savePrefs(){ lsSet('fs.prefs',{view:S.view,shopTab:S.shopTab}); lsSet('fs.hidden',S.people.filter(p=>!p.show).map(p=>p.id)); }
+function save(){
+  savePrefs();
+  if(LOCAL){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){ mem=JSON.parse(JSON.stringify(S)); } return; }
+  if(window.SYNC) SYNC.push();
+}
+
+/* ================= reference data ================= */
+const PASTELS=['#bfe3f2','#f9c9d0','#d8c8f7','#c3e8cc','#ffe5a8','#ffd2b3','#c8ece6','#f3d1ea','#dfe7b8','#d9dde6'];
+// code: [city, time zone, country, flag, lat, lon, atlas country name]
+const AIRPORTS={
+ AKL:['Auckland','Pacific/Auckland','New Zealand','🇳🇿',-37.01,174.79,'New Zealand'],
+ WLG:['Wellington','Pacific/Auckland','New Zealand','🇳🇿',-41.33,174.81,'New Zealand'],
+ CHC:['Christchurch','Pacific/Auckland','New Zealand','🇳🇿',-43.49,172.53,'New Zealand'],
+ ZQN:['Queenstown','Pacific/Auckland','New Zealand','🇳🇿',-45.02,168.74,'New Zealand'],
+ NRT:['Tokyo','Asia/Tokyo','Japan','🇯🇵',35.77,140.39,'Japan'], HND:['Tokyo','Asia/Tokyo','Japan','🇯🇵',35.55,139.78,'Japan'],
+ KIX:['Osaka','Asia/Tokyo','Japan','🇯🇵',34.43,135.24,'Japan'],
+ LAX:['Los Angeles','America/Los_Angeles','USA','🇺🇸',33.94,-118.41,'United States of America'],
+ SFO:['San Francisco','America/Los_Angeles','USA','🇺🇸',37.62,-122.38,'United States of America'],
+ SEA:['Seattle','America/Los_Angeles','USA','🇺🇸',47.45,-122.31,'United States of America'],
+ IAH:['Houston','America/Chicago','USA','🇺🇸',29.99,-95.34,'United States of America'],
+ ORD:['Chicago','America/Chicago','USA','🇺🇸',41.98,-87.9,'United States of America'],
+ JFK:['New York','America/New_York','USA','🇺🇸',40.64,-73.78,'United States of America'],
+ EWR:['New York','America/New_York','USA','🇺🇸',40.69,-74.17,'United States of America'],
+ HNL:['Honolulu','Pacific/Honolulu','USA (Hawaiʻi)','🇺🇸',21.32,-157.92,null],
+ YVR:['Vancouver','America/Vancouver','Canada','🇨🇦',49.19,-123.18,'Canada'],
+ SYD:['Sydney','Australia/Sydney','Australia','🇦🇺',-33.94,151.18,'Australia'], MEL:['Melbourne','Australia/Melbourne','Australia','🇦🇺',-37.67,144.84,'Australia'],
+ BNE:['Brisbane','Australia/Brisbane','Australia','🇦🇺',-27.38,153.12,'Australia'], OOL:['Gold Coast','Australia/Brisbane','Australia','🇦🇺',-28.16,153.5,'Australia'],
+ PER:['Perth','Australia/Perth','Australia','🇦🇺',-31.94,115.97,'Australia'], ADL:['Adelaide','Australia/Adelaide','Australia','🇦🇺',-34.94,138.53,'Australia'],
+ CNS:['Cairns','Australia/Brisbane','Australia','🇦🇺',-16.88,145.75,'Australia'],
+ NAN:['Nadi','Pacific/Fiji','Fiji','🇫🇯',-17.76,177.44,'Fiji'], APW:['Apia','Pacific/Apia','Samoa','🇼🇸',-13.83,-172.01,null],
+ RAR:['Rarotonga','Pacific/Rarotonga','Cook Islands','🇨🇰',-21.2,-159.81,null], TBU:["Nukuʻalofa",'Pacific/Tongatapu','Tonga','🇹🇴',-21.24,-175.15,null],
+ NOU:['Nouméa','Pacific/Noumea','New Caledonia','🇳🇨',-22.01,166.21,'New Caledonia'], PPT:['Papeete','Pacific/Tahiti','French Polynesia','🇵🇫',-17.55,-149.61,null],
+ NLK:['Norfolk Island','Pacific/Norfolk','Norfolk Island','🇳🇫',-29.04,167.94,null],
+ SIN:['Singapore','Asia/Singapore','Singapore','🇸🇬',1.36,103.99,null], DPS:['Bali','Asia/Makassar','Indonesia','🇮🇩',-8.75,115.17,'Indonesia'],
+ TPE:['Taipei','Asia/Taipei','Taiwan','🇹🇼',25.08,121.23,'Taiwan'], HKG:['Hong Kong','Asia/Hong_Kong','Hong Kong','🇭🇰',22.31,113.91,'China'],
+ ICN:['Seoul','Asia/Seoul','South Korea','🇰🇷',37.46,126.44,'South Korea'], PVG:['Shanghai','Asia/Shanghai','China','🇨🇳',31.14,121.81,'China']
+};
+const HOME=['AKL','WLG','CHC','ZQN'];
+const HOME_AP='AKL';
+const AISLES=['Fruit & vege','Meat & fish','Dairy & eggs','Bakery','Pantry','Frozen','Drinks','Household','Other'];
+const AISLE_WORDS={
+ 'Fruit & vege':'apple banana orange lemon lime avocado kiwifruit mandarin grape berr potato kumara onion garlic carrot lettuce salad tomato cucumber capsicum broccoli cauliflower spinach mushroom pumpkin corn bean pea ginger herb coriander parsley courgette cabbage',
+ 'Meat & fish':'chicken beef mince lamb pork bacon ham sausage salami fish salmon tuna prawn steak',
+ 'Dairy & eggs':'milk cheese butter yoghurt yogurt cream egg',
+ 'Bakery':'bread roll bun wrap bagel croissant muffin crumpet',
+ 'Pantry':'rice pasta noodle flour sugar salt pepper oil vinegar sauce cereal oats weetbix weet-bix tin soup spice honey jam peanut coffee tea biscuit cracker chip snack stock nori soy',
+ 'Frozen':'frozen ice cream icecream nuggets',
+ 'Drinks':'juice water soda coke lemonade wine beer',
+ 'Household':'toilet paper tissue towel dish detergent soap shampoo toothpaste nappy wipes bin bag foil cling sponge laundry battery'
+};
+const SHOP_WORDS={ // suggestion only, by shop name
+ hardware:'car oil wd40 screw nail paint bulb hose tape glue drill fuse filter wiper tyre fertiliser compost mulch seed',
+ pharmacy:'panadol paracetamol ibuprofen nurofen sunscreen plaster vitamin prescription bandage antiseptic',
+ butcher:'lamb chops steak roast mince sausage brisket',
+ asian:'nori kimchi dumpling gochujang miso tofu bok choy rice noodle'
+};
+function guessAisle(n){ const s=n.toLowerCase(); for(const a in AISLE_WORDS) if(AISLE_WORDS[a].split(' ').some(w=>s.includes(w))) return a; return 'Other'; }
+
+/* ================= dates ================= */
+function dk(d){ const x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function at(d,h,m){ const x=new Date(d); x.setHours(h,m||0,0,0); return x; }
+function monday(d){ const x=new Date(d); x.setHours(12,0,0,0); return addDays(x,-((x.getDay()+6)%7)); }
+const uid=()=>Math.random().toString(36).slice(2,10);
+function t12(hm){ if(!hm) return ''; const [h,m]=hm.split(':').map(Number); return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?'am':'pm'); }
+const fmtD=(d,o)=>new Date(d).toLocaleDateString('en-NZ',o);
+
+/* ================= initial state ================= */
+function fresh(){
+  const t=new Date();
+  const P=[
+    {id:'p1',name:'Person 1',color:PASTELS[0],show:true,traveller:false},
+    {id:'p2',name:'Person 2',nick:'Mummy',color:PASTELS[1],show:true,traveller:true},
+    {id:'p3',name:'Person 3',color:PASTELS[2],show:true,traveller:false},
+    {id:'p4',name:'Person 4',color:PASTELS[3],show:true,traveller:false},
+    {id:'all',name:'Everyone',color:PASTELS[4],show:true,traveller:false}
+  ];
+  const shops=[
+    {id:'super',name:'Supermarket',color:'#c8ece6',aisles:true},
+    {id:'veg',name:'Fruit & vege shop',color:'#c3e8cc'},
+    {id:'butch',name:'Butcher',color:'#f9c9d0',kind:'butcher'},
+    {id:'asian',name:'Asian grocer',color:'#ffe5a8',kind:'asian'},
+    {id:'chem',name:'Pharmacy',color:'#d8c8f7',kind:'pharmacy'},
+    {id:'hard',name:'Hardware',color:'#ffd2b3',kind:'hardware'},
+    {id:'other',name:'Other',color:'#d9dde6'}
+  ];
+  const ev=(whos,title,off,time)=>({id:uid(),whos,title,date:dk(addDays(t,off)),time:time||'',sample:true});
+  const fl=(f,from,to,s,e)=>({id:uid(),who:'p2',flight:f,from,to,start:s.toISOString(),end:e.toISOString(),sample:true});
+  return {
+    people:P, shops, sources:[], itemShop:{},
+    events:[ev(['p3'],'School assembly',0,'09:00'),ev(['p3'],'Swimming',1,'16:00'),ev(['p1'],'Site meeting',1,'07:30'),ev(['p4'],'Coffee group',2,'10:30'),
+            ev(['all'],'Rubbish & recycling out',3,''),
+            {id:'ev-td1',whos:['p1'],title:'Book car service',date:dk(addDays(t,-1)),time:'10:00',todoId:'td1',sample:true},
+            {id:'ev-td2',whos:['p1'],title:'Mow the lawns',date:dk(addDays(t,2)),time:'',todoId:'td2',sample:true},ev(['p1','p3'],'School disco',4,'18:00'),ev(['all'],'Dinner at the beach',5,'17:30'),ev(['p4','p3'],'Garden club',6,'13:00')],
+    flights:[fl('NZ99','AKL','NRT',new Date(t.getTime()-5*36e5),new Date(t.getTime()+6*36e5)),fl('NZ90','NRT','AKL',at(addDays(t,2),20,0),at(addDays(t,3),7,30)),
+             fl('NZ6','AKL','LAX',at(addDays(t,7),19,30),at(addDays(t,8),8,0)),fl('NZ1','LAX','AKL',at(addDays(t,10),2,0),at(addDays(t,10),15,0))],
+    groceries:[
+      {id:uid(),name:'Milk',shop:'super',aisle:'Dairy & eggs',done:false,sample:true},
+      {id:uid(),name:'Bread',shop:'super',aisle:'Bakery',done:true,sample:true},
+      {id:uid(),name:'Toilet paper',shop:'super',aisle:'Household',done:false,sample:true},
+      {id:uid(),name:'Avocados',shop:'veg',done:false,sample:true},
+      {id:uid(),name:'Lamb chops',shop:'butch',done:false,sample:true},
+      {id:uid(),name:'Rice (10 kg)',shop:'asian',done:false,sample:true},
+      {id:uid(),name:'Sunscreen',shop:'chem',done:false,sample:true}
+    ],
+    todos:[
+      {id:'td1',title:'Book car service',who:'p1',done:false,sample:true,eventId:'ev-td1'},
+      {id:'td2',title:'Mow the lawns',who:'p1',done:false,sample:true,eventId:'ev-td2'},
+      {id:uid(),title:'Renew passport',who:'p2',done:false,sample:true},
+      {id:uid(),title:'Clean out the gutters',who:'',done:false,sample:true},
+      {id:uid(),title:'Return library books',who:'p3',done:false,sample:true}
+    ],
+    override:null, view:'week', shopTab:'all'
+  };
+}
+function migrate(s){
+  if(!s) return fresh();
+  s.events=(s.events||[]).map(e=>e.whos?e:Object.assign(e,{whos:e.who?[e.who]:[]}));
+  s.sources=s.sources||[]; s.itemShop=s.itemShop||{}; s.todos=s.todos||[];
+  return s;
+}
+function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
+let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
+(()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
+let weekOff=0, monthOff=0;
+
+/* ================= time zones ================= */
+function partsIn(tz,d){ const o={}; new Intl.DateTimeFormat('en-NZ',{timeZone:tz,hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(d).forEach(p=>o[p.type]=p.value); return o; }
+function offsetMin(tz,d){ const p=partsIn(tz,d); return Math.round((Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-d.getTime())/6e4); }
+function hm(d,tz){ const p=partsIn(tz,d); const h=+p.hour%24; return {h,m:+p.minute,txt:((h%12)||12)+':'+p.minute,ap:h<12?'am':'pm'}; }
+function fmtTime(d,tz){ const x=hm(d,tz); return x.txt+x.ap; }
+function dayIn(d,tz){ return new Intl.DateTimeFormat('en-NZ',{timeZone:tz,weekday:'long'}).format(d); }
+function dateIn(d,tz){ return new Intl.DateTimeFormat('en-NZ',{timeZone:tz,weekday:'long',day:'numeric',month:'long'}).format(d); }
+
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const person=id=>S.people.find(p=>p.id===id);
+const traveller=()=>S.people.find(p=>p.traveller);
+const shop=id=>S.shops.find(s=>s.id===id)||S.shops[S.shops.length-1];
+const col=id=>{ const p=person(id); return p?p.color:'#e5e7eb'; };
+const nm=id=>{ const p=person(id); return p?p.name:''; };
+function toast(m){ const b=document.createElement('div'); b.className='banner'; b.textContent=m; document.body.appendChild(b); setTimeout(()=>b.remove(),2600); }
+function modal(draw){ const L=$('#layer'); L.innerHTML='<div class="scrim"><div class="modal"></div></div>'; const close=()=>L.innerHTML=''; L.querySelector('.scrim').onclick=e=>{ if(e.target.classList.contains('scrim')) close(); }; draw(L.querySelector('.modal'),close); }
+
+/* ================= where is the traveller? ================= */
+function travellerNow(now){
+  const tp=traveller(); if(!tp) return null;
+  if(S.override){ if(S.override.code==='HOME') return null; const a=AIRPORTS[S.override.code]; return a?{tp,code:S.override.code,a,manual:true}:null; }
+  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  let loc=null, inAir=null;
+  for(const f of fl){ const s=new Date(f.start), e=new Date(f.end); if(s<=now&&now<e){ inAir=f; break; } if(e<=now) loc=f.to; }
+  const next=fl.find(f=>new Date(f.start)>now);
+  if(inAir){ return {tp,air:inAir,code:inAir.to,a:AIRPORTS[inAir.to]||null,from:AIRPORTS[inAir.from]||null,next}; }
+  if(!loc||HOME.includes(loc)) return null;
+  const a=AIRPORTS[loc]; if(!a) return null;
+  return {tp,code:loc,a,next};
+}
+
+/* ================= clocks ================= */
+function phase(h,m){ const x=h+m/60; return x>=5&&x<7?'dawn':x>=7&&x<17?'day':x>=17&&x<19.5?'dusk':'night'; }
+const STARS='<span class="stars">'+[[18,20],[40,64],[60,30],[78,72],[110,18],[150,58],[190,26],[230,70],[262,40],[205,88],[95,92]].map(([x,y])=>`<i style="left:${x}px;top:${y}px"></i>`).join('')+'</span>';
+function orbStyle(h,m){
+  const x=h+m/60, isDay=x>=6&&x<18, f=isDay?(x-6)/12:(((x+6)%24))/12;
+  const right=10+(1-f)*40, top=10+(1-Math.sin(Math.PI*f))*30;
+  return {cls:isDay?'sun':'moon',style:`right:${right.toFixed(0)}px;top:${top.toFixed(0)}px`};
+}
+const tName=tp=>tp?(tp.nick||tp.name):'';
+function homeETA(tp,now){
+  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const f=fl.find(f=>new Date(f.end)>now&&HOME.includes(f.to)); return f?new Date(f.end):null;
+}
+function relTime(d,now){
+  const mins=Math.max(0,Math.round((d-now)/6e4)), dd=Math.floor(mins/1440), hh=Math.floor((mins%1440)/60), mm=mins%60;
+  if(dd) return `${dd} day${dd>1?'s':''} ${hh} hr${hh!==1?'s':''}`; if(hh) return `${hh} hr${hh!==1?'s':''} ${mm} min`; return `${mm} min`;
+}
+const etaTxt=d=>`${fmtD(d,{weekday:'short'})} ${fmtTime(d,'Pacific/Auckland')}`;
+function clockHTML(tz,city,sub,extra,badge){
+  const now=new Date(), t=hm(now,tz), o=orbStyle(t.h,t.m);
+  return {cls:'cc '+phase(t.h,t.m), html:`${STARS}<span class="hill"></span><span class="orb ${o.cls}" style="${o.style}"></span>${badge?`<span class="badge">${badge}</span>`:''}
+    <span class="city">${city}</span><span class="time">${t.txt}<small>${t.ap}</small></span><span class="sub">${sub}</span>${extra||''}`};
+}
+function flightProgress(f,now){ return Math.min(1,Math.max(0,(now-new Date(f.start))/(new Date(f.end)-new Date(f.start)))); }
+function renderClock(){
+  const now=new Date(), hc=$('#homeClock'), tp=traveller();
+  $('#globeLbl').textContent=tp?`WHERE'S ${tName(tp).toUpperCase()}?`:'WHERE?';
+  const h=clockHTML('Pacific/Auckland','🏠 Home · Auckland',dateIn(now,'Pacific/Auckland'));
+  hc.className=h.cls; hc.innerHTML=h.html;
+  const r=travellerNow(now), box=$('#awayBox');
+  if(!r){ box.innerHTML=''; return; }
+  const name=esc(tName(r.tp)), eta=homeETA(r.tp,now);
+  const etaLine=eta?`🏠 Home ${etaTxt(eta)} · in ${relTime(eta,now)}`:'';
+  if(!r.a){ box.innerHTML=`<button class="cc day" id="awayBtn"><span class="city">✈️ ${name}</span><span class="time" style="font-size:30px">${esc(r.air.from)} → ${esc(r.air.to)}</span><span class="sub">In the air</span></button>`; }
+  else if(r.air){
+    const p=flightProgress(r.air,now), tz=r.a[1];
+    const c=clockHTML(tz,`✈️ ${name} → ${esc(r.a[0])} ${r.a[3]}`,`🛬 lands in ${relTime(new Date(r.air.end),now)} · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ`,
+      `<span class="bar2"><i style="width:${(p*100).toFixed(0)}%"></i></span>${HOME.includes(r.code)?'':`<span class="sub2">${etaLine}</span>`}`);
+    box.innerHTML=`<button class="${c.cls}" id="awayBtn">${c.html}</button>`;
+  } else {
+    const tz=r.a[1], t=hm(now,tz), night=(t.h>=22||t.h<7);
+    const diff=(offsetMin(tz,now)-offsetMin('Pacific/Auckland',now))/60;
+    const dtxt=diff===0?'same time':`${Math.abs(diff)}h ${diff<0?'behind':'ahead'}`;
+    const status=night?'🌙 asleep?':t.h<9?'☕ early there':'📞 good time to call';
+    const c=clockHTML(tz,`💼 ${name} · ${esc(r.a[0])} ${r.a[3]}`,`${dtxt} · ${status}`,etaLine?`<span class="sub2">${etaLine}</span>`:'',r.manual?'set by hand':'');
+    box.innerHTML=`<button class="${c.cls}" id="awayBtn">${c.html}</button>`;
+  }
+  $('#awayBtn').onclick=openGlobe;
+}
+
+/* ================= people bar + calendar navigation ================= */
+function renderBar(){
+  $('#bar').innerHTML=S.people.map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('');
+  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ const p=person(b.dataset.p); p.show=!p.show; savePrefs(); renderBar(); renderCal(); });
+  renderCalHead();
+}
+function renderCalHead(){
+  const isW=S.view==='week'; let label;
+  if(isW){ const m=addDays(monday(new Date()),weekOff*7), e=addDays(m,6); label=weekOff===0?'This week':weekOff===1?'Next week':weekOff===-1?'Last week':`${fmtD(m,{day:'numeric',month:'short'})} – ${fmtD(e,{day:'numeric',month:'short'})}`; }
+  else { const t=new Date(); label=fmtD(new Date(t.getFullYear(),t.getMonth()+monthOff,1),{month:'long',year:'numeric'}); }
+  $('#calhead').innerHTML=`<span class="lbl">${label}</span><button class="arrow" id="prev" aria-label="Previous">‹</button><button class="pill" id="todayBtn">Today</button><button class="arrow" id="next" aria-label="Next">›</button>
+    <div class="seg"><button data-v="week" class="${isW?'on':''}">Week</button><button data-v="month" class="${!isW?'on':''}">Month</button></div>`;
+  document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; save(); renderCalHead(); renderCal(); });
+  $('#prev').onclick=()=>{ isW?weekOff--:monthOff--; renderCalHead(); renderCal(); };
+  $('#next').onclick=()=>{ isW?weekOff++:monthOff++; renderCalHead(); renderCal(); };
+  $('#todayBtn').onclick=()=>{ weekOff=0; monthOff=0; renderCalHead(); renderCal(); };
+}
+
+/* ================= repeating entries ================= */
+// rpt: {f:'D'|'W'|'M'|'Y', n:interval, days:[0-6 Sun..Sat] (weekly), until:'YYYY-MM-DD'|'' , ex:['YYYY-MM-DD',...]}
+const DAYMS=864e5;
+const kd=k=>new Date(k+'T12:00');
+function occursOn(e,key){
+  if(!e.rpt) return e.date===key;
+  const r=e.rpt; if(key<e.date) return false; if(r.until&&key>r.until) return false; if(r.ex&&r.ex.includes(key)) return false;
+  const a=kd(e.date), b=kd(key), n=Math.max(1,r.n||1);
+  if(r.f==='D') return Math.round((b-a)/DAYMS)%n===0;
+  if(r.f==='W'){ const days=r.days&&r.days.length?r.days:[a.getDay()]; if(!days.includes(b.getDay())) return false; return Math.round((monday(b)-monday(a))/(7*DAYMS))%n===0; }
+  if(r.f==='M'){ if(b.getDate()!==a.getDate()) return false; return ((b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth())%n===0; }
+  if(r.f==='Y') return b.getDate()===a.getDate()&&b.getMonth()===a.getMonth()&&(b.getFullYear()-a.getFullYear())%n===0;
+  return e.date===key;
+}
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function rptText(r){
+  if(!r) return '';
+  const n=r.n||1;
+  let t=r.f==='D'?(n===1?'Every day':`Every ${n} days`):r.f==='W'?(n===1?'Every week':n===2?'Every fortnight':`Every ${n} weeks`)+(r.days&&r.days.length?' on '+[1,2,3,4,5,6,0].filter(d=>r.days.includes(d)).map(d=>WD[d]).join(', '):''):
+    r.f==='M'?(n===1?'Every month':`Every ${n} months`):r.f==='Y'?'Every year':'';
+  if(r.until) t+=' until '+fmtD(kd(r.until),{day:'numeric',month:'short',year:'numeric'});
+  return t;
+}
+// when someone taps one date of a repeating entry
+function openOccurrence(e,key){
+  modal((m,close)=>{
+    m.innerHTML=`<h2>🔁 ${esc(e.title)}</h2><p class="note">${esc(rptText(e.rpt))}. You tapped ${fmtD(kd(key),{weekday:'long',day:'numeric',month:'long'})}.</p>
+      <div class="opts" style="flex-direction:column;align-items:stretch">
+      <button class="opt" id="o1">✏️ Change just this one</button>
+      <button class="opt" id="o2">🔁 Change all of them</button>
+      <button class="opt" id="o3">⏭️ Skip just this one</button>
+      <button class="opt" id="o4">⏹️ Stop repeating after this</button></div>
+      <div class="mact"><button class="cancel" id="oc">Cancel</button></div>`;
+    m.querySelector('#oc').onclick=close;
+    m.querySelector('#o1').onclick=()=>{ close(); const copy={whos:[...e.whos],title:e.title,date:key,time:e.time};
+      openAdd(copy,()=>{ e.rpt.ex=[...(e.rpt.ex||[]),key]; save(); renderCal(); },'Change just this one',{noRepeat:true}); };
+    m.querySelector('#o2').onclick=()=>{ close(); openAdd(e,null,'Change all of them'); };
+    m.querySelector('#o3').onclick=()=>{ e.rpt.ex=[...(e.rpt.ex||[]),key]; save(); close(); renderCal(); toast('Skipped that one'); };
+    m.querySelector('#o4').onclick=()=>{ e.rpt.until=key; save(); close(); renderCal(); toast('Stops after '+fmtD(kd(key),{day:'numeric',month:'short'})); };
+  });
+}
+function repeatPicker(box,st){
+  const opts=[['','Never'],['D1','Every day'],['W1','Every week'],['W2','Every fortnight'],['M1','Every month'],['Y1','Every year']];
+  const cur=st.rpt?(st.rpt.f+(st.rpt.n||1)):'';
+  const draw=()=>{
+    const c=st.rpt?(st.rpt.f+(st.rpt.n||1)):'';
+    box.innerHTML=`<div class="opts">${opts.map(([k,l])=>`<button class="opt ${c===k?'on':''}" data-r="${k}">${l}</button>`).join('')}</div>
+    ${st.rpt&&st.rpt.f==='W'?`<div class="step">On these days</div><div class="opts">${[1,2,3,4,5,6,0].map(d=>`<button class="opt ${(st.rpt.days||[]).includes(d)?'on':''}" data-wd="${d}" style="min-width:70px">${WD[d]}</button>`).join('')}</div>`:''}
+    ${st.rpt?`<div class="step">Until</div><div class="opts"><button class="opt ${!st.rpt.until?'on':''}" data-u="">No end date</button><label class="opt" style="display:flex;align-items:center;gap:8px">📅 Until <input type="date" id="uIn" value="${st.rpt.until||''}" style="font-size:19px;border:0;background:none"></label></div>`:''}`;
+    box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ const k=b.dataset.r; if(!k) st.rpt=null; else { const f=k[0], n=+k.slice(1); st.rpt=Object.assign({ex:[],until:''},st.rpt||{},{f,n}); if(f==='W'&&!(st.rpt.days&&st.rpt.days.length)) st.rpt.days=[kd(st.date).getDay()]; if(f!=='W') delete st.rpt.days; } draw(); });
+    box.querySelectorAll('[data-wd]').forEach(b=>b.onclick=()=>{ const d=+b.dataset.wd, ds=st.rpt.days||[]; st.rpt.days=ds.includes(d)?ds.filter(x=>x!==d):[...ds,d]; if(!st.rpt.days.length) st.rpt.days=[d]; draw(); });
+    const u=box.querySelector('[data-u]'); if(u) u.onclick=()=>{ st.rpt.until=''; draw(); };
+    const ui=box.querySelector('#uIn'); if(ui) ui.onchange=()=>{ st.rpt.until=ui.value; draw(); };
+  };
+  draw();
+}
+
+/* ================= calendar ================= */
+const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p.show; });
+function itemsForDay(key){
+  const out=[];
+  for(const e of S.events) if(shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+  for(const f of S.flights){ if(!shown([f.who])) continue; const s=new Date(f.start); if(dk(s)===key) out.push({k:'fl',sort:String(s.getHours()).padStart(2,'0')+':'+String(s.getMinutes()).padStart(2,'0'),f}); }
+  return out.sort((a,b)=>a.sort.localeCompare(b.sort));
+}
+function evBg(whos){ const cs=whos.map(col); if(cs.length<2) return cs[0]||'#e5e7eb'; const step=100/cs.length; return `linear-gradient(135deg,${cs.map((c,i)=>`${c} ${(i*step).toFixed(0)}%,${c} ${((i+1)*step).toFixed(0)}%`).join(',')})`; }
+function evHTML(it,compact){
+  if(it.k==='ev'){
+    const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
+    if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
+    const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
+    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${e.time?t12(e.time):'All day'}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}</button>`;
+  }
+  const f=it.f, lbl=`✈️ ${esc(f.from)}→${esc(f.to)}`;
+  if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
+  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(new Date(f.start),'Pacific/Auckland')} · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}</button>`;
+}
+function renderCal(){
+  const cal=$('#cal'), todayKey=dk(new Date());
+  if(S.view==='week'){
+    const m=addDays(monday(new Date()),weekOff*7); let h='<div class="week">';
+    for(let i=0;i<7;i++){
+      const d=addDays(m,i), key=dk(d), isT=key===todayKey;
+      h+=`<div class="day ${isT?'today':''} ${i>4?'wkend':''}" data-drop="${key}"><h3>${isT?'Today':fmtD(d,{weekday:'long'})}<b>${d.getDate()} ${fmtD(d,{month:'short'})}</b></h3>
+          <div class="evs">${itemsForDay(key).map(x=>evHTML(x)).join('')}<button class="addday" data-add="${key}">＋ add</button></div></div>`;
+    }
+    cal.innerHTML=h+'</div>';
+  } else {
+    const t=new Date(), first=new Date(t.getFullYear(),t.getMonth()+monthOff,1), start=monday(first), mon=first.getMonth();
+    let h='<div class="mgrid">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="mhead">${x}</div>`).join('')+'</div><div class="mgrid mbody">';
+    for(let i=0;i<42;i++){
+      const d=addDays(start,i), key=dk(d), its=itemsForDay(key);
+      h+=`<button class="mcell ${d.getMonth()!==mon?'other':''} ${key===todayKey?'today':''}" data-add="${key}" data-drop="${key}"><span class="n">${d.getDate()}</span>${its.slice(0,3).map(x=>evHTML(x,true)).join('')}${its.length>3?`<span class="note">+${its.length-3} more</span>`:''}</button>`;
+    }
+    cal.innerHTML=h+'</div>';
+  }
+  cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
+  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
+}
+
+/* ================= press-and-drag (touch: press & hold; mouse: just drag) ================= */
+let drag=null, suppressClick=false;
+window.addEventListener('click',e=>{ if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
+document.addEventListener('touchmove',e=>{ if(drag&&drag.live) e.preventDefault(); },{passive:false});
+document.addEventListener('contextmenu',e=>{ if(e.target.closest('[data-lift]')) e.preventDefault(); });
+function liftable(el,opts){
+  el.addEventListener('pointerdown',e=>{
+    if(e.button>0||e.target.closest('[data-nolift]')) return;
+    const st={el,opts,sx:e.clientX,sy:e.clientY,x:e.clientX,y:e.clientY,live:false,timer:null,pid:e.pointerId,mouse:e.pointerType==='mouse'};
+    drag=st;
+    if(!st.mouse) st.timer=setTimeout(()=>{ if(drag===st) goLive(st); },320);
+    window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); window.addEventListener('pointercancel',onCancel);
+  });
+}
+function goLive(st){
+  st.live=true; document.body.classList.add('dragging'); st.el.classList.add('lifted');
+  const g=document.createElement('div'); g.className='ghost'; g.textContent=st.opts.label(); document.body.appendChild(g); st.g=g;
+  try{ navigator.vibrate&&navigator.vibrate(15); }catch(e){}
+  if(st.opts.onLive) st.opts.onLive();
+  place(st);
+}
+function place(st){
+  st.g.style.left=st.x+'px'; st.g.style.top=st.y+'px';
+  const el=document.elementFromPoint(st.x,st.y), tgt=el&&el.closest(st.opts.targets);
+  if(tgt!==st.over){ if(st.over) st.over.classList.remove('drop-on'); st.over=tgt; if(tgt) tgt.classList.add('drop-on'); }
+}
+function onMove(e){
+  const st=drag; if(!st||e.pointerId!==st.pid) return; st.x=e.clientX; st.y=e.clientY;
+  const moved=Math.hypot(st.x-st.sx,st.y-st.sy);
+  if(!st.live){ if(st.mouse&&moved>6) goLive(st); else if(!st.mouse&&moved>10){ endDrag(); } return; }
+  place(st);
+}
+function onUp(){ const st=drag; if(!st) return; const over=st.over, live=st.live; endDrag(); if(pendingRender){ pendingRender=false; setTimeout(renderAll,450); } if(live){ suppressClick=true; setTimeout(()=>suppressClick=false,400); if(over) st.opts.drop(over); } }
+function onCancel(){ endDrag(); }
+function endDrag(){
+  const st=drag; if(!st) return; clearTimeout(st.timer);
+  window.removeEventListener('pointermove',onMove); window.removeEventListener('pointerup',onUp); window.removeEventListener('pointercancel',onCancel);
+  if(st.g) st.g.remove(); if(st.over) st.over.classList.remove('drop-on'); if(st.live&&st.opts.onEnd) st.opts.onEnd(); st.el.classList.remove('lifted'); document.body.classList.remove('dragging'); drag=null;
+}
+
+/* ================= to do (with "did it get done?" follow-up) ================= */
+const todoEv=t=>t&&t.eventId?S.events.find(e=>e.id===t.eventId):null;
+const todoOf=e=>e&&e.todoId?S.todos.find(t=>t.id===e.todoId):null;
+function evPast(e,now){
+  now=now||new Date();
+  if(!e.time) return e.date<dk(now);
+  const [h,m]=e.time.split(':').map(Number); const d=new Date(e.date+'T00:00'); d.setHours(h+1,m,0,0); return d<now;
+}
+const needsCheck=t=>{ const e=todoEv(t); return !!e&&!t.done&&evPast(e); };
+function whenTxt(e){ const d=new Date(e.date+'T12:00'), k=e.date, today=dk(new Date()), tom=dk(addDays(new Date(),1));
+  return (k===today?'Today':k===tom?'Tomorrow':fmtD(d,{weekday:'short',day:'numeric',month:'short'}))+(e.time?' · '+t12(e.time):''); }
+function markDone(t,v){ t.done=v; const e=todoEv(t); if(e) e.done=v; save(); renderTodo(); renderCal(); }
+function unbook(t){ const e=todoEv(t); if(e) S.events=S.events.filter(x=>x.id!==e.id); t.eventId=null; save(); renderTodo(); renderCal(); }
+function keepInput(id,fn){ const el=document.getElementById(id), v=el?el.value:'', f=el&&document.activeElement===el; fn(); const n=document.getElementById(id); if(n&&v){ n.value=v; } if(n&&f) n.focus(); }
+function renderTodo(){ keepInput('tIn',renderTodo_); }
+function renderTodo_(){
+  const p=$('#todoPanel'), now=new Date();
+  const check=S.todos.filter(t=>needsCheck(t));
+  const open=S.todos.filter(t=>!t.done&&!todoEv(t));
+  const booked=S.todos.filter(t=>!t.done&&todoEv(t)&&!needsCheck(t)).sort((a,b)=>(todoEv(a).date+(todoEv(a).time||'')).localeCompare(todoEv(b).date+(todoEv(b).time||'')));
+  const done=S.todos.filter(t=>t.done);
+  const whoTag=x=>person(x.who)?`<span class="who"><span class="dot" style="width:11px;height:11px;vertical-align:-1px;background:${col(x.who)}"></span> ${esc(nm(x.who))}</span>`:'';
+  const row=(x,extra)=>`<div class="item ${x.done?'done':''}" data-lift data-t="${x.id}">
+     <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
+     <span class="nm">${esc(x.title)}${extra||''}${whoTag(x)}</span>
+     ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
+  let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button></div>
+  <form class="addrow" id="tForm"><input id="tIn" placeholder="Add a job…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form><div class="list">`;
+  if(check.length){
+    h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
+      <div class="acts"><button class="ok" data-done="${t.id}">✓ Done</button><button data-move="${t.id}">📅 Move it</button><button data-unbook="${t.id}">↩ Back on the list</button></div></div>`; }).join('');
+  }
+  if(open.length) h+=(check.length||booked.length?'<div class="sect">To do</div>':'')+open.map(x=>row(x)).join('');
+  if(booked.length) h+='<div class="sect">📅 Booked in</div>'+booked.map(x=>row(x,`<span class="when">📅 ${whenTxt(todoEv(x))}</span>`)).join('');
+  if(done.length) h+='<div class="sect">Done</div>'+done.map(x=>row(x)).join('');
+  if(!S.todos.length) h+='<p class="note" style="padding:12px">No jobs. Nice.</p>';
+  p.innerHTML=h+'</div>';
+  $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; S.todos.unshift({id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:'',done:false}); save(); renderTodo(); $('#tIn').focus(); };
+  p.querySelectorAll('[data-tick]').forEach(b=>b.onclick=()=>{ const x=S.todos.find(t=>t.id===b.dataset.tick); markDone(x,!x.done); });
+  p.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ markDone(S.todos.find(t=>t.id===b.dataset.done),true); toast('Nice one ✓'); });
+  p.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{ const t=S.todos.find(x=>x.id===b.dataset.move); openAdd(todoEv(t),()=>renderTodo(),'Move this job to a new day'); });
+  p.querySelectorAll('[data-unbook]').forEach(b=>b.onclick=()=>unbook(S.todos.find(t=>t.id===b.dataset.unbook)));
+  p.querySelectorAll('[data-sched]').forEach(b=>b.onclick=()=>scheduleTodo(S.todos.find(t=>t.id===b.dataset.sched),dk(new Date())));
+  p.querySelectorAll('[data-t]').forEach(el=>{
+    const t=S.todos.find(x=>x.id===el.dataset.t);
+    el.onclick=e=>{ if(e.target.closest('[data-nolift]')) return; openTodo(t); };
+    if(!t.done) liftable(el,{label:()=>'📅 '+t.title,targets:'[data-drop]',drop:tgt=>scheduleTodo(t,tgt.dataset.drop)});
+  });
+  $('#tClear').onclick=()=>{ S.todos=S.todos.filter(x=>!x.done); save(); renderTodo(); };
+}
+function scheduleTodo(t,date){
+  const e=todoEv(t);
+  if(e){ e.date=date; openAdd(e,()=>renderTodo(),'Move this job to a new day'); return; }
+  openAdd({whos:t.who?[t.who]:[],title:t.title,date,todoId:t.id},ev=>{ t.eventId=ev.id; save(); renderTodo(); });
+}
+function openTodo(t){
+  const st={title:t.title,who:t.who||''};
+  modal((m,close)=>{ const draw=()=>{
+    m.innerHTML=`<h2>Job</h2><div class="step">What needs doing?</div><input class="txt" id="jIn" value="${esc(st.title)}">
+    <div class="step">Whose job is it?</div>
+    <div class="opts"><button class="opt ${!st.who?'on':''}" data-who="">Anyone</button>${S.people.map(p=>`<button class="opt ${st.who===p.id?'on':''}" data-who="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
+    <div class="mact"><button class="del" id="dBtn">Delete</button><button class="cancel" id="sch">📅 Put on calendar</button><button class="save" id="sBtn">Save</button></div>`;
+    const ti=m.querySelector('#jIn'); ti.oninput=()=>st.title=ti.value;
+    m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ st.who=b.dataset.who; draw(); });
+    m.querySelector('#dBtn').onclick=()=>{ const e=todoEv(t); if(e) S.events=S.events.filter(x=>x.id!==e.id); S.todos=S.todos.filter(x=>x.id!==t.id); save(); close(); renderTodo(); renderCal(); };
+    m.querySelector('#sBtn').onclick=()=>{ t.title=st.title.trim()||t.title; t.who=st.who; save(); close(); renderTodo(); };
+    m.querySelector('#sch').onclick=()=>{ t.title=st.title.trim()||t.title; t.who=st.who; save(); close(); scheduleTodo(t,dk(new Date())); };
+  }; draw(); });
+}
+
+/* ================= shopping ================= */
+let pending=null; // item waiting for a shop choice
+function suggestShop(name){
+  const k=name.toLowerCase(); if(S.itemShop[k]&&S.shops.some(s=>s.id===S.itemShop[k])) return S.itemShop[k];
+  if(S.shopTab!=='all'&&S.shops.some(s=>s.id===S.shopTab)) return S.shopTab;
+  for(const s of S.shops){ const w=SHOP_WORDS[s.kind]; if(w&&w.split(' ').some(x=>k.includes(x))) return s.id; }
+  return (S.shops.find(s=>s.aisles)||S.shops[0]).id;
+}
+function addToShop(name,sid){
+  const ex=S.groceries.find(x=>x.shop===sid&&x.name.toLowerCase()===name.toLowerCase());
+  if(ex){ ex.done=false; toast(`${ex.name} is already on the ${shop(sid).name} list`); }
+  else S.groceries.push({id:uid(),name:name.charAt(0).toUpperCase()+name.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(name):'',done:false});
+  S.itemShop[name.toLowerCase()]=sid; save();
+}
+function moveItem(id,sid){
+  const g=S.groceries.find(x=>x.id===id); if(!g||g.shop===sid) return;
+  g.shop=sid; g.aisle=shop(sid).aisles?(g.aisle||guessAisle(g.name)):''; S.itemShop[g.name.toLowerCase()]=sid; save(); renderShop(); toast(`Moved to ${shop(sid).name}`);
+}
+function renderShop(){ keepInput('sIn',renderShop_); }
+function renderShop_(){
+  const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
+  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button></div>
+  <form class="addrow" id="sForm"><input id="sIn" placeholder="Add an item…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
+  <div class="shops"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
+  <div class="list">`;
+  const groups=[];
+  if(!cur){ for(const s of S.shops){ const it=S.groceries.filter(g=>g.shop===s.id); if(it.length) groups.push([s,it,s.id]); } }
+  else if(cur.aisles){ for(const a of AISLES){ const it=S.groceries.filter(g=>g.shop===cur.id&&(g.aisle||'Other')===a); if(it.length) groups.push([{name:a,color:cur.color},it,cur.id]); } }
+  else { const it=S.groceries.filter(g=>g.shop===cur.id); if(it.length) groups.push([cur,it,cur.id]); }
+  for(const [g,items,sid] of groups){
+    h+=`<div data-shopdrop="${sid}"><div class="grp"><span class="tag" style="background:${g.color}"></span>${esc(g.name)}</div>`+
+      items.sort((a,b)=>a.done-b.done).map(x=>`<div class="item ${x.done?'done':''}" data-lift data-g="${x.id}"><span class="box">${x.done?'✓':''}</span><span class="nm">${esc(x.name)}</span>${!cur&&shop(x.shop).aisles&&x.aisle?`<span class="sub">${esc(x.aisle)}</span>`:''}</div>`).join('')+'</div>';
+  }
+  if(!groups.length) h+='<p class="note" style="padding:12px">Nothing on this list yet.</p>';
+  h+='</div>';
+  if(pending){
+    const sug=suggestShop(pending);
+    h+=`<div class="chooser"><h3>Where does “${esc(pending)}” go?</h3><div class="opts">${[S.shops.find(s=>s.id===sug),...S.shops.filter(s=>s.id!==sug)].map((s,i)=>`<button class="opt ${i===0?'on':''}" data-pick="${s.id}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</button>`).join('')}</div>
+    <div class="row"><button class="linkbtn" id="pCancel">Cancel</button><span class="note">Next time it goes straight to the shop you pick.</span></div></div>`;
+  }
+  p.innerHTML=h;
+  p.querySelectorAll('[data-shop]').forEach(b=>b.onclick=()=>{ S.shopTab=b.dataset.shop; save(); renderShop(); });
+  $('#sForm').onsubmit=e=>{ e.preventDefault(); const v=$('#sIn').value.trim(); if(!v) return;
+    const k=v.toLowerCase();
+    if(S.itemShop[k]&&S.shops.some(s=>s.id===S.itemShop[k])&&S.shopTab==='all'){ $('#sIn').value=''; addToShop(v,S.itemShop[k]); toast(`Added to ${shop(S.itemShop[k]).name}`); renderShop(); $('#sIn').focus(); return; }
+    pending=v; renderShop(); };
+  p.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const si=$('#sIn'); if(si) si.value=''; addToShop(pending,b.dataset.pick); pending=null; renderShop(); $('#sIn').focus(); });
+  const pc=$('#pCancel'); if(pc) pc.onclick=()=>{ pending=null; renderShop(); };
+  p.querySelectorAll('[data-g]').forEach(el=>{
+    const g=S.groceries.find(x=>x.id===el.dataset.g);
+    el.onclick=()=>{ g.done=!g.done; save(); renderShop(); };
+    liftable(el,{label:()=>'🛒 '+g.name,targets:'[data-shopdrop]',drop:tgt=>moveItem(g.id,tgt.dataset.shopdrop),
+      onLive:()=>{ const tr=document.createElement('div'); tr.className='tray'; tr.id='tray';
+        tr.innerHTML=`<div class="tt">Drop “${esc(g.name)}” on a shop</div>`+S.shops.map(s=>`<div class="tile" data-shopdrop="${s.id}" style="background:${s.color}">${s.id===g.shop?'📍 ':''}${esc(s.name)}</div>`).join('');
+        p.appendChild(tr); },
+      onEnd:()=>{ const tr=document.getElementById('tray'); if(tr) tr.remove(); }});
+  });
+  $('#gClear').onclick=()=>{ S.groceries=S.groceries.filter(x=>!x.done); save(); renderShop(); };
+}
+
+/* ================= time wheels (like the Android alarm) ================= */
+function makeWheel(values,idx,onPick,cls){
+  const w=document.createElement('div'); w.className='wheel'+(cls?' '+cls:''); const H=64;
+  w.innerHTML='<div class="pad"></div>'+values.map((v,i)=>`<div class="wi" data-i="${i}">${v}</div>`).join('')+'<div class="pad"></div>';
+  const mark=i=>w.querySelectorAll('.wi').forEach((el,j)=>el.classList.toggle('sel',j===i));
+  let t, cur=idx; mark(idx);
+  w.addEventListener('scroll',()=>{ const i=Math.max(0,Math.min(values.length-1,Math.round(w.scrollTop/H))); if(i!==cur){ cur=i; mark(i); } clearTimeout(t); t=setTimeout(()=>onPick(cur),80); });
+  w.querySelectorAll('.wi').forEach(el=>el.onclick=()=>w.scrollTo({top:+el.dataset.i*H,behavior:'smooth'}));
+  w.setTo=i=>{ w.scrollTop=i*H; cur=i; mark(i); };
+  requestAnimationFrame(()=>w.setTo(idx));
+  return w;
+}
+function timePicker(box,st){
+  const draw=()=>{
+    box.innerHTML=`<div class="opts" style="margin-bottom:12px"><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button></div><div id="tpArea"></div>`;
+    box.querySelectorAll('[data-allday]').forEach(b=>b.onclick=()=>{ if(b.dataset.allday==='1') st.time=''; else if(!st.time) st.time='09:00'; draw(); });
+    if(!st.time) return;
+    const area=box.querySelector('#tpArea');
+    let [H,M]=st.time.split(':').map(Number);
+    const setT=()=>{ st.time=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'); };
+    if(st.typing){
+      area.innerHTML=`<div class="timewrap"><div class="typed"><input id="hh" inputmode="numeric" maxlength="2" value="${(H%12)||12}"><span class="colon">:</span><input id="mm" inputmode="numeric" maxlength="2" value="${String(M).padStart(2,'0')}"></div>
+        <div class="opts"><button class="opt ${H<12?'on':''}" data-ap="am">am</button><button class="opt ${H>=12?'on':''}" data-ap="pm">pm</button></div>
+        <button class="linkbtn" id="toWheel">🎡 Use the wheels</button></div>`;
+      const hh=area.querySelector('#hh'), mm=area.querySelector('#mm');
+      const read=()=>{ let h=Math.min(12,Math.max(1,parseInt(hh.value)||12)), m=Math.min(59,Math.max(0,parseInt(mm.value)||0)); const pm=H>=12; H=(h%12)+(pm?12:0); M=m; setT(); };
+      hh.oninput=()=>{ if(hh.value.length>=2) mm.focus(); read(); }; mm.oninput=read;
+      hh.onfocus=()=>hh.select(); mm.onfocus=()=>mm.select();
+      area.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ read(); H=(H%12)+(b.dataset.ap==='pm'?12:0); setT(); draw(); });
+      area.querySelector('#toWheel').onclick=()=>{ read(); st.typing=false; draw(); };
+      setTimeout(()=>hh.focus(),50);
+      return;
+    }
+    area.innerHTML='<div class="timewrap"><div class="wheels" id="wh"></div><button class="linkbtn" id="toType">⌨️ Type it in</button></div>';
+    const wh=area.querySelector('#wh');
+    const hours=Array.from({length:12},(_,i)=>String(i+1)), mins=Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
+    wh.appendChild(makeWheel(hours,((H%12)||12)-1,i=>{ const pm=H>=12; H=((i+1)%12)+(pm?12:0); setT(); }));
+    const c=document.createElement('span'); c.className='colon'; c.textContent=':'; wh.appendChild(c);
+    wh.appendChild(makeWheel(mins,M,i=>{ M=i; setT(); }));
+    wh.appendChild(makeWheel(['am','pm'],H>=12?1:0,i=>{ H=(H%12)+(i?12:0); setT(); },'ampm'));
+    area.querySelector('#toType').onclick=()=>{ st.typing=true; draw(); };
+  };
+  draw();
+}
+
+/* ================= add / edit calendar entry ================= */
+function openAdd(existing,onSaved,heading,opt){
+  const isNew=!existing||!existing.id;
+  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',date:existing?.date||dk(new Date()),time:existing?.time||'',typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
+  const canRepeat=!(opt&&opt.noRepeat)&&!(existing&&existing.todoId);
+  const t=new Date(), dayOpts=[];
+  for(let i=0;i<8;i++){ const d=addDays(t,i); dayOpts.push([dk(d),i===0?'Today':i===1?'Tomorrow':fmtD(d,{weekday:'short',day:'numeric',month:'short'})]); }
+  const ensure=()=>{ if(!dayOpts.some(o=>o[0]===st.date)) dayOpts.unshift([st.date,fmtD(new Date(st.date+'T12:00'),{weekday:'short',day:'numeric',month:'short'})]); };
+  ensure();
+  modal((m,close)=>{
+    m.innerHTML=`<h2>${heading||(isNew?'Add to the calendar':'Change this')}</h2>
+    <div class="step">1. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
+    <div class="step">2. What is it?</div><input class="txt" id="evTitle" value="${esc(st.title)}" placeholder="e.g. Doctor, school trip, swimming">
+    <div class="step">3. Which day?</div><div class="opts" id="dayBox"></div>
+    <div class="step">4. What time?</div><div id="timeBox"></div>
+    ${canRepeat?'<div class="step">5. Does it repeat?</div><div id="rptBox"></div>':''}
+    <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
+    const drawWho=()=>{ const b=m.querySelector('#whoBox');
+      b.innerHTML=S.people.map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
+      b.querySelectorAll('[data-who]').forEach(x=>x.onclick=()=>{ const id=x.dataset.who; st.whos=st.whos.includes(id)?st.whos.filter(i=>i!==id):[...st.whos,id]; drawWho(); }); };
+    const drawDays=()=>{ const b=m.querySelector('#dayBox');
+      b.innerHTML=dayOpts.map(o=>`<button class="opt ${st.date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
+      b.querySelectorAll('[data-day]').forEach(x=>x.onclick=()=>{ st.date=x.dataset.day; drawDays(); });
+      b.querySelector('#dIn').onchange=e=>{ if(e.target.value){ st.date=e.target.value; ensure(); drawDays(); } }; };
+    drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),st); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
+    const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
+    m.querySelector('#cBtn').onclick=close;
+    if(!isNew) m.querySelector('#dBtn').onclick=()=>{ S.events=S.events.filter(e=>e.id!==existing.id); const tj=todoOf(existing); if(tj) tj.eventId=null; save(); close(); renderCal(); renderTodo(); toast(tj?'Taken off the calendar, back on the to-do list':'Deleted'); };
+    const db=m.querySelector('#doneBtn'); if(db) db.onclick=()=>{ const tj=todoOf(existing); close(); if(tj) markDone(tj,true); else { existing.done=true; save(); renderCal(); } toast('Nice one ✓'); };
+    m.querySelector('#sBtn').onclick=()=>{
+      if(!st.whos.length){ toast('Tap who it is for'); return; }
+      if(!st.title.trim()){ toast('Type what it is'); ti.focus(); return; }
+      const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),date:st.date,time:st.time};
+      if(canRepeat){ if(st.rpt){ if(st.rpt.until&&st.rpt.until<st.date){ toast('The end date is before the start'); return; } rec.rpt=st.rpt; } else if(existing) delete existing.rpt; }
+      let ev; if(isNew){ ev=Object.assign({id:uid()},rec); if(existing&&existing.todoId) ev.todoId=existing.todoId; S.events.push(ev); } else { ev=Object.assign(existing,rec); const tj=todoOf(ev); if(tj) tj.title=ev.title; }
+      save(); close(); renderCal(); renderTodo(); toast(isNew?'Added to the calendar':'Saved'); if(onSaved) onSaved(ev);
+    };
+  });
+}
+
+function openFlight(f){
+  const a=AIRPORTS[f.from], b=AIRPORTS[f.to], s=new Date(f.start), e=new Date(f.end);
+  const nz=d=>d.toLocaleString('en-NZ',{weekday:'long',hour:'numeric',minute:'2-digit'});
+  modal((m,close)=>{
+    m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>
+    <p style="font-size:21px">Leaves <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
+    Lands <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
+    <p class="note">From the roster. To change it, load an updated roster in 🔗 Calendars.</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
+    m.querySelector('#ok').onclick=close;
+  });
+}
+function openWhere(after){
+  const tp=traveller(); if(!tp){ toast('In Settings, tick who travels for work'); return; }
+  const cities=[...new Map(Object.entries(AIRPORTS).filter(([c])=>!HOME.includes(c)).map(([c,v])=>[v[0],c])).entries()].sort();
+  modal((m,close)=>{
+    m.innerHTML=`<h2>Where is ${esc(tp.name)}?</h2><p class="note">This normally comes from the roster. If plans change, pick the city here. It stays set until you tap “Use the roster”.</p>
+    <div class="opts">${cities.map(([city,code])=>`<button class="opt ${S.override?.code===code?'on':''}" data-c="${code}">${AIRPORTS[code][3]} ${esc(city)}</button>`).join('')}</div>
+    <div class="mact"><button class="cancel" data-c="HOME">🏠 Home</button><button class="cancel" id="ros">Use the roster</button><button class="save" id="ok">Done</button></div>`;
+    const done=()=>{ save(); close(); renderClock(); if(after) after(); };
+    m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ S.override={code:b.dataset.c}; done(); });
+    m.querySelector('#ros').onclick=()=>{ S.override=null; done(); };
+    m.querySelector('#ok').onclick=close;
+  });
+}
+
+/* ================= globe: where is everyone? ================= */
+let globeTimer=null;
+function subsolar(d){
+  const start=Date.UTC(d.getUTCFullYear(),0,0), doy=(d.getTime()-start)/864e5;
+  const g=2*Math.PI/365*(doy-1);
+  const eqt=229.18*(0.000075+0.001868*Math.cos(g)-0.032077*Math.sin(g)-0.014615*Math.cos(2*g)-0.040849*Math.sin(2*g));
+  const decl=0.006918-0.399912*Math.cos(g)+0.070257*Math.sin(g)-0.006758*Math.cos(2*g)+0.000907*Math.sin(2*g)-0.002697*Math.cos(3*g)+0.00148*Math.sin(3*g);
+  const mins=d.getUTCHours()*60+d.getUTCMinutes()+d.getUTCSeconds()/60;
+  return [-(mins+eqt-720)/4, decl*180/Math.PI];
+}
+function openGlobe(){
+  const L=$('#spaceLayer');
+  const countries=topojson.feature(WORLD,WORLD.objects.countries);
+  const now=new Date(), r=travellerNow(now), tp=traveller(), home=AIRPORTS[HOME_AP];
+  const who=tp?esc(tName(tp)):'everyone';
+  const homeLL=[home[5],home[4]];
+  let thereLL=null, planeLL=null, arcFrom=homeLL, arcTo=null, frac=0, planeAhead=null;
+  if(r&&r.a) thereLL=[r.a[5],r.a[4]];
+  if(r&&r.air&&r.from&&r.a){
+    arcFrom=[r.from[5],r.from[4]]; arcTo=[r.a[5],r.a[4]]; frac=flightProgress(r.air,now);
+    const ip=d3.geoInterpolate(arcFrom,arcTo); planeLL=ip(frac); planeAhead=ip(Math.min(1,frac+0.01));
+  } else if(thereLL) arcTo=thereLL;
+  const focus=planeLL||(arcTo?d3.geoInterpolate(arcFrom,arcTo)(0.5):homeLL);
+  const her=r&&r.a?r.a[6]:null;
+  const eta=tp?homeETA(tp,now):null;
+  function whereOver(ll){
+    for(const f of countries.features) if(d3.geoContains(f,ll)) return 'over '+f.properties.name.replace('United States of America','the USA');
+    const [lon,lat]=ll;
+    if(lat<-28&&lat>-47&&lon>146&&lon<173) return 'over the Tasman Sea';
+    if(lat<=-9&&lat>=-28&&lon>142&&lon<166) return 'over the Coral Sea';
+    if(lat>5&&lat<30&&lon>120&&lon<140) return 'over the Philippine Sea';
+    if(lon>=110||lon<=-75) return 'over the Pacific Ocean';
+    if(lon>20&&lon<110&&lat<25) return 'over the Indian Ocean';
+    return 'over the ocean';
+  }
+  const starHTML=Array.from({length:90},()=>{ const sz=Math.random()*2+1; return `<i style="left:${Math.random()*100}%;top:${Math.random()*100}%;width:${sz}px;height:${sz}px;opacity:${(Math.random()*.6+.3).toFixed(2)}"></i>`; }).join('');
+  const distKm=thereLL?Math.round(d3.geoDistance(homeLL,thereLL)*6371):0;
+  const herCard=()=>{
+    if(!tp) return '';
+    if(!r) return `<div class="icard" style="background:#c3e8cc"><div class="c">🏠 ${who} is home!</div><div class="s">Everyone is in Auckland right now.</div></div>`;
+    if(!r.a) return `<div class="icard" style="background:#d5e8f6"><div class="c">✈️ ${who} is flying</div><div class="t" style="font-size:30px">${esc(r.air.from)} → ${esc(r.air.to)}</div></div>`;
+    const t=hm(new Date(),r.a[1]), ph=phase(t.h,t.m);
+    const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph];
+    if(r.air) return `<div class="icard" style="background:#d5e8f6"><div class="c">✈️ ${who} is flying ${esc(r.air.flight||'')} to ${esc(r.a[0])} ${r.a[3]}</div>
+      <div class="t" style="font-size:28px">Lands in ${relTime(new Date(r.air.end),now)}</div>
+      <div class="s">Somewhere ${whereOver(planeLL)} (estimated)<br>Lands ${fmtTime(new Date(r.air.end),r.a[1])} ${esc(r.a[0])} time · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ time</div>
+      <div class="bar2" style="height:8px;border-radius:99px;background:rgba(255,255,255,.7);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${(frac*100).toFixed(0)}%;background:#2b2f3a"></i></div></div>`;
+    return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away</div></div>`;
+  };
+  const homeT=hm(now,'Pacific/Auckland');
+  const etaCard=eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
+  L.innerHTML=`<div class="space"><div class="starsbg">${starHTML}</div>
+   <div class="stage" id="stage"></div>
+   <div class="info"><h2>🌏 Where's ${who}?</h2>
+     ${herCard()}${etaCard}
+     <div class="icard" style="background:#fff6d6"><div class="c">🏠 Home · Auckland 🇳🇿</div><div class="t" style="font-size:30px">${homeT.txt}<small style="font-size:18px">${homeT.ap}</small></div><div class="s">${dateIn(now,'Pacific/Auckland')}</div></div>
+     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(new Date(r.next.start),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?'The plane position is worked out from the rostered times, so it is an estimate. ':''}The shaded side is night time. Drag the globe to spin it.</span></div>
+     <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button class="close" id="gClose">✕ Back</button></div>
+   </div></div>`;
+
+  const stage=$('#stage'), rect=stage.getBoundingClientRect();
+  const size=Math.max(260,Math.min(rect.width-30,rect.height-30,760));
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('width',size); svg.setAttribute('height',size); svg.setAttribute('viewBox',`0 0 ${size} ${size}`);
+  stage.appendChild(svg);
+  const proj=d3.geoOrthographic().scale(size/2-8).translate([size/2,size/2]).clipAngle(90);
+  const path=d3.geoPath(proj), grat=d3.geoGraticule10();
+  const sun=subsolar(now), night=d3.geoCircle().center([sun[0]+180,-sun[1]]).radius(90)();
+  let rot=[-(focus[0]+60),-focus[1]*0.6]; const target=[-focus[0],-focus[1]];
+  svg.innerHTML=`<defs><radialGradient id="ocean" cx="40%" cy="35%"><stop offset="0" stop-color="#d9f0ff"/><stop offset=".7" stop-color="#9fd3ee"/><stop offset="1" stop-color="#7cb9dc"/></radialGradient>
+    <radialGradient id="glow"><stop offset=".86" stop-color="#9fd8ff" stop-opacity=".45"/><stop offset="1" stop-color="#9fd8ff" stop-opacity="0"/></radialGradient>
+    <filter id="pshadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".45"/></filter></defs>
+    <circle cx="${size/2}" cy="${size/2}" r="${size/2}" fill="url(#glow)"/><g id="gl"></g>`;
+  const gl=svg.querySelector('#gl');
+  const visible=ll=>d3.geoDistance(ll,proj.invert([size/2,size/2]))<Math.PI/2;
+  function pin(ll,label,sub,fill){
+    const p=proj(ll); if(!p||!visible(ll)) return '';
+    const w=Math.max(label.length*8.4,sub.length*7.2)+26, x=p[0]+14, y=p[1]-46;
+    return `<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="12" fill="${fill}"/><circle cx="${p[0]}" cy="${p[1]}" r="8" fill="${fill}" stroke="#fff" stroke-width="3"/>
+      <g transform="translate(${x},${y})"><rect class="lbl-bg" width="${w}" height="44" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(label)}</text><text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text></g>`;
+  }
+  // a sleek black jet with a silver fern-green stripe (not an airline logo)
+  const PLANE=`<g filter="url(#pshadow)">
+    <path d="M-6,-3 L-14,-24 L-8,-24 L8,-3Z" fill="#111" stroke="#fff" stroke-width=".8"/>
+    <path d="M-6,3 L-14,24 L-8,24 L8,3Z" fill="#111" stroke="#fff" stroke-width=".8"/>
+    <path d="M-20,-2 L-25,-10 L-21,-10 L-15,-2Z" fill="#111" stroke="#fff" stroke-width=".6"/>
+    <path d="M-20,2 L-25,10 L-21,10 L-15,2Z" fill="#111" stroke="#fff" stroke-width=".6"/>
+    <path d="M-24,0 C-24,-3.5 -20,-4.2 -14,-4.2 L16,-3.6 C22,-3.2 26,-1.6 27,0 C26,1.6 22,3.2 16,3.6 L-14,4.2 C-20,4.2 -24,3.5 -24,0Z" fill="#111" stroke="#fff" stroke-width="1"/>
+    <path d="M-18,0 L20,0" stroke="#9fd8cf" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="21" cy="0" r="1.6" fill="#9fd3ee"/></g>`;
+  function draw(){
+    proj.rotate(rot);
+    let h=`<path d="${path({type:'Sphere'})}" fill="url(#ocean)"/><path d="${path(grat)}" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width=".7"/>`;
+    for(const f of countries.features){ const d=path(f); if(d) h+=`<path d="${d}" fill="${f.properties.name===her?'#ffc9a3':f.properties.name==='New Zealand'?'#ffe5a8':'#c3e8cc'}" stroke="#fff" stroke-width=".6"/>`; }
+    h+=`<path d="${path(night)}" fill="#1b1f4a" fill-opacity=".38"/>`;
+    if(planeLL){
+      h+=`<path d="${path({type:'LineString',coordinates:[planeLL,arcTo]})||''}" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 8" stroke-opacity=".9"/>`;
+      h+=`<path d="${path({type:'LineString',coordinates:[arcFrom,planeLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round"/>`;
+    } else if(arcTo) h+=`<path class="arc" d="${path({type:'LineString',coordinates:[arcFrom,arcTo]})||''}"/>`;
+    h+=pin(homeLL,'🏠 Home',`Auckland · ${fmtTime(new Date(),'Pacific/Auckland')}`,'#f59e0b');
+    if(thereLL&&!planeLL) h+=pin(thereLL,`💼 ${tName(r.tp)}`,`${r.a[0]} · ${fmtTime(new Date(),r.a[1])}`,'#ef6f8f');
+    if(planeLL){
+      if(!HOME.includes(r.code)||!r.from||HOME.includes(r.air.from)) h+=pin(arcTo,`🛬 ${r.a[0]}`,`lands ${fmtTime(new Date(r.air.end),r.a[1])}`,'#ef6f8f');
+      if(r.from&&!HOME.includes(r.air.from)) h+=pin(arcFrom,`🛫 ${r.from[0]}`,'departed','#a78bfa');
+      const p=proj(planeLL), q=proj(planeAhead);
+      if(p&&visible(planeLL)){
+        const ang=q&&(Math.abs(q[0]-p[0])+Math.abs(q[1]-p[1])>0.01)?Math.atan2(q[1]-p[1],q[0]-p[0])*180/Math.PI:0;
+        h+=`<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="18" fill="#ffd45c"/><g transform="translate(${p[0]},${p[1]}) rotate(${ang.toFixed(1)}) scale(1.35)">${PLANE}</g>`;
+        const lbl=`✈️ ${tName(r.tp)} · lands in ${relTime(new Date(r.air.end),new Date())}`, sub=whereOver(planeLL);
+        const w=Math.max(lbl.length*8.4,sub.length*7.2)+26;
+        h+=`<g transform="translate(${p[0]-w/2},${p[1]+30})"><rect class="lbl-bg" width="${w}" height="44" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(lbl)}</text><text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text></g>`;
+      }
+    }
+    gl.innerHTML=h;
+  }
+  function spinTo(tgt,ms){
+    cancelAnimationFrame(globeTimer); const from=[...rot], t0=performance.now();
+    const step=n=>{ const k=Math.min(1,(n-t0)/ms), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; rot=[from[0]+(tgt[0]-from[0])*e,from[1]+(tgt[1]-from[1])*e]; draw(); if(k<1) globeTimer=requestAnimationFrame(step); };
+    globeTimer=requestAnimationFrame(step);
+  }
+  draw(); spinTo(target,1800);
+  let dg=null;
+  svg.addEventListener('pointerdown',e=>{ cancelAnimationFrame(globeTimer); dg={x:e.clientX,y:e.clientY,r:[...rot]}; svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove',e=>{ if(!dg) return; const k=120/proj.scale(); rot=[dg.r[0]+(e.clientX-dg.x)*k*1.2,Math.max(-80,Math.min(80,dg.r[1]-(e.clientY-dg.y)*k*1.2))]; draw(); });
+  svg.addEventListener('pointerup',()=>dg=null); svg.addEventListener('pointercancel',()=>dg=null);
+  $('#gSpin').onclick=()=>spinTo(target,1400);
+  $('#gSet').onclick=()=>openWhere(()=>{ openGlobe(); });
+  $('#gClose').onclick=()=>{ cancelAnimationFrame(globeTimer); L.innerHTML=''; };
+}
+
+/* ================= calendar files (.ics) ================= */
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
+function parseICS(text,who,isRoster,sid){
+  sid=sid||uid();
+  const lines=text.replace(/\r?\n[ \t]/g,'').split(/\r?\n/); const evs=[]; let cur=null;
+  for(const ln of lines){
+    if(ln==='BEGIN:VEVENT') cur={}; else if(ln==='END:VEVENT'){ if(cur) evs.push(cur); cur=null; }
+    else if(cur){ const i=ln.indexOf(':'); if(i<0) continue; const k=ln.slice(0,i), name=k.split(';')[0];
+      if(name==='EXDATE'){ (cur.EXDATES=cur.EXDATES||[]).push({v:ln.slice(i+1),params:k}); } else cur[name]={v:ln.slice(i+1),params:k}; }
+  }
+  const toDate=o=>{ if(!o) return null; const m=o.v.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/); if(!m) return null;
+    if(!m[4]) return new Date(+m[1],+m[2]-1,+m[3]);
+    if(m[7]) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0)));
+    const tz=(o.params.match(/TZID=([^;:]+)/)||[])[1];
+    if(tz){ try{ const g=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])); return new Date(g.getTime()-offsetMin(tz,g)*6e4); }catch(e){} }
+    return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]); };
+  const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const BYDAY={SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+  function rrule(e,start){
+    if(!e.RRULE) return null;
+    const p=Object.fromEntries(e.RRULE.v.split(';').map(x=>x.split('=')));
+    const f={DAILY:'D',WEEKLY:'W',MONTHLY:'M',YEARLY:'Y'}[p.FREQ]; if(!f) return null;
+    const r={f,n:+(p.INTERVAL||1),until:'',ex:[]};
+    if(f==='W') r.days=p.BYDAY?p.BYDAY.split(',').map(x=>BYDAY[x.slice(-2)]).filter(x=>x!==undefined):[start.getDay()];
+    if(f==='M'&&p.BYDAY) return 'unsupported';           // e.g. "2nd Tuesday" — not handled yet
+    if(p.UNTIL){ const u=toDate({v:p.UNTIL,params:''}); if(u) r.until=dk(u); }
+    (e.EXDATES||[]).forEach(x=>x.v.split(',').forEach(v=>{ const d=toDate({v,params:x.params}); if(d) r.ex.push(dk(d)); }));
+    if(p.COUNT){ // turn "10 times" into an end date
+      const tmp={date:dk(start),rpt:r}; let c=0, d=new Date(start);
+      for(let i=0;i<3000&&c<+p.COUNT;i++){ const k=dk(d); if(occursOn(tmp,k)){ c++; if(c===+p.COUNT){ r.until=k; break; } } d=addDays(d,1); }
+    }
+    return r;
+  }
+  const lo=dk(addDays(new Date(),-62)), hi=dk(addDays(new Date(),400));
+  const flights=[], others=[], masters={};
+  for(const e of evs){
+    const sum=(e.SUMMARY?.v||'').replace(/\\,/g,',').replace(/\\n/g,' ').replace(/\;/g,';').trim(), s=toDate(e.DTSTART), en=toDate(e.DTEND)||s; if(!s) continue;
+    const uidv=(e.UID?.v||'')+'|'+(e['RECURRENCE-ID']?.v||'');
+    const id=sid+'-'+hashStr(uidv+'|'+e.DTSTART.v+'|'+sum);
+    const rp=rrule(e,s);
+    const k=dk(s);
+    if(rp&&rp!=='unsupported'){ if(rp.until&&rp.until<lo) continue; if(k>hi) continue; }
+    else if(k<lo||k>hi) continue;
+    const m=isRoster&&(sum+' '+(e.LOCATION?.v||'')+' '+(e.DESCRIPTION?.v||'')).match(/\b([A-Z]{3})\s*(?:-|–|→|>|to|\/)\s*([A-Z]{3})\b/);
+    if(m&&(AIRPORTS[m[1]]||AIRPORTS[m[2]])){ flights.push({id,who,src:sid,flight:((sum.match(/\b(NZ\s?\d{1,4})\b/)||[])[1]||'').replace(' ',''),from:m[1],to:m[2],start:s.toISOString(),end:en.toISOString()}); continue; }
+    if(!sum) continue;
+    const ev={id,whos:[who],title:sum,date:k,time:e.DTSTART.v.includes('T')?hhmm(s):'',src:sid};
+    if(rp&&rp!=='unsupported'){ ev.rpt=rp; if(e.UID) masters[e.UID.v]=ev; }
+    others.push(ev);
+    if(e['RECURRENCE-ID']&&e.UID) ev._moved={uid:e.UID.v,from:toDate(e['RECURRENCE-ID'])};
+  }
+  // a moved/changed single date of a repeating entry: hide the original date on the repeating one
+  for(const ev of others){ if(ev._moved){ const mst=masters[ev._moved.uid]; if(mst&&ev._moved.from) mst.rpt.ex.push(dk(ev._moved.from)); delete ev._moved; } }
+  return {flights,others};
+}
+// put a parsed calendar into the family data, replacing whatever that source brought in before
+function applySource(src,parsed){
+  S.events=S.events.filter(x=>x.src!==src.id).concat(parsed.others);
+  if(src.type==='roster'){ S.flights=S.flights.filter(x=>!(x.who===src.who)).concat(parsed.flights); S.override=null; }
+  else S.flights=S.flights.filter(x=>x.src!==src.id).concat(parsed.flights);
+  src.count=parsed.flights.length+parsed.others.length; src.at=Date.now();
+}
+
+/* ================= live calendar links (fetched through the family's own Google helper) ================= */
+const HELPER_CODE=key=>`// Family Screen calendar helper. Fetches calendar links for the family screen.
+const KEY = '${key}';
+function doGet(e) {
+  if (!e || !e.parameter || e.parameter.key !== KEY) return ContentService.createTextOutput('not allowed');
+  const url = String(e.parameter.url || '').replace(/^webcal:/i, 'https:');
+  if (!/^https:\\/\\//i.test(url)) return ContentService.createTextOutput('bad link');
+  const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  return ContentService.createTextOutput(r.getContentText()).setMimeType(ContentService.MimeType.TEXT);
+}`;
+let refreshing=false;
+async function fetchLink(src){
+  const h=S.linkHelper; if(!h||!h.url) throw new Error('helper');
+  const u=h.url+'?key='+encodeURIComponent(h.key)+'&url='+encodeURIComponent(src.url)+'&t='+Date.now();
+  const r=await fetch(u,{redirect:'follow'}); const t=await r.text();
+  if(!/BEGIN:VCALENDAR/.test(t)) throw new Error(t==='not allowed'?'helper key mismatch':t==='bad link'?'that link is not a calendar link':'the link did not return a calendar');
+  return t;
+}
+async function refreshLinks(force){
+  if(refreshing||!S.linkHelper||!S.linkHelper.url) return; refreshing=true;
+  try{
+    for(const src of S.sources.filter(x=>x.url)){
+      if(!force&&src.at&&Date.now()-src.at<30*60e3) continue;
+      try{ const t=await fetchLink(src); applySource(src,parseICS(t,src.who,src.type==='roster',src.id)); src.err=''; }
+      catch(e){ src.err=e.message||'could not update'; src.at=Date.now(); }
+      save();
+    }
+    renderAll();
+  } finally { refreshing=false; }
+}
+setInterval(()=>refreshLinks(false),10*60e3);
+function openHelperSetup(after){
+  const key=(S.linkHelper&&S.linkHelper.key)||(uid()+uid()+uid());
+  modal((m,close)=>{
+    m.innerHTML=`<h2>🔗 Set up live calendar links (one-off)</h2>
+    <p class="note">Calendar links can't be read straight from the family screen, so a tiny helper runs free in your own Google account and fetches them. You do this once; it then works for every link.</p>
+    <ol style="font-size:18px;line-height:1.6">
+      <li>On a computer, open <b>script.google.com</b> (signed in to your Google account) and click <b>New project</b>.</li>
+      <li>Delete what's there, tap <b>Copy helper code</b> below, and paste it in. Click 💾 <b>Save</b>.</li>
+      <li>Click <b>Deploy → New deployment</b>. Click ⚙️ beside “Select type” and choose <b>Web app</b>.</li>
+      <li>Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>, then <b>Authorise access</b> and allow it (choose Advanced → Go to project if Google warns you; it's your own script).</li>
+      <li>Copy the <b>Web app URL</b> (it ends in <b>/exec</b>) and paste it below.</li></ol>
+    <details class="how"><summary>Show the helper code</summary><pre style="white-space:pre-wrap;font-size:13px;user-select:text;-webkit-user-select:text">${esc(HELPER_CODE(key))}</pre></details>
+    <div class="row"><button class="opt" id="hCopy">📋 Copy helper code</button></div>
+    <div class="step">Web app URL</div><input class="txt" id="hUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc((S.linkHelper&&S.linkHelper.url)||'')}">
+    <p class="note">The helper only answers the family screen (it checks a private key that's built into the code you copied).</p>
+    <div class="mact"><button class="cancel" id="hC">Cancel</button><button class="save" id="hS">Save and test</button></div>`;
+    m.querySelector('#hCopy').onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(key)).then(()=>toast('Helper code copied')); }catch(e){ toast('Open “Show the helper code” and copy it'); } };
+    m.querySelector('#hC').onclick=close;
+    m.querySelector('#hS').onclick=async()=>{
+      const v=m.querySelector('#hUrl').value.trim();
+      if(!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(v)){ toast('Paste the Web app URL ending in /exec'); return; }
+      S.linkHelper={url:v,key}; save();
+      try{ const r=await fetch(v+'?key='+encodeURIComponent(key)+'&url=x'); const t=await r.text(); if(t!=='bad link') throw new Error(t==='not allowed'?'The helper code and key don’t match: copy the code again':'The helper didn’t answer'); toast('Helper is working ✓'); close(); if(after) after(); }
+      catch(e){ toast(e.message||'Could not reach the helper'); }
+    };
+  });
+}
+function openAddLink(who){
+  if(!S.linkHelper||!S.linkHelper.url){ openHelperSetup(()=>openAddLink(who)); return; }
+  modal((m,close)=>{
+    m.innerHTML=`<h2>🔗 Add a live calendar link for ${esc(nm(who))}</h2><p class="note">Paste a calendar subscription link (iCal / .ics / webcal). It updates on its own every 30 minutes.</p>
+    <input class="txt" id="lIn" placeholder="https://…  or  webcal://…">
+    <div class="step">What is it?</div>
+    <div class="opts"><button class="opt on" data-k="cal">📅 Personal or work</button><button class="opt" data-k="school">🏫 School</button>${person(who)?.traveller?'<button class="opt" data-k="roster">✈️ Work roster</button>':''}</div>
+    <div class="step">Name it</div><input class="txt" id="lName" placeholder="e.g. Tony's Google calendar">
+    <div class="mact"><button class="cancel" id="c2">Cancel</button><button class="save" id="s2">Add and load it</button></div>`;
+    let kind='cal'; m.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>{ kind=x.dataset.k; m.querySelectorAll('[data-k]').forEach(y=>y.classList.toggle('on',y===x)); });
+    m.querySelector('#c2').onclick=()=>{ close(); openSync(); };
+    m.querySelector('#s2').onclick=async()=>{
+      const v=m.querySelector('#lIn').value.trim(); if(!/^(https?|webcal):\/\//i.test(v)){ toast('That doesn’t look like a calendar link'); return; }
+      const src={id:uid(),who,type:kind,url:v,label:m.querySelector('#lName').value.trim()||v.replace(/^(https?|webcal):\/\//i,'').split('/')[0]};
+      toast('Loading the calendar…');
+      try{ const t=await fetchLink(src); if(kind==='roster') S.sources=S.sources.filter(s=>!(s.who===who&&s.type==='roster')); applySource(src,parseICS(t,who,kind==='roster',src.id)); S.sources.push(src); save(); renderAll(); close(); openSync(); toast(`Loaded ${src.count} entries`); }
+      catch(e){ toast('Could not load it: '+(e.message||'unknown problem')); }
+    };
+  });
+}
+
+/* ================= calendar setup tool ================= */
+function openSync(){
+  modal((m,close)=>{ const draw=()=>{
+    const srcs=pid=>S.sources.filter(s=>s.who===pid);
+    const helperOk=S.linkHelper&&S.linkHelper.url;
+    m.innerHTML=`<h2>🔗 Connect calendars</h2>
+    <p class="note">Bring each person's calendars onto Family Screen. There are two ways:</p>
+    <div class="opts" style="margin-bottom:8px">
+      <div class="srccard" style="flex:1;min-width:260px;margin:0"><h4>🔗 Live link</h4><div class="note">Paste a calendar's subscription link once. It updates itself every 30 minutes, so roster or school changes show up without you doing anything. Best for Google Calendar, Outlook, RosterBuster and school calendars.</div>
+        <div class="srcline">${helperOk?'<span class="pill-ok">helper set up ✓</span><button class="xbtn" id="helperRe">Change helper</button>':'<span class="pill-wait">needs a one-off helper set-up (about 5 min)</span><button class="xbtn" id="helperGo">Set it up</button>'}</div></div>
+      <div class="srccard" style="flex:1;min-width:260px;margin:0"><h4>📂 Calendar file</h4><div class="note">Load an .ics file. Quick, with no set-up, but it doesn't update itself. Load a new file when things change (for example each new roster).</div></div>
+    </div>
+    ${S.people.map(p=>`<div class="srccard"><h4><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</h4>
+      ${srcs(p.id).map(s=>`<div class="srcline"><span>${s.type==='roster'?'✈️ Work roster':s.type==='school'?'🏫 School':'📅 Calendar'}: <b>${esc(s.label)}</b></span>
+        ${s.url?(s.err?`<span class="pill-wait">⚠️ ${esc(s.err)}</span>`:`<span class="pill-ok">🔗 live · ${s.count||0} entries · updated ${s.at?fmtTime(new Date(s.at),'Pacific/Auckland'):'—'}</span>`)
+               :`<span class="pill-ok">📂 ${s.count} entries · loaded ${s.at?fmtD(s.at,{day:'numeric',month:'short'}):''}</span>`}
+        ${s.url?`<button class="xbtn" data-refresh="${s.id}">🔄 Update now</button>`:''}<button class="xbtn" data-rm="${s.id}">Remove</button></div>`).join('')||'<div class="srcline note">Nothing connected yet.</div>'}
+      <div class="srcline">
+        <button class="xbtn" data-link="${p.id}">🔗 Add a live link</button>
+        <label class="xbtn">📂 Load a calendar file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="cal" style="display:none"></label>
+        ${p.traveller?`<label class="xbtn">✈️ Load roster file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="roster" style="display:none"></label>`:''}
+        <label class="xbtn">🏫 School calendar file<input type="file" accept=".ics,text/calendar" data-file="${p.id}" data-type="school" style="display:none"></label>
+      </div></div>`).join('')}
+    <div class="step">Where to find a calendar's link</div>
+    <details class="how"><summary>Google Calendar</summary><ol><li>On a computer, open calendar.google.com.</li><li>⚙️ Settings → under “Settings for my calendars” click the calendar.</li><li>Scroll to “Integrate calendar” and copy <b>Secret address in iCal format</b>. Use 🔗 Add a live link. (For a file instead: Settings → Import &amp; export → Export.)</li></ol></details>
+    <details class="how"><summary>Work roster (RosterBuster or the Air NZ calendar)</summary><ol><li>RosterBuster: Settings → Calendar → look for a <b>subscribe / iCal link</b> (calendar sync may need Premium). Use ✈️ Work roster when adding it.</li><li>No link? Export the roster as an <b>.ics</b> file and use ✈️ Load roster file each time a new roster comes out.</li></ol></details>
+    <details class="how"><summary>School calendar</summary><ol><li>Look on the school website or app for “Subscribe”, “Add to calendar” or “iCal”.</li><li>A link goes in 🔗 Add a live link (choose 🏫 School). A file goes in 🏫 School calendar file.</li></ol></details>
+    <details class="how"><summary>Outlook / Microsoft 365</summary><ol><li>Outlook on the web → ⚙️ Settings → Calendar → Shared calendars → <b>Publish a calendar</b>.</li><li>Pick the calendar and “Can view all details”, click Publish, and copy the <b>ICS</b> link. (Your employer may block this.)</li></ol></details>
+    <p class="note">Repeating entries in these calendars come across as repeats too. A few unusual patterns (like “the 2nd Tuesday of each month”) show their first date only.</p>
+    <div class="mact"><button class="save" id="ok">Done</button></div>`;
+    const hg=m.querySelector('#helperGo')||m.querySelector('#helperRe'); if(hg) hg.onclick=()=>{ close(); openHelperSetup(()=>openSync()); };
+    m.querySelectorAll('[data-link]').forEach(b=>b.onclick=()=>{ close(); openAddLink(b.dataset.link); });
+    m.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=async()=>{ const src=S.sources.find(x=>x.id===b.dataset.refresh); b.textContent='Updating…';
+      try{ const t=await fetchLink(src); applySource(src,parseICS(t,src.who,src.type==='roster',src.id)); src.err=''; toast(`Updated: ${src.count} entries`); }catch(e){ src.err=e.message||'could not update'; toast('Could not update: '+src.err); }
+      save(); renderAll(); draw(); });
+    m.querySelectorAll('[data-file]').forEach(inp=>inp.onchange=async e=>{
+      const f=e.target.files[0]; if(!f) return; const who=inp.dataset.file, type=inp.dataset.type;
+      const src={id:uid(),who,type,label:f.name};
+      const r=parseICS(await f.text(),who,type==='roster',src.id);
+      if(!r.flights.length&&!r.others.length){ toast('No entries found in that file'); return; }
+      if(type==='roster'){ const old=S.sources.filter(s=>s.who===who&&s.type==='roster').map(s=>s.id); S.sources=S.sources.filter(s=>!old.includes(s.id)); S.events=S.events.filter(x=>!old.includes(x.src)); }
+      applySource(src,r); S.sources.push(src);
+      save(); renderAll(); draw(); toast(`Loaded ${r.flights.length?r.flights.length+' flights and ':''}${r.others.length} entries`);
+    });
+    m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ const id=b.dataset.rm; const s=S.sources.find(x=>x.id===id); S.sources=S.sources.filter(x=>x.id!==id); S.events=S.events.filter(x=>x.src!==id); S.flights=S.flights.filter(x=>x.src!==id); if(s&&s.type==='roster') S.override=null; save(); renderAll(); draw(); });
+    m.querySelector('#ok').onclick=close;
+  }; draw(); });
+}
+
+/* ================= settings ================= */
+function openSettings(){
+  modal((m,close)=>{ const draw=()=>{
+    const tp=traveller();
+    m.innerHTML=`<h2>Settings</h2>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button></div>
+    ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
+      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&SYNC.getMembers().length>1?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
+      <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
+      <p class="note">After adding someone, they open Family Screen on their phone and sign in with that Google account.</p>`}
+    <div class="step">People: type each name and tap a colour</div>
+    ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
+      ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
+      <label class="small"><input type="radio" name="trav" data-trav="${p.id}" ${p.traveller?'checked':''}> travels for work ✈️</label>
+      ${p.traveller?`<label class="small">Kids call them <input type="text" style="width:120px" value="${esc(p.nick||'')}" data-nick="${p.id}" placeholder="e.g. Mummy"></label>`:''}
+      ${S.people.length>1?`<button class="xbtn" data-prm="${p.id}">Remove</button>`:''}</div>`).join('')}
+    <div class="row" style="margin-top:10px"><button class="xbtn" id="padd">＋ Add a person</button><label class="small"><input type="radio" name="trav" data-trav="" ${tp?'':'checked'}> nobody travels</label></div>
+    <div class="step">Shops</div>
+    ${S.shops.map(s=>`<div class="prow"><input type="text" value="${esc(s.name)}" data-sn="${s.id}">
+      ${PASTELS.slice(0,8).map(c=>`<button class="sw ${s.color===c?'on':''}" style="background:${c}" data-sc="${s.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
+      <label class="small"><input type="checkbox" data-sa="${s.id}" ${s.aisles?'checked':''}> sort by aisle</label>
+      ${S.shops.length>1?`<button class="xbtn" data-srm="${s.id}">Remove</button>`:''}</div>`).join('')}
+    <div class="row" style="margin-top:10px"><button class="xbtn" id="sadd">＋ Add a shop</button></div>
+    ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
+    <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="step">This device</div>
+    <div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
+    <div class="mact"><button class="save" id="ok">Done</button></div>`;
+    const re=()=>{ save(); renderAll(); };
+    m.querySelector('#goSync').onclick=()=>{ close(); openSync(); };
+    m.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ person(i.dataset.pn).name=i.value.trim()||'—'; re(); });
+    m.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{ person(b.dataset.pc).color=b.dataset.c; re(); draw(); });
+    m.querySelectorAll('[data-nick]').forEach(i=>i.onchange=()=>{ person(i.dataset.nick).nick=i.value.trim(); re(); });
+    m.querySelectorAll('[data-trav]').forEach(r=>r.onchange=()=>{ S.people.forEach(p=>p.traveller=p.id===r.dataset.trav); S.override=null; re(); draw(); });
+    m.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{ const id=b.dataset.prm; S.people=S.people.filter(p=>p.id!==id); S.events.forEach(e=>e.whos=e.whos.filter(w=>w!==id)); re(); draw(); });
+    m.querySelector('#padd').onclick=()=>{ S.people.splice(Math.max(0,S.people.length-1),0,{id:uid(),name:'New person',color:PASTELS[S.people.length%PASTELS.length],show:true,traveller:false}); re(); draw(); };
+    m.querySelectorAll('[data-sn]').forEach(i=>i.onchange=()=>{ shop(i.dataset.sn).name=i.value.trim()||'—'; re(); });
+    m.querySelectorAll('[data-sc]').forEach(b=>b.onclick=()=>{ shop(b.dataset.sc).color=b.dataset.c; re(); draw(); });
+    m.querySelectorAll('[data-sa]').forEach(c=>c.onchange=()=>{ const s=shop(c.dataset.sa); s.aisles=c.checked; S.groceries.filter(g=>g.shop===s.id&&!g.aisle).forEach(g=>g.aisle=guessAisle(g.name)); re(); });
+    m.querySelectorAll('[data-srm]').forEach(b=>b.onclick=()=>{ const id=b.dataset.srm; S.shops=S.shops.filter(s=>s.id!==id); const fb=S.shops[S.shops.length-1].id; S.groceries.forEach(g=>{ if(g.shop===id) g.shop=fb; }); if(S.shopTab===id) S.shopTab='all'; re(); draw(); });
+    m.querySelector('#sadd').onclick=()=>{ S.shops.push({id:uid(),name:'New shop',color:PASTELS[S.shops.length%8]}); re(); draw(); };
+    m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
+    if(!LOCAL){
+      m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
+      m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
+      m.querySelector('#signOut').onclick=async()=>{ close(); await SYNC.signOut(); };
+      m.querySelector('#ok').onclick=close;
+      return;
+    }
+    m.querySelector('#clr').onclick=()=>{ ['events','flights','groceries','todos'].forEach(k=>S[k]=S[k].filter(x=>!x.sample)); re(); toast('Sample entries removed'); };
+    m.querySelector('#reset').onclick=()=>{ S=fresh(); ['events','flights','groceries','todos'].forEach(k=>S[k]=[]); re(); close(); toast('Cleared. Set up names in ⚙️ Settings'); };
+    m.querySelector('#ok').onclick=close;
+  }; draw(); });
+}
+
+/* ================= install on a phone, tablet or computer ================= */
+let INSTALL_EVT=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); INSTALL_EVT=e; });
+function isInstalled(){ try{ return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true; }catch(e){ return false; } }
+function showInstall(){
+  const ua=navigator.userAgent, ios=/iPhone|iPad|iPod/.test(ua), android=/Android/.test(ua), samsung=/SamsungBrowser/.test(ua);
+  const steps=ios?['Tap the <b>Share</b> button (square with an arrow ⬆️).','Tap <b>Add to Home Screen</b>, then <b>Add</b>.']
+    :samsung?['Tap the <b>☰</b> menu (bottom right).','Tap <b>Add page to → Home screen</b>, then <b>Add</b>.']
+    :android?['Tap the <b>⋮</b> menu (top right).','Tap <b>Add to Home screen</b> or <b>Install app</b>, then <b>Install</b>.']
+    :['Click the install icon at the right of the address bar,','or ⋮ → <b>Cast, save and share → Install page as app</b>.'];
+  modal((m,close)=>{
+    m.innerHTML=`<h2>📲 Install Family Screen</h2>${isInstalled()?'<p style="font-size:20px">✓ It\'s installed on this device.</p>':`
+      <p class="note">Installing puts Family Screen on the home screen so it opens like an app and keeps working when the internet drops out.</p>
+      ${INSTALL_EVT?'<div class="mact" style="justify-content:flex-start"><button class="save" id="inGo">📲 Install now</button></div><p class="note">Or by hand:</p>':''}
+      <ol style="font-size:19px;line-height:1.6">${steps.map(x=>`<li>${x}</li>`).join('')}</ol>`}
+      <div class="step">Put it on another phone</div><p class="note">Open this address on the phone and sign in with that person's Google account (add their account in ⚙️ Settings first):</p>
+      <p style="font-size:20px;font-weight:700;user-select:text;-webkit-user-select:text">${esc(location.origin+location.pathname)}</p>
+      <div class="mact"><button class="cancel" id="inCopy">Copy the link</button><button class="save" id="inOk">Done</button></div>`;
+    const g=m.querySelector('#inGo'); if(g) g.onclick=async()=>{ const e=INSTALL_EVT; INSTALL_EVT=null; try{ e.prompt(); await e.userChoice; }catch(x){} close(); };
+    m.querySelector('#inCopy').onclick=()=>{ try{ navigator.clipboard.writeText(location.origin+location.pathname).then(()=>toast('Link copied')); }catch(e){ toast(location.origin+location.pathname); } };
+    m.querySelector('#inOk').onclick=close;
+  });
+}
+
+/* ================= phone layout: one section at a time ================= */
+function setTab(t){ document.body.dataset.tab=t; document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
+
+/* ================= sign-in gate (synced mode) ================= */
+function gate(kind,extra){
+  const g=$('#gate');
+  if(!kind){ g.hidden=true; g.innerHTML=''; return; }
+  g.hidden=false;
+  const logo='<div class="glogo">📅🛒✅</div><h1>Family Screen</h1>';
+  if(kind==='loading') g.innerHTML=`<div class="gcard">${logo}<p class="note">Loading…</p></div>`;
+  if(kind==='signin') g.innerHTML=`<div class="gcard">${logo}<p>Our family calendar, to-do list and shopping list, on the fridge and on our phones.</p>
+     <button class="gbtn" id="gIn"><span>G</span> Sign in with Google</button>${extra?`<p class="gerr">${esc(extra)}</p>`:''}
+     <p class="note">Only Google accounts added by the family can see anything here.</p><p class="note"><a href="?demo">Try the demo instead</a></p></div>`;
+  if(kind==='nohome') g.innerHTML=`<div class="gcard">${logo}<p>You're signed in as <b>${esc(SYNC.me())}</b>, but this account hasn't been added to a family yet.</p>
+     <p class="note">If your family already uses Family Screen, ask them to add <b>${esc(SYNC.me())}</b> in ⚙️ Settings → Family accounts, then tap Check again.</p>
+     <div class="grow2"><button class="gbtn" id="gCheck">🔄 Check again</button><button class="gbtn ghostb" id="gNew">🏠 Set up a new family</button></div>
+     <p class="note"><a href="#" id="gOut">Use a different Google account</a></p></div>`;
+  if(kind==='error') g.innerHTML=`<div class="gcard">${logo}<p class="gerr">${esc(extra||'Something went wrong.')}</p><button class="gbtn" id="gRetry">Try again</button> <p class="note"><a href="#" id="gOut">Sign out</a></p></div>`;
+  const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.onclick=e=>{ e.preventDefault(); f(); }; };
+  on('gIn',async()=>{ try{ await SYNC.signIn(); }catch(e){ gate('signin',e&&e.code==='auth/popup-closed-by-user'?'':'Sign-in did not finish. Please try again.'); } });
+  on('gCheck',()=>enterHome());
+  on('gNew',async()=>{ gate('loading'); try{ const id=await SYNC.createHousehold(starter()); startHome(id); }catch(e){ gate('error','Could not set up the family: '+(e.code||e.message)); } });
+  on('gOut',()=>SYNC.signOut());
+  on('gRetry',()=>location.reload());
+}
+async function enterHome(){
+  gate('loading');
+  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome'); }
+  catch(e){ gate('error','Could not reach the family database ('+(e.code||e.message)+'). Check the internet connection.'); }
+}
+let pendingRender=false, rTimer=null;
+function syncChanged(what,err){
+  if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ SYNC.stop(); gate('nohome'); } return; }
+  clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
+}
+function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLinks(false),4000); }
+
+/* ================= boot ================= */
+function renderAll(){ if(!S.people.length) return; renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); }
+$('#addBtn').onclick=()=>openAdd(null);
+$('#setBtn').onclick=openSettings;
+$('#globeBtn').onclick=openGlobe;
+$('#homeClock').onclick=openGlobe;
+document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.onclick=()=>{ if(b.dataset.tab==='where') openGlobe(); else setTab(b.dataset.tab); });
+setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'cal'; }catch(e){ return 'cal'; } })());
+if(LOCAL){ gate(null); renderAll(); save(); setTimeout(()=>refreshLinks(false),2000); }
+else {
+  gate('loading');
+  SYNC.init(CONFIG,{emulator:EMU});
+  SYNC.watchAuth(u=>{ if(!u){ SYNC.stop(); gate('signin'); } else enterHome(); });
+}
+setInterval(renderClock,15000);
+let lastDay=dk(new Date()); setInterval(()=>{ if(dk(new Date())!==lastDay){ lastDay=dk(new Date()); renderCal(); renderTodo(); } },60000);
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
