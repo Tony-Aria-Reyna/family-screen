@@ -272,6 +272,16 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .gdots i:nth-child(2){animation-delay:.15s}.gdots i:nth-child(3){animation-delay:.3s}
 @keyframes bounce{50%{transform:translateY(-10px)}}
 
+.instOffer{position:fixed;right:20px;bottom:20px;z-index:95;display:flex;align-items:center;gap:14px;background:#fff;border-radius:22px;padding:14px 16px;max-width:560px;box-shadow:0 18px 50px rgba(43,47,58,.25);transform:translateY(140%);transition:transform .35s ease}
+.instOffer.show{transform:none}
+.instOffer img{width:56px;height:56px;border-radius:14px;flex:none}
+.io-t{display:flex;flex-direction:column;gap:3px;font-size:15px;color:var(--muted);line-height:1.35}
+.io-t b{font-size:18px;color:var(--ink)}
+.io-how{color:var(--ink)}
+.io-b{display:flex;flex-direction:column;gap:6px;flex:none}
+.io-go{background:var(--accent);border-radius:14px;padding:12px 22px;font-size:18px;font-weight:800}
+.io-no{background:var(--soft);border-radius:14px;padding:8px 14px;font-size:15px}
+@media (max-width:900px){ .instOffer{left:10px;right:10px;bottom:90px} }
 .tabbar{display:none}
 @media (max-width:900px){
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
@@ -1328,8 +1338,28 @@ function openSettings(){
 
 /* ================= install on a phone, tablet or computer ================= */
 let INSTALL_EVT=null;
-window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); INSTALL_EVT=e; });
-function isInstalled(){ try{ return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true; }catch(e){ return false; } }
+function isInstalled(){ try{ return matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: window-controls-overlay)').matches||navigator.standalone===true; }catch(e){ return false; } }
+/* pop-up offering to install Family Screen as an app on this computer / phone */
+function offerInstall(){
+  if(isInstalled()||document.getElementById('instOffer')) return;
+  const snooze=lsGet('fs.installSnooze',0); if(snooze&&Date.now()<snooze) return;
+  const ua=navigator.userAgent, ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const mobile=/Android|iPhone|iPad|iPod/.test(ua);
+  if(!INSTALL_EVT&&!ios) return;                      // browser can't install (e.g. Firefox) or already installed
+  const where=mobile?'this phone':'this computer';
+  const d=document.createElement('div'); d.id='instOffer'; d.className='instOffer';
+  d.innerHTML=`<img src="icon-192.png" alt=""><div class="io-t"><b>Install Family Screen on ${where}</b>
+    <span>${mobile?'It goes on your home screen and opens like an app.':'It gets its own window and an icon on the desktop and Start menu, and opens like any other program.'} Works even when the internet drops out.</span>
+    ${ios&&!INSTALL_EVT?'<span class="io-how">Tap the <b>Share</b> button ⬆️, then <b>Add to Home Screen</b>.</span>':''}</div>
+    <div class="io-b">${INSTALL_EVT?'<button class="io-go" id="ioGo">Install</button>':''}<button class="io-no" id="ioNo">Not now</button></div>`;
+  document.body.appendChild(d); requestAnimationFrame(()=>d.classList.add('show'));
+  const go=d.querySelector('#ioGo'); if(go) go.onclick=async()=>{ const e=INSTALL_EVT; INSTALL_EVT=null; d.remove(); try{ e.prompt(); const r=await e.userChoice; if(r&&r.outcome!=='accepted') lsSet('fs.installSnooze',Date.now()+3*864e5); }catch(x){} };
+  d.querySelector('#ioNo').onclick=()=>{ lsSet('fs.installSnooze',Date.now()+3*864e5); d.remove(); };
+}
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); INSTALL_EVT=e; setTimeout(offerInstall,1200); });
+window.addEventListener('appinstalled',()=>{ INSTALL_EVT=null; const d=document.getElementById('instOffer'); if(d) d.remove(); toast('Installed ✓ Find Family Screen on your desktop or Start menu'); });
+setTimeout(offerInstall,2500);
+
 function showInstall(){
   const ua=navigator.userAgent, ios=/iPhone|iPad|iPod/.test(ua), android=/Android/.test(ua), samsung=/SamsungBrowser/.test(ua);
   const steps=ios?['Tap the <b>Share</b> button (square with an arrow ⬆️).','Tap <b>Add to Home Screen</b>, then <b>Add</b>.']
