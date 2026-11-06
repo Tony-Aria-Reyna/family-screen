@@ -350,45 +350,63 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 #phoneTop .pt-mum:empty{display:none}
 #phoneTop .pt-mum:empty+.pt-set{margin-left:auto}
 /* ---------- phone calendar ---------- */
-#pcal{display:none;flex-direction:column;padding:0 8px;min-height:calc(100vh - 140px);touch-action:pan-y}
+#pcal{display:none;position:relative;height:calc(100vh - 150px - env(safe-area-inset-bottom));height:calc(100dvh - 150px - env(safe-area-inset-bottom));overflow:hidden;padding:0 8px;flex-direction:column}
 .pc-head{display:flex;align-items:center;gap:6px;padding:4px 6px 8px}
 .pc-head h2{margin:0;font-size:30px;margin-right:auto}
 .pc-head button{background:var(--card);border-radius:12px;min-width:40px;height:40px;font-size:20px;box-shadow:0 1px 0 var(--line)}
 .pc-head .pc-today{border:2px solid var(--ink);font-weight:800;font-size:16px}
-.pc-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:13px;font-weight:700;color:var(--muted);padding-bottom:4px}
+.pc-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:13px;font-weight:700;color:var(--muted);padding-bottom:6px;transition:opacity .2s}
 .pc-dow span:last-child{color:#d0453b}
-.pc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
-.pc-cell{background:#fff;border-radius:10px;padding:3px 2px 4px;text-align:center;min-width:0;overflow:hidden;border:2px solid transparent;display:flex;flex-direction:column;gap:2px}
+.pc-gridwrap{overflow:hidden;touch-action:none}
+.pc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-auto-rows:58px}
+.pc-cell{background:#fff;border-radius:10px;margin:1.5px;padding:3px 2px 4px;text-align:center;min-width:0;overflow:hidden;border:2px solid transparent;display:flex;flex-direction:column;gap:2px}
 .pc-cell.other{opacity:.4}
 .pc-cell.sel{border-color:#9aa0ab}
-.pc-cell .n{font-size:16px;font-weight:700;align-self:center;min-width:26px;height:26px;line-height:26px;border-radius:8px}
+.pc-cell .n{font-size:16px;font-weight:700;align-self:center;min-width:26px;height:26px;line-height:26px;border-radius:8px;flex:none}
 .pc-cell.today .n{background:var(--ink);color:#fff}
 .pc-cell.sun .n{color:#d0453b}.pc-cell.today.sun .n{color:#fff}
+.pc-cell .lines{display:flex;flex-direction:column;gap:2px}
 .pc-cell .ln{height:5px;border-radius:3px;margin:0 2px}
-.pc-cell .tt{font-size:11px;line-height:1.25;border-radius:4px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:clip;text-align:left}
+.pc-cell .titles{display:none;flex-direction:column;gap:2px}
+.pc-grid.titles .pc-cell .titles{display:flex}.pc-grid.titles .pc-cell .lines{display:none}
+.pc-cell .tt{font-size:11px;line-height:1.25;border-radius:4px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-align:left}
 .pc-cell .more{font-size:11px;color:var(--muted);text-align:left;padding-left:3px}
-.mode-month .pc-cell{min-height:calc((100vh - 290px)/6)}
-.mode-split .pc-cell{min-height:58px}
-.mode-week .pc-cell{min-height:92px}
-.pc-grab{align-self:center;width:64px;height:22px;display:grid;place-items:center;cursor:ns-resize;touch-action:none;margin:2px 0}
+.pc-sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-radius:22px 22px 0 0;box-shadow:0 -6px 20px rgba(43,47,58,.08);display:flex;flex-direction:column;z-index:3}
+.pc-grab{align-self:center;width:90px;height:20px;display:grid;place-items:center;cursor:ns-resize;touch-action:none;flex:none}
 .pc-grab:before{content:"";width:44px;height:5px;border-radius:9px;background:#c9c3b8}
-.pc-agenda{flex:1;padding:4px 4px 90px}
-.mode-month .pc-agenda{display:none}
-.pa-head{display:flex;align-items:baseline;gap:10px;padding:8px 4px 10px}
-.pa-head b{font-size:38px;line-height:1}
-.pa-head span{font-size:16px;font-weight:800;color:var(--muted);text-transform:uppercase}
-.pa-allday{border-radius:16px;padding:12px 14px;margin-bottom:8px;text-align:left;width:100%;display:block}
-.pa-allday b{display:block;font-size:19px;font-weight:600}
-.pa-allday small{font-size:14px;opacity:.75}
-.pa-row{display:grid;grid-template-columns:58px 6px 1fr;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line);text-align:left;width:100%}
-.pa-row .t{font-size:15px;font-weight:700;padding-top:3px;text-align:right}
-.pa-row .bar{width:5px;border-radius:3px;align-self:stretch;min-height:36px}
-.pa-row b{display:block;font-size:19px;font-weight:600}
-.pa-row small{display:block;font-size:14px;color:var(--muted);margin-top:2px}
-.pa-empty{color:var(--muted);padding:16px 4px;font-size:16px}
+.ps-head{display:flex;align-items:baseline;gap:8px;padding:0 12px 8px;touch-action:none;flex:none}
+.ps-head b{font-size:38px;line-height:1}
+.ps-head span{font-size:16px;font-weight:800;color:var(--muted);text-transform:uppercase}
+.ps-head .ps-mon{margin-right:auto}
+.ps-head button{background:var(--card);border-radius:12px;width:40px;height:40px;font-size:20px;align-self:center;box-shadow:0 1px 0 var(--line)}
+.ps-allday{display:flex;flex-direction:column;gap:6px;padding:0 8px 8px;flex:none;max-height:30%;overflow:auto}
+.ad{border-radius:14px;padding:8px 12px;text-align:left;width:100%}
+.ad b{display:block;font-size:17px;font-weight:600}
+.ad small{display:block;font-size:13px;opacity:.75}
+.ps-scroll{flex:1;overflow-y:auto;padding:0 6px 90px;overscroll-behavior:contain}
+/* ---------- time-of-day grid ---------- */
+.tl{position:relative;margin-top:8px}
+.tl-h{position:absolute;left:0;right:0;height:58px;border-top:1px solid var(--line)}
+.tl-h span{position:absolute;left:0;top:-9px;width:48px;text-align:right;font-size:12px;font-weight:700;color:var(--muted);background:var(--bg);padding-right:4px}
+.tb{position:absolute;border-radius:10px;padding:4px 8px;text-align:left;overflow:hidden;color:var(--ink);box-shadow:inset 0 0 0 1px rgba(255,255,255,.6);display:flex;flex-direction:column;gap:1px;margin-left:2px}
+.tb b{font-size:15px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb small{font-size:12px;opacity:.8;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb.short{flex-direction:row;align-items:center;gap:6px}.tb.short small{display:none}
+.tl-now{position:absolute;left:52px;right:0;height:2px;background:#e5484d;z-index:2;pointer-events:none}
+.tl-now:before{content:"";position:absolute;left:-6px;top:-5px;width:12px;height:12px;border-radius:50%;background:#e5484d}
+.tl-now span{position:absolute;left:-54px;top:-9px;font-size:11px;font-weight:800;color:#e5484d;background:var(--bg);padding:0 2px}
 .pc-fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom));z-index:30;background:#fff;border-radius:999px;box-shadow:0 10px 30px rgba(43,47,58,.22);display:none;align-items:center;gap:18px;padding:12px 14px 12px 24px;font-size:19px;color:var(--muted);white-space:nowrap}
 .pc-fab b{font-size:30px;color:var(--ink);font-weight:500;line-height:.8}
 @media (max-width:900px){ body[data-tab="cal"] .pc-fab{display:flex} }
+/* ---------- fridge day view ---------- */
+.fday{display:grid;grid-template-columns:1fr;height:100%;min-height:0}
+.fday .fd-all{display:flex;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line)}
+.fday .fd-all .ad{width:auto;min-width:220px}
+.fday .fd-scroll{overflow-y:auto;padding:0 14px 20px;min-height:0}
+.fday .tl-h span,.fday .tl-now span{background:#fff}
+.fday .tb b{font-size:17px}.fday .tb small{font-size:14px}
+.day h3{cursor:pointer}
+
 </style>
 </head>
 <body>
@@ -652,17 +670,20 @@ function renderBar(){
   document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ const p=person(b.dataset.p); p.show=!p.show; savePrefs(); renderBar(); renderCal(); });
   renderCalHead();
 }
+let fDay=dk(new Date());
 function renderCalHead(){
-  const isW=S.view==='week'; let label;
-  if(isW){ const m=addDays(monday(new Date()),weekOff*7), e=addDays(m,6); label=weekOff===0?'This week':weekOff===1?'Next week':weekOff===-1?'Last week':`${fmtD(m,{day:'numeric',month:'short'})} – ${fmtD(e,{day:'numeric',month:'short'})}`; }
+  const v=S.view; let label;
+  if(v==='week'){ const m=addDays(monday(new Date()),weekOff*7), e=addDays(m,6); label=weekOff===0?'This week':weekOff===1?'Next week':weekOff===-1?'Last week':`${fmtD(m,{day:'numeric',month:'short'})} – ${fmtD(e,{day:'numeric',month:'short'})}`; }
+  else if(v==='day'){ const d=kd(fDay), t=dk(new Date()); label=(fDay===t?'Today · ':fDay===dk(addDays(new Date(),1))?'Tomorrow · ':'')+fmtD(d,{weekday:'long',day:'numeric',month:'long'}); }
   else { const t=new Date(); label=fmtD(new Date(t.getFullYear(),t.getMonth()+monthOff,1),{month:'long',year:'numeric'}); }
   $('#calhead').innerHTML=`<span class="lbl">${label}</span><button class="arrow" id="prev" aria-label="Previous">‹</button><button class="pill" id="todayBtn">Today</button><button class="arrow" id="next" aria-label="Next">›</button>
-    <div class="seg"><button data-v="week" class="${isW?'on':''}">Week</button><button data-v="month" class="${!isW?'on':''}">Month</button></div>`;
+    <div class="seg"><button data-v="day" class="${v==='day'?'on':''}">Day</button><button data-v="week" class="${v==='week'?'on':''}">Week</button><button data-v="month" class="${v==='month'?'on':''}">Month</button></div>`;
   document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; save(); renderCalHead(); renderCal(); });
-  $('#prev').onclick=()=>{ isW?weekOff--:monthOff--; renderCalHead(); renderCal(); };
-  $('#next').onclick=()=>{ isW?weekOff++:monthOff++; renderCalHead(); renderCal(); };
-  $('#todayBtn').onclick=()=>{ weekOff=0; monthOff=0; renderCalHead(); renderCal(); };
+  const step=n=>{ if(v==='week') weekOff+=n; else if(v==='day') fDay=dk(addDays(kd(fDay),n)); else monthOff+=n; renderCalHead(); renderCal(); };
+  $('#prev').onclick=()=>step(-1); $('#next').onclick=()=>step(1);
+  $('#todayBtn').onclick=()=>{ weekOff=0; monthOff=0; fDay=dk(new Date()); renderCalHead(); renderCal(); };
 }
+function openFridgeDay(key){ fDay=key; S.view='day'; save(); renderCalHead(); renderCal(); }
 
 /* ================= repeating entries ================= */
 // rpt: {f:'D'|'W'|'M'|'Y', n:interval, days:[0-6 Sun..Sat] (weekly), until:'YYYY-MM-DD'|'' , ex:['YYYY-MM-DD',...]}
@@ -721,6 +742,54 @@ function repeatPicker(box,st){
   draw();
 }
 
+/* ================= time-of-day view (shared by phone and fridge) ================= */
+const HOUR=58;
+function dayBlocks(key){
+  const its=itemsForDay(key), all=[], timed=[], dayStart=kd(key); dayStart.setHours(0,0,0,0);
+  const mins=d=>Math.round((d-dayStart)/6e4);
+  for(const it of its){
+    if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=e.todoId?(e.done?'✅ ':'☐ '):'';
+      if(!e.time){ all.push({bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁':'',names].filter(Boolean).join(' '),addr:e.addr,attr:`data-ev="${e.id}" data-occ="${key}"`}); continue; }
+      const [h,m]=e.time.split(':').map(Number), s=h*60+m;
+      timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
+    else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day',attr:'data-where="1"'}); }
+    else { const f=it.f, s0=new Date(f.start), e0=new Date(f.end), a=AIRPORTS[f.from], b=AIRPORTS[f.to];
+      if(it.k==='arr'&&dk(s0)===key) continue;
+      const s=Math.max(0,mins(s0)), e=Math.min(1440,mins(e0));
+      const title=`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${b?b[0]:f.to}`;
+      const sub=it.k==='arr'?`🛬 lands ${fmtTime(e0,'Pacific/Auckland')}${b&&b[1]!=='Pacific/Auckland'?' · '+fmtTime(e0,b[1])+' local':''}`:`${fmtTime(s0,'Pacific/Auckland')}–${dk(e0)===key?fmtTime(e0,'Pacific/Auckland'):'next day '+fmtTime(e0,'Pacific/Auckland')}${a&&a[1]!=='Pacific/Auckland'?' · departs '+fmtTime(s0,a[1])+' local':''}${f.report&&a?' · report '+fmtTime(new Date(f.report),a[1]):''}`;
+      timed.push({s,e:Math.max(e,s+30),bg:col(f.who),title,sub:tName(person(f.who))+' · '+sub,attr:`data-fl="${f.id}"`,flight:true}); }
+  }
+  // side-by-side columns for entries that overlap
+  timed.sort((a,b)=>a.s-b.s||b.e-a.e);
+  let cluster=[], end=-1;
+  const flush=()=>{ const cols=[]; for(const t of cluster){ let c=cols.findIndex(x=>x<=t.s); if(c<0){ c=cols.length; cols.push(0); } cols[c]=t.e; t.col=c; } cluster.forEach(t=>t.cols=cols.length); cluster=[]; };
+  for(const t of timed){ if(t.s>=end&&cluster.length){ flush(); end=-1; } cluster.push(t); end=Math.max(end,Math.max(t.e,t.s+30)); }
+  if(cluster.length) flush();
+  return {all,timed};
+}
+function timelineHTML(key){
+  const {all,timed}=dayBlocks(key), isToday=key===dk(new Date());
+  const hours=Array.from({length:24},(_,h)=>`<div class="tl-h" style="top:${h*HOUR}px"><span>${h===0?'':((h%12)||12)+(h<12?' am':' pm')}</span></div>`).join('');
+  const blocks=timed.map(t=>{ const top=t.s/60*HOUR, h=Math.max(28,(t.e-t.s)/60*HOUR-2), w=`calc((100% - 58px) / ${t.cols})`, left=`calc(56px + (100% - 58px) * ${t.col} / ${t.cols})`;
+    return `<button class="tb ${t.done?'done-ev':''} ${h<44?'short':''}" ${t.attr} style="top:${top}px;height:${h}px;left:${left};width:${w};background:${t.bg}"><b>${esc(t.title)}</b><small>${esc(t.sub)}</small>${t.addr?`<small class="addr" data-nav="${esc(t.addr)}">📍 ${esc(t.addr)}</small>`:''}</button>`; }).join('');
+  const now=new Date(), nm_=now.getHours()*60+now.getMinutes();
+  return {
+    allday: all.map(o=>`<button class="ad" style="background:${o.bg}" ${o.attr}><b>${esc(o.title)}</b>${o.sub?`<small>${esc(o.sub)}</small>`:''}${o.addr?`<small class="addr" data-nav="${esc(o.addr)}">📍 ${esc(o.addr)}</small>`:''}</button>`).join(''),
+    tl:`<div class="tl" data-tlday="${key}" style="height:${24*HOUR}px">${hours}${blocks}${isToday?`<div class="tl-now" style="top:${nm_/60*HOUR}px"><span>${fmtTime(now,'Pacific/Auckland')}</span></div>`:''}</div>`,
+    scrollTo: isToday?Math.max(0,(nm_/60-1.5)*HOUR):Math.max(0,((timed[0]?timed[0].s:7*60)/60-0.75)*HOUR)
+  };
+}
+function wireTimeline(box,key){
+  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
+  box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>{ if(isPhone()) setTab('where'); else openGlobe(); });
+  const tl=box.querySelector('.tl');
+  if(tl) tl.onclick=e=>{ if(e.target!==tl&&!e.target.classList.contains('tl-h')) return; const r=tl.getBoundingClientRect(), m=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HOUR*4)*15));
+    openAdd({date:key,time:String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}); };
+}
+setInterval(()=>{ document.querySelectorAll('.tl-now').forEach(n=>{ const d=new Date(); n.style.top=((d.getHours()*60+d.getMinutes())/60*HOUR)+'px'; n.querySelector('span').textContent=fmtTime(d,'Pacific/Auckland'); }); },30000);
+
 /* ================= calendar ================= */
 const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p.show; });
 function itemsForDay(key){
@@ -772,6 +841,15 @@ function evHTML(it,compact){
 }
 function renderCal(){
   const cal=$('#cal'), todayKey=dk(new Date());
+  if(S.view==='day'){
+    const keep=cal.querySelector('.fd-scroll'), same=cal.dataset.day===fDay, st=keep?keep.scrollTop:0;
+    const T=timelineHTML(fDay); cal.dataset.day=fDay;
+    cal.innerHTML=`<div class="fday" data-drop="${fDay}">${T.allday?`<div class="fd-all">${T.allday}</div>`:''}<div class="fd-scroll">${T.tl}</div></div>`;
+    cal.querySelector('.fd-scroll').scrollTop=same&&keep?st:T.scrollTo;
+    wireTimeline(cal,fDay);
+    if(isPhone()&&$('#pcal')) renderPCal();
+    return;
+  }
   if(S.view==='week'){
     const m=addDays(monday(new Date()),weekOff*7); let h='<div class="week">';
     for(let i=0;i<7;i++){
@@ -791,6 +869,7 @@ function renderCal(){
   }
   if(isPhone()&&$('#pcal')) renderPCal();
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
+  cal.querySelectorAll('.day h3').forEach(h=>h.onclick=()=>openFridgeDay(h.parentElement.dataset.drop));
   cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
   cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
@@ -1706,7 +1785,6 @@ function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLink
 
 /* ================= phone: header, calendar, swipes, back button ================= */
 const isPhone=()=>matchMedia('(max-width:900px)').matches;
-let pSel=dk(new Date()), pMode=lsGet('fs.pmode','split'), pMonth=null;
 function renderPhoneTop(){
   const el=$('#phoneTop'); if(!el) return;
   const now=new Date(), t=hm(now,'Pacific/Auckland'), r=travellerNow(now);
@@ -1718,68 +1796,76 @@ function renderPhoneTop(){
     <button class="pt-mum" id="ptMum" style="background:${bg}">${mum}</button><button class="pt-set" id="ptSet" aria-label="Settings">⚙️</button>`;
   $('#ptSet').onclick=openSettings; const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
 }
+/* ================= phone calendar: month grid with a sliding day sheet ================= */
+let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
+const ROW=58, MODES=['day','week','split','month'];
+function renderPCal(){
+  const el=$('#pcal'); if(!el||!isPhone()) return;
+  const sel=kd(pSel), todayK=dk(new Date());
+  if(!pMonth) pMonth=new Date(sel.getFullYear(),sel.getMonth(),1);
+  const first=new Date(pMonth), start=monday(first), lastDay=new Date(first.getFullYear(),first.getMonth()+1,0);
+  let days=[]; for(let i=0;i<42;i++) days.push(addDays(start,i)); if(dk(days[35])>dk(lastDay)) days=days.slice(0,35);
+  const rows=days.length/7, selRow=Math.max(0,days.findIndex(d=>dk(d)===pSel)>=0?Math.floor(days.findIndex(d=>dk(d)===pSel)/7):0);
+  const cells=days.map(d=>{ const k=dk(d), ls=dayLines(k), other=d.getMonth()!==pMonth.getMonth();
+    return `<button class="pc-cell ${other?'other':''} ${k===todayK?'today':''} ${k===pSel?'sel':''} ${d.getDay()===0?'sun':''}" data-pd="${k}" data-drop="${k}"><span class="n">${d.getDate()}</span>
+      <span class="lines">${ls.slice(0,4).map(l=>`<i class="ln" style="background:${l.c}"></i>`).join('')}</span>
+      <span class="titles">${ls.slice(0,3).map(l=>`<span class="tt" style="background:${l.c}">${esc(l.t)}</span>`).join('')}${ls.length>3?`<span class="more">+${ls.length-3}</span>`:''}</span></button>`; }).join('');
+  const T=timelineHTML(pSel), keepScroll=el.querySelector('.ps-scroll');
+  if(keepScroll&&el.dataset.day===pSel) pScroll=keepScroll.scrollTop; else pScroll=null;
+  el.dataset.day=pSel;
+  el.innerHTML=`<div class="pc-head"><h2>${fmtD(pMonth,{month:'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</h2><button id="pcPrev" aria-label="Previous month">‹</button><button id="pcNext" aria-label="Next month">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
+    <div class="pc-dow">${['M','T','W','T','F','S','S'].map(x=>`<span>${x}</span>`).join('')}</div>
+    <div class="pc-gridwrap" id="pcWrap"><div class="pc-grid" id="pcGrid">${cells}</div></div>
+    <div class="pc-sheet" id="pcSheet"><div class="pc-grab"></div>
+      <div class="ps-head" id="psHead"><b>${sel.getDate()}</b><span>${fmtD(sel,{weekday:'short'})}${pSel===todayK?' · Today':''}</span><span class="ps-mon">${fmtD(sel,{month:'short'})}</span><button id="psPrev" aria-label="Previous day">‹</button><button id="psNext" aria-label="Next day">›</button></div>
+      ${T.allday?`<div class="ps-allday">${T.allday}</div>`:''}
+      <div class="ps-scroll" id="psScroll">${T.tl}</div></div>`;
+  // geometry
+  const H=el.clientHeight, head=el.querySelector('.pc-head').offsetHeight, gridTop=head+el.querySelector('.pc-dow').offsetHeight;
+  pSnaps={day:head, week:gridTop+ROW+6, split:gridTop+rows*ROW+6, month:H-96};
+  if(pSnaps.month<pSnaps.split+40) pSnaps.month=pSnaps.split+40;
+  const layout=(y,anim)=>{ pY=y; const sheet=$('#pcSheet'), wrap=$('#pcWrap'), grid=$('#pcGrid'); if(!sheet) return;
+    const avail=Math.max(0,y-gridTop-6);
+    let rowH=ROW, off=0;
+    if(avail>=rows*ROW){ rowH=Math.min(avail/rows,160); } else { off=-Math.min(selRow*ROW,rows*ROW-avail); }
+    [sheet,wrap,grid].forEach(x=>x.style.transition=anim?'all .26s ease':'none');
+    sheet.style.top=y+'px'; wrap.style.height=avail+'px'; grid.style.transform=`translateY(${off}px)`;
+    grid.style.gridAutoRows=rowH+'px'; grid.classList.toggle('titles',rowH>=92);
+    el.querySelector('.pc-dow').style.opacity=y<=gridTop?0:1; };
+  layout(pSnaps[pMode]??pSnaps.split,false);
+  const sc=$('#psScroll'); sc.scrollTop=pScroll!=null?pScroll:T.scrollTo;
+  // taps
+  el.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>{ if(suppressClick) return; const k=b.dataset.pd; if(k===pSel&&pMode==='month'){ setPMode('split'); return; } pSel=k; const d=kd(k); if(d.getMonth()!==pMonth.getMonth()) pMonth=new Date(d.getFullYear(),d.getMonth(),1); renderPCal(); updateFab(); });
+  $('#pcPrev').onclick=()=>{ pMonth=new Date(pMonth.getFullYear(),pMonth.getMonth()-1,1); renderPCal(); };
+  $('#pcNext').onclick=()=>{ pMonth=new Date(pMonth.getFullYear(),pMonth.getMonth()+1,1); renderPCal(); };
+  $('#pcToday').onclick=()=>{ pSel=dk(new Date()); pMonth=null; renderPCal(); updateFab(); };
+  const stepDay=n=>{ pSel=dk(addDays(kd(pSel),n)); const d=kd(pSel); if(d.getMonth()!==pMonth.getMonth()) pMonth=new Date(d.getFullYear(),d.getMonth(),1); renderPCal(); updateFab(); };
+  $('#psPrev').onclick=e=>{ e.stopPropagation(); stepDay(-1); }; $('#psNext').onclick=e=>{ e.stopPropagation(); stepDay(1); };
+  wireTimeline(el.querySelector('.pc-sheet'),pSel);
+  // slide the day sheet with a finger: follows the finger, then settles on the nearest view
+  const drag=(zone,needDecide)=>{ let st=null;
+    zone.addEventListener('pointerdown',e=>{ if(e.target.closest('button')&&zone.id==='psHead') return; st={y0:e.clientY,x0:e.clientX,top0:pY,live:!needDecide,t0:Date.now(),id:e.pointerId}; if(st.live) zone.setPointerCapture(e.pointerId); });
+    zone.addEventListener('pointermove',e=>{ if(!st) return; const dy=e.clientY-st.y0, dx=e.clientX-st.x0;
+      if(!st.live){ if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)*1.3){ st.live=true; try{ zone.setPointerCapture(st.id); }catch(x){} } else if(Math.abs(dx)>12){ st=null; return; } else return; }
+      layout(Math.max(pSnaps.day,Math.min(pSnaps.month,st.top0+dy)),false); });
+    const end=()=>{ if(!st) return; const s=st; st=null; if(!s.live) return;
+      suppressClick=true; setTimeout(()=>suppressClick=false,350);
+      const moved=pY-s.top0, fast=Math.abs(moved)>30&&Date.now()-s.t0<300;
+      let best=MODES.reduce((a,m)=>Math.abs(pSnaps[m]-pY)<Math.abs(pSnaps[a]-pY)?m:a,'split');
+      const startMode=MODES.reduce((a,m)=>Math.abs(pSnaps[m]-s.top0)<Math.abs(pSnaps[a]-s.top0)?m:a,'split');
+      if(fast&&best===startMode){ const i=MODES.indexOf(startMode); best=MODES[Math.max(0,Math.min(3,i+(moved>0?1:-1)))]; }
+      pMode=best; lsSet('fs.pmode2',best); layout(pSnaps[best],true); };
+    zone.addEventListener('pointerup',end); zone.addEventListener('pointercancel',end);
+  };
+  drag(el.querySelector('.pc-grab'),false); drag($('#psHead'),false); drag($('#pcWrap'),true);
+}
+function setPMode(m){ pMode=m; lsSet('fs.pmode2',m); renderPCal(); }
 function dayLines(key){ return itemsForDay(key).map(it=>{
-  if(it.k==='ev') return {c:evBg(it.e.whos),t:it.e.title,done:it.e.done};
-  if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; return {c:col(it.who),t:a?'💼 '+a[0]:'✈️ flying',away:true}; }
+  if(it.k==='ev') return {c:evBg(it.e.whos),t:(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
+  if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; return {c:col(it.who),t:a?'💼 '+a[0]:'✈️'}; }
   if(it.k==='arr') return {c:col(it.f.who),t:'🛬 '+fmtTime(new Date(it.f.end),'Pacific/Auckland')};
   return {c:col(it.f.who),t:'✈️ '+it.f.from+'→'+it.f.to};
 }); }
-function renderPCal(){
-  const el=$('#pcal'); if(!el) return;
-  const sel=kd(pSel), todayK=dk(new Date());
-  if(!pMonth) pMonth=new Date(sel.getFullYear(),sel.getMonth(),1);
-  let days=[];
-  if(pMode==='week'){ const m=monday(sel); for(let i=0;i<7;i++) days.push(addDays(m,i)); }
-  else { const first=new Date(pMonth), start=monday(first); for(let i=0;i<42;i++) days.push(addDays(start,i)); if(dk(days[35])>dk(new Date(first.getFullYear(),first.getMonth()+1,0))) days=days.slice(0,35); }
-  const label=pMode==='week'?fmtD(sel,{month:'long'}):fmtD(pMonth,{month:'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'});
-  const maxT=pMode==='month'?4:3;
-  const cells=days.map(d=>{ const k=dk(d), ls=dayLines(k), other=pMode!=='week'&&d.getMonth()!==pMonth.getMonth();
-    const body=pMode==='split'?ls.slice(0,4).map(l=>`<i class="ln" style="background:${l.c}"></i>`).join('')
-      :ls.slice(0,maxT).map(l=>`<span class="tt" style="background:${l.c}">${esc(l.t)}</span>`).join('')+(ls.length>maxT?`<span class="more">+${ls.length-maxT}</span>`:'');
-    return `<button class="pc-cell ${other?'other':''} ${k===todayK?'today':''} ${k===pSel?'sel':''} ${d.getDay()===0?'sun':''}" data-pd="${k}" data-drop="${k}"><span class="n">${d.getDate()}</span>${body}</button>`; }).join('');
-  el.className='mode-'+pMode;
-  el.innerHTML=`<div class="pc-head"><h2>${label}</h2><button id="pcPrev" aria-label="Previous">‹</button><button id="pcNext" aria-label="Next">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
-    <div class="pc-dow">${['M','T','W','T','F','S','S'].map(x=>`<span>${x}</span>`).join('')}</div>
-    <div class="pc-grid" id="pcGrid">${cells}</div><div class="pc-grab" id="pcGrab" title="Drag up or down"></div>
-    <div class="pc-agenda">${agendaHTML(pSel)}</div>`;
-  el.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>{ const k=b.dataset.pd; if(k===pSel&&pMode==='month'){ setPMode('split'); return; } pSel=k; if(pMode!=='week'){ const d=kd(k); if(d.getMonth()!==pMonth.getMonth()) pMonth=new Date(d.getFullYear(),d.getMonth(),1); } renderPCal(); updateFab(); });
-  const step=n=>{ if(pMode==='week'){ pSel=dk(addDays(kd(pSel),7*n)); pMonth=null; } else { pMonth=new Date(pMonth.getFullYear(),pMonth.getMonth()+n,1); } renderPCal(); updateFab(); };
-  $('#pcPrev').onclick=()=>step(-1); $('#pcNext').onclick=()=>step(1);
-  $('#pcToday').onclick=()=>{ pSel=dk(new Date()); pMonth=null; renderPCal(); updateFab(); };
-  wireAgenda(el.querySelector('.pc-agenda'));
-  // drag the handle (or the grid) up/down to change view: month ⇄ month + day ⇄ week + day
-  const grab=$('#pcGrab'), grid=$('#pcGrid');
-  const vdrag=(target,needVertical)=>{ let y0=null,x0=0,dec=false;
-    target.addEventListener('pointerdown',e=>{ y0=e.clientY; x0=e.clientX; dec=!needVertical; if(!needVertical) target.setPointerCapture(e.pointerId); });
-    target.addEventListener('pointermove',e=>{ if(y0===null) return; const dy=e.clientY-y0, dx=e.clientX-x0;
-      if(!dec){ if(Math.abs(dy)>14&&Math.abs(dy)>Math.abs(dx)*1.4){ dec=true; } else if(Math.abs(dx)>14){ y0=null; return; } else return; }
-      if(Math.abs(dy)>55){ const order=['week','split','month'], i=order.indexOf(pMode), n=Math.max(0,Math.min(2,i+(dy>0?1:-1))); y0=null; if(n!==i){ suppressClick=true; setTimeout(()=>suppressClick=false,350); setPMode(order[n]); } } });
-    const end=()=>{ y0=null; }; target.addEventListener('pointerup',end); target.addEventListener('pointercancel',end);
-  };
-  vdrag(grab,false); vdrag(grid,true);
-}
-function setPMode(m){ pMode=m; lsSet('fs.pmode',m); if(m!=='week') pMonth=new Date(kd(pSel).getFullYear(),kd(pSel).getMonth(),1); renderPCal(); }
-function agendaHTML(key){
-  const d=kd(key), its=itemsForDay(key);
-  const all=[], timed=[];
-  for(const it of its){
-    if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=e.todoId?(e.done?'✅ ':'☐ '):'';
-      const o={bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁 '+rptText(e.rpt):'',names,e.note||''].filter(Boolean).join(' · '),addr:e.addr||'',attr:`data-ev="${e.id}" data-occ="${key}"`};
-      if(e.time){ o.t=t12(e.time); if(e.dur) o.sub=[tRange(e),o.sub].filter(Boolean).join(' · '); timed.push(o); } else all.push(o); }
-    else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day · tap to see where',attr:'data-where="1"'}); }
-    else if(it.k==='arr'){ const f=it.f, b=AIRPORTS[f.to], e=new Date(f.end); timed.push({t:fmtTime(e,'Pacific/Auckland'),bg:col(f.who),title:`🛬 ${tName(person(f.who))} ${HOME.includes(f.to)?'home':'lands in '+(b?b[0]:f.to)}`,sub:`${f.flight||''} ${f.from}→${f.to}${b&&b[1]!=='Pacific/Auckland'?' · '+fmtTime(e,b[1])+' local':''}${f.signOut&&HOME.includes(f.to)?' · signs out '+fmtTime(new Date(f.signOut),'Pacific/Auckland'):''}`,attr:`data-fl="${f.id}"`}); }
-    else { const f=it.f, a=AIRPORTS[f.from], s=new Date(f.start); timed.push({t:fmtTime(s,'Pacific/Auckland'),bg:col(f.who),title:`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${AIRPORTS[f.to]?AIRPORTS[f.to][0]:f.to}`,sub:`${tName(person(f.who))}${f.report&&a?' · report '+fmtTime(new Date(f.report),a[1]):''}${a&&a[1]!=='Pacific/Auckland'?' · '+fmtTime(s,a[1])+' '+a[0]+' time':''}`,attr:`data-fl="${f.id}"`}); }
-  }
-  return `<div class="pa-head"><b>${d.getDate()}</b><span>${fmtD(d,{weekday:'short'})}</span></div>`+
-    all.map(o=>`<button class="pa-allday" style="background:${o.bg}" ${o.attr}><b>${esc(o.title)}</b><small>${esc(o.sub||'All day')}</small>${o.addr?`<small class="addr" data-nav="${esc(o.addr)}">📍 ${esc(o.addr)} · 🧭 Go</small>`:''}</button>`).join('')+
-    timed.map(o=>`<button class="pa-row" ${o.attr}><span class="t">${o.t}</span><i class="bar" style="background:${o.bg}"></i><span><b>${esc(o.title)}</b>${o.sub?`<small>${esc(o.sub)}</small>`:''}${o.addr?`<small class="addr" data-nav="${esc(o.addr)}">📍 ${esc(o.addr)} · 🧭 Go</small>`:''}</span></button>`).join('')+
-    (its.length?'':'<div class="pa-empty">Nothing on. Tap “Add” below to put something in.</div>');
-}
-function wireAgenda(box){
-  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
-  box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
-  box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>setTab('where'));
-}
 function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.innerHTML=`<span>Add on ${d.getDate()} ${fmtD(d,{month:'short'})}</span><b>＋</b>`; f.onclick=()=>openAdd({date:pSel}); }
 
 /* swipe left / right to move between tabs */
