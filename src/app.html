@@ -208,7 +208,21 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .wheel.ampm{width:82px}
 .wheel.ampm .wi{font-size:22px}.wheel.ampm .wi.sel{font-size:28px}
 .colon{position:relative;font-size:40px;font-weight:800}
-.typed{display:flex;align-items:center;gap:8px}
+.typed{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tdial{display:flex;align-items:center;gap:12px;margin:4px 0}
+.tdl{width:78px;font-size:17px;font-weight:800;color:var(--muted)}
+.tdial .wheel{height:150px}.tdial .wheel .pad,.tdial .wi{height:50px}.tdial .wheels:before{height:50px;margin-top:-25px}
+.tdial .wi{font-size:24px}.tdial .wi.sel{font-size:34px}
+.tdial .typed input{width:74px;height:58px;font-size:32px}
+.tlen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0 90px;font-size:18px}
+.tquick{display:flex;gap:6px;flex-wrap:wrap}
+.opt.sm{padding:6px 12px;font-size:15px;min-height:0}
+.addrrow{position:relative}
+.addrlist{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.18);z-index:20;overflow:hidden;max-height:300px;overflow-y:auto}
+.addropt{display:block;width:100%;text-align:left;padding:12px 14px;font-size:17px;border-bottom:1px solid var(--line)}
+.addropt:hover{background:var(--soft)}
+.addrsrc{font-size:11px;color:var(--muted);padding:4px 10px;text-align:right}
+.nzwarn{background:#fff3cf;border-radius:12px;padding:8px 12px;font-size:15px;font-weight:700;margin-bottom:6px}
 .typed input{width:96px;height:72px;font-size:40px;font-weight:800;text-align:center;border:3px solid var(--line);border-radius:16px;user-select:text;-webkit-user-select:text}
 .linkbtn{background:var(--soft);border-radius:14px;padding:10px 16px;font-size:18px}
 /* settings */
@@ -234,7 +248,15 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .proto{font-size:12px;color:var(--muted);background:#fff6d6;border-radius:8px;padding:3px 8px;max-width:100px;line-height:1.2}
 
 /* ---------- globe screen ---------- */
-.space{position:fixed;inset:0;z-index:40;background:radial-gradient(ellipse at 50% 40%,#2a2f6b 0%,#161a3d 60%,#0d1029 100%);color:#fff;display:grid;grid-template-columns:1fr 360px;gap:0;overflow:hidden}
+.space{position:fixed;inset:0;z-index:40;background:radial-gradient(ellipse at 50% 40%,#2a2f6b 0%,#161a3d 60%,#0d1029 100%);color:#fff;display:grid;grid-template-columns:1fr;gap:0;overflow:hidden}
+.fcard{position:absolute;left:20px;top:20px;z-index:4;width:min(360px,calc(100% - 110px));text-align:left;background:rgba(255,255,255,.94);color:var(--ink);border-radius:20px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.gc-k{font-size:15px;font-weight:800}
+.gc-t{font-size:34px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.gc-t small{font-size:17px;font-weight:700;color:var(--muted)}
+.gc-s{font-size:15px;font-weight:600;color:#4a4f5c;margin-top:3px}
+.gc-bar{height:6px;border-radius:99px;background:#e6e2da;margin-top:8px;overflow:hidden}.gc-bar i{display:block;height:100%;background:#2b2f3a}
+.sptop{position:absolute;right:18px;top:18px;z-index:4;display:flex;gap:8px}
+.spbtn{width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.16);color:#fff;font-size:22px;font-weight:800;border:1px solid rgba(255,255,255,.25)}
+.spbtn.gclose{background:#fff;color:var(--ink)}
 .space .starsbg{position:absolute;inset:0;pointer-events:none}
 .space .starsbg i{position:absolute;border-radius:50%;background:#fff}
 .space .stage{position:relative;display:grid;place-items:center;min-height:0}
@@ -364,7 +386,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   body #phoneTop{display:flex}
   .ph .tip{display:none}
   body[data-tab="cal"] #pcal{display:flex}
-  .space{grid-template-columns:1fr;grid-template-rows:52vh auto;overflow:auto;bottom:calc(64px + env(safe-area-inset-bottom))}
+  .space{grid-template-columns:1fr;grid-template-rows:1fr;bottom:calc(64px + env(safe-area-inset-bottom))}
+  .fcard{left:12px;top:12px;width:calc(100% - 84px);padding:10px 14px}.gc-t{font-size:28px}.sptop{right:12px;top:12px}.sptop .gclose{display:none}
   .space .info{padding:18px 16px 24px}
   .space h2{font-size:24px}
   .tray{top:96px}
@@ -394,6 +417,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 /* ---------- phone calendar ---------- */
 #pcal{display:none;position:relative;overflow:clip;height:calc(100vh - 150px - env(safe-area-inset-bottom));height:calc(100dvh - 150px - env(safe-area-inset-bottom));overflow:hidden;padding:0 8px;flex-direction:column}
 .pc-head{display:flex;align-items:center;gap:6px;padding:4px 6px 8px}
+.pt-nz{display:inline-block;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;font-size:12px;font-weight:800;background:#ffe9b3;color:#6b4b00;border-radius:99px;padding:2px 8px}
 .pc-head{flex:none;position:relative;z-index:5;background:var(--bg)}
 .pc-head h2{margin:0;font-size:23px;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .pc-head button{flex:none;background:var(--card);border-radius:12px;min-width:36px;height:38px;font-size:20px;box-shadow:0 1px 0 var(--line)}
@@ -487,6 +511,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .fw-now:before{content:"";position:absolute;left:-6px;top:-5px;width:12px;height:12px;border-radius:50%;background:#e5484d}
 .fw-nowlbl{position:absolute;left:0;width:52px;height:0;z-index:3;pointer-events:none}
 .fw-nowlbl span{position:absolute;right:2px;top:-9px;font-size:11px;font-weight:800;color:#e5484d;background:var(--bg);padding:0 2px;white-space:nowrap}
+@keyframes slL{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}@keyframes slR{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
+.slideL .ps-scroll,.slideL.fday{animation:slL .22s ease}.slideR .ps-scroll,.slideR.fday{animation:slR .22s ease}
 .wk-now{position:relative;height:2px;background:#e5484d;margin:7px 0 7px 8px;border-radius:2px;pointer-events:none;flex:none}
 .wk-now::before{content:'';position:absolute;left:-7px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e5484d}
 .wk-now span{position:absolute;right:0;top:-9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;padding:1px 6px;border-radius:99px}
@@ -536,6 +562,44 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 <div id="layer"></div>
 <div id="spaceLayer"></div>
 
+<script>
+/* ===== Family Screen always runs on Auckland time, whatever time zone this phone is set to =====
+   On a phone set to another zone (e.g. Reyna in Los Angeles) the local clock functions are made to read
+   Auckland time, so the calendar, the now-line and new entries are all NZ time. NZ devices are untouched. */
+const HOME_TZ='Pacific/Auckland';
+const DEVICE_TZ=(()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||''; }catch(e){ return ''; } })();
+const AWAY_TZ=!!DEVICE_TZ&&DEVICE_TZ!==HOME_TZ&&DEVICE_TZ!=='NZ'&&!/^Antarctica\/(McMurdo|South_Pole)$/.test(DEVICE_TZ);
+(function(){
+  if(!AWAY_TZ) return;
+  const RD=Date; window.DeviceDate=RD; const P=RD.prototype, RDTF=Intl.DateTimeFormat, getT=P.getTime, setT=P.setTime;
+  const raw={ld:P.toLocaleDateString, lt:P.toLocaleTimeString, ls:P.toLocaleString};
+  const fmt=new RDTF('en-US',{timeZone:HOME_TZ,hourCycle:'h23',year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
+  const cache=new Map();
+  function off(t){ const k=Math.floor(t/9e5); let o=cache.get(k); if(o!==undefined) return o; const t0=k*9e5, p={};
+    for(const x of fmt.formatToParts(new RD(t0))) p[x.type]=x.value;
+    o=RD.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-t0; cache.set(k,o); return o; }
+  function fromWall(y,mo,d,h,mi,s,ms){ const g=RD.UTC(y,mo,d,h,mi,s,ms); let t=g-off(g); t=g-off(t); return t; }
+  const W=d=>{ const t=getT.call(d); return new RD(t+off(t)); };
+  const G={getFullYear:'getUTCFullYear',getMonth:'getUTCMonth',getDate:'getUTCDate',getDay:'getUTCDay',getHours:'getUTCHours',getMinutes:'getUTCMinutes',getSeconds:'getUTCSeconds',getMilliseconds:'getUTCMilliseconds'};
+  for(const [k,u] of Object.entries(G)) P[k]=function(){ return isNaN(getT.call(this))?NaN:W(this)[u](); };
+  P.getTimezoneOffset=function(){ return -off(getT.call(this))/6e4; };
+  const S={setFullYear:0,setMonth:1,setDate:2,setHours:3,setMinutes:4,setSeconds:5,setMilliseconds:6};
+  for(const [k,i] of Object.entries(S)) P[k]=function(...a){ const w=W(this), c=[w.getUTCFullYear(),w.getUTCMonth(),w.getUTCDate(),w.getUTCHours(),w.getUTCMinutes(),w.getUTCSeconds(),w.getUTCMilliseconds()];
+    a.forEach((v,j)=>{ if(i+j<7) c[i+j]=+v; }); return setT.call(this,fromWall(...c)); };
+  P.toLocaleDateString=function(l,o){ return raw.ld.call(this,l,Object.assign({timeZone:HOME_TZ},o)); };
+  P.toLocaleTimeString=function(l,o){ return raw.lt.call(this,l,Object.assign({timeZone:HOME_TZ},o)); };
+  P.toLocaleString=function(l,o){ return raw.ls.call(this,l,Object.assign({timeZone:HOME_TZ},o)); };
+  function DTF(l,o){ return new RDTF(l,Object.assign({timeZone:HOME_TZ},o)); }
+  DTF.prototype=RDTF.prototype; DTF.supportedLocalesOf=RDTF.supportedLocalesOf.bind(RDTF); Intl.DateTimeFormat=DTF;
+  const LOCAL=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d)(?:\.(\d{1,3})\d*)?)?$/;
+  const pl=v=>{ const m=typeof v==='string'&&LOCAL.exec(v); return m?fromWall(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0),+((m[7]||'0').padEnd(3,'0'))):null; };
+  class HD extends RD{ constructor(...a){
+    if(!a.length) super(); else if(a.length===1){ const v=a[0], t=pl(v); super(t!=null?t:(v instanceof RD?getT.call(v):v)); }
+    else super(fromWall(+a[0],+a[1],a[2]==null?1:+a[2],+(a[3]||0),+(a[4]||0),+(a[5]||0),+(a[6]||0))); } }
+  HD.parse=v=>{ const t=pl(v); return t!=null?t:RD.parse(v); };
+  window.Date=HD;
+})();
+</script>
 <script>/*@LIBS@*/</script>
 <script>/*@SYNC@*/</script>
 <script>/*@ROSTER@*/</script>
@@ -619,6 +683,12 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const navUrl=a=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(a);
 function endOf(hm,dur){ const [h,m]=hm.split(':').map(Number), t=Math.min(23*60+59,h*60+m+(dur||0)); return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
 function tRange(e){ return e.time?t12(e.time)+(e.dur?'–'+t12(endOf(e.time,e.dur)):''):'All day'; }
+// When this phone is overseas: name of where it is, and the same moment in its local time ("7:30pm Los Angeles")
+const HERE=(()=>{ if(!AWAY_TZ) return ''; const a=Object.values(AIRPORTS).find(v=>v[1]===DEVICE_TZ); return a?a[0]:DEVICE_TZ.split('/').pop().replace(/_/g,' '); })();
+const hereT=d=>{ if(!AWAY_TZ) return ''; const dd=new Date(d), sameDay=new Intl.DateTimeFormat('en-CA',{timeZone:DEVICE_TZ}).format(dd)===new Intl.DateTimeFormat('en-CA',{timeZone:HOME_TZ}).format(dd);
+  return (sameDay?'':new Intl.DateTimeFormat('en-NZ',{timeZone:DEVICE_TZ,weekday:'short'}).format(dd)+' ')+fmtTime(dd,DEVICE_TZ)+' '+HERE; };
+const alsoHere=d=>AWAY_TZ?' · '+hereT(d):'';
+const evHere=(e,key)=>AWAY_TZ&&e.time?' · '+hereT(new Date((key||e.date)+'T'+e.time)):'';
 function t12(hm){ if(!hm) return ''; const [h,m]=hm.split(':').map(Number); return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h<12?'am':'pm'); }
 const fmtD=(d,o)=>new Date(d).toLocaleDateString('en-NZ',o);
 
@@ -770,6 +840,7 @@ function clockHTML(tz,city,sub,extra,badge){
 }
 function flightProgress(f,now){ return Math.min(1,Math.max(0,(now-fS(f))/(fE(f)-fS(f)))); }
 // the traveller's next flight, if it leaves within 24 hours
+function whenShort(d,now){ const k=dk(d); return (k===dk(now)?'today':k===dk(addDays(now,1))?'tomorrow':fmtD(d,{weekday:'short'}))+' '+fmtTime(d,HOME_TZ); }
 function soonFlight(tp,now){ const f=S.flights.filter(x=>x.who===tp.id&&fS(x)>now).sort((a,b)=>fS(a)-fS(b))[0]; return f&&fS(f)-now<24*36e5?f:null; }
 function whenWord(d,now){ const same=dk(d)===dk(now), h=+hm(d,'Pacific/Auckland').h; return same?(h>=17?'tonight':h<12?'this morning':'this afternoon'):dk(d)===dk(addDays(now,1))?(h<12?'tomorrow morning':h>=17?'tomorrow night':'tomorrow'):fmtD(d,{weekday:'long'}); }
 function liveWait(f,now){ const nt=!LOCAL&&SYNC.getNotifier&&SYNC.getNotifier(), on=nt&&nt.flights&&nt.flights.key; if(!on||!f.flight) return ''; const st=new Date(fS(f)-3*36e5); return st>now?`🛰️ Live status from ${fmtTime(st,'Pacific/Auckland')}`:'🛰️ Checking…'; }
@@ -893,7 +964,7 @@ function dayBlocks(key){
     if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=e.todoId?(e.done?'✅ ':'☐ '):'';
       if(!e.time){ all.push({bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁':'',names].filter(Boolean).join(' '),addr:e.addr,attr:`data-ev="${e.id}" data-occ="${key}"`}); continue; }
       const [h,m]=e.time.split(':').map(Number), s=h*60+m;
-      timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
+      timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e)+(AWAY_TZ&&e.time?' NZ':'')+evHere(e,key),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
     else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day',attr:'data-where="1"'}); }
     else if(it.k==='taxi'){ const f=it.f, a0=it.kind==='pick'?it.t:it.t2, b0=it.kind==='pick'?it.t2:it.t, c=col(f.who);
       const s=Math.max(0,mins(a0)), e=Math.min(1440,mins(b0));
@@ -902,7 +973,7 @@ function dayBlocks(key){
       if(it.k==='arr'&&dk(s0)===key) continue;
       const s=Math.max(0,mins(s0)), e=Math.min(1440,mins(e0));
       const title=`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${b?b[0]:f.to}${liveTag(f)?' · '+liveTag(f):''}`;
-      const sub=it.k==='arr'?`🛬 lands ${fmtTime(e0,'Pacific/Auckland')}${b&&b[1]!=='Pacific/Auckland'?' · '+fmtTime(e0,b[1])+' local':''}`:`${fmtTime(s0,'Pacific/Auckland')}–${dk(e0)===key?fmtTime(e0,'Pacific/Auckland'):'next day '+fmtTime(e0,'Pacific/Auckland')}${a&&a[1]!=='Pacific/Auckland'?' · departs '+fmtTime(s0,a[1])+' local':''}${f.report&&a?' · report '+fmtTime(new Date(f.report),a[1]):''}`;
+      const sub=it.k==='arr'?`🛬 lands ${fmtTime(e0,'Pacific/Auckland')} NZ${alsoHere(e0)}`:`${fmtTime(s0,'Pacific/Auckland')}–${dk(e0)===key?fmtTime(e0,'Pacific/Auckland'):'next day '+fmtTime(e0,'Pacific/Auckland')}${f.report?' · signs on '+fmtTime(new Date(f.report),'Pacific/Auckland'):''}`;
       timed.push({s,e:Math.max(e,s+30),bg:col(f.who),title,sub:tName(person(f.who))+' · '+sub,attr:`data-fl="${f.id}"`,flight:true}); }
   }
   // side-by-side columns for entries that overlap
@@ -934,6 +1005,17 @@ function wireTimeline(box,key){
     openAdd({date:key,time:String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}); };
 }
 // week view: a red "now" line in today's column, between what's been and what's still to come
+// Swipe left / right on a day's detail to go to the next / previous day (phone day panel and fridge day view)
+(()=>{ let st=null;
+  document.addEventListener('touchstart',e=>{ const t=e.touches[0], z=e.target.closest&&e.target.closest('#pcSheet,#pwSheet,#cal .fday');
+    st=z&&e.touches.length===1&&!e.target.closest('.wheel,input,textarea,.scrim')?{z,x:t.clientX,y:t.clientY,t:Date.now()}:null; },{passive:true});
+  document.addEventListener('touchend',e=>{ if(!st) return; const t=e.changedTouches[0], dx=t.clientX-st.x, dy=t.clientY-st.y, z=st.z; st=null;
+    if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.7||Date.now()-st0()>800) return;
+    const next=dx<0, id=z.id==='pcSheet'?(next?'#psNext':'#psPrev'):z.id==='pwSheet'?(next?'#pwDNext':'#pwDPrev'):(next?'#next':'#prev');
+    const b=$(id); if(!b) return; suppressClick=false; b.click(); suppressClick=true; setTimeout(()=>suppressClick=false,350);
+    const box=$(z.id==='pcSheet'?'#pcSheet':z.id==='pwSheet'?'#pwSheet':'#cal .fday'); if(box){ box.classList.remove('slideL','slideR'); void box.offsetWidth; box.classList.add(next?'slideL':'slideR'); } },{passive:true});
+  let t0=0; const st0=()=>t0; document.addEventListener('touchstart',()=>{ t0=Date.now(); },{passive:true,capture:true});
+})();
 function placeWeekNow(){
   const col=document.querySelector('#cal .week .day.today .evs'); if(!col) return;
   col.querySelectorAll('.wk-now').forEach(n=>n.remove());
@@ -977,13 +1059,13 @@ function whereAt(pid,t){
 }
 function evBg(whos){ const cs=whos.map(col); if(cs.length<2) return cs[0]||'#e5e7eb'; const step=100/cs.length; return `linear-gradient(135deg,${cs.map((c,i)=>`${c} ${(i*step).toFixed(0)}%,${c} ${((i+1)*step).toFixed(0)}%`).join(',')})`; }
 const taxiLbl=it=>it.kind==='pick'?`🚕 Taxi pick-up ${fmtTime(it.t,'Pacific/Auckland')}`:`🚕 Taxi drop-off ~${fmtTime(it.t,'Pacific/Auckland')}`;
-const taxiSub=it=>it.kind==='pick'?`travelling to sign-on ${fmtTime(it.t2,'Pacific/Auckland')}`:`lands ${fmtTime(it.t2,'Pacific/Auckland')} · customs + ride`;
+const taxiSub=it=>(it.kind==='pick'?`travelling to sign-on ${fmtTime(it.t2,'Pacific/Auckland')}`:`lands ${fmtTime(it.t2,'Pacific/Auckland')} · customs + ride`)+alsoHere(it.t);
 function evHTML(it,compact){
   if(it.k==='ev'){
     const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
     if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
     const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
-    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${tRange(e)}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}${e.addr?`<small class="addr" data-nav="${esc(e.addr)}">📍 ${esc(e.addr)}</small>`:''}</button>`;
+    return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${tRange(e)}${AWAY_TZ&&e.time?' NZ':''}${evHere(e,it.key)}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}${e.addr?`<small class="addr" data-nav="${esc(e.addr)}">📍 ${esc(e.addr)}</small>`:''}</button>`;
   }
   if(it.k==='away'){
     const c=col(it.who), a=it.w.code?AIRPORTS[it.w.code]:null, txt=a?`💼 In ${esc(a[0])} ${a[3]}`:`✈️ Flying ${esc(it.w.air.from)}→${esc(it.w.air.to)}`;
@@ -997,14 +1079,14 @@ function evHTML(it,compact){
   }
   if(it.k==='arr'){
     const f=it.f, b=AIRPORTS[f.to], e=fE(f), home=HOME.includes(f.to);
-    const lbl=`🛬 Lands ${esc(b?b[0]:f.to)} ${fmtTime(e,'Pacific/Auckland')}`;
+    const lbl=`🛬 ${fmtTime(e,'Pacific/Auckland')} lands ${esc(b?b[0]:f.to)}`;
     if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
-    return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(e,'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')} lands</small>${lbl}${liveBadge(f)}<small>✈️ ${esc(f.from)}→${esc(f.to)}${b&&b[1]!=='Pacific/Auckland'?` · ${new Intl.DateTimeFormat('en-NZ',{timeZone:b[1],weekday:'short'}).format(e)} ${fmtTime(e,b[1])} ${esc(b[0])} time`:''}${f.signOut&&home?` · signs out ${fmtTime(new Date(f.signOut),'Pacific/Auckland')}`:''}</small></button>`;
+    return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(e,'Pacific/Auckland')} NZ${alsoHere(e)} · ${esc(nm(f.who))} ${esc(f.flight||'')} lands</small>${lbl}${liveBadge(f)}<small>✈️ ${esc(f.from)}→${esc(f.to)}${f.signOut&&home?` · signs out ${fmtTime(new Date(f.signOut),'Pacific/Auckland')}`:''}</small></button>`;
   }
   const f=it.f, lbl=`✈️ ${esc(f.from)}→${esc(f.to)}`;
   if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
-  const fa=AIRPORTS[f.from], loc=fa&&fa[1]!=='Pacific/Auckland'?`<small>${new Intl.DateTimeFormat('en-NZ',{timeZone:fa[1],weekday:'short'}).format(fS(f))} ${fmtTime(fS(f),fa[1])} ${esc(fa[0])} time</small>`:'';
-  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(fS(f),'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}${liveBadge(f)}${loc}</button>`;
+  const loc='';
+  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(fS(f),'Pacific/Auckland')} NZ${alsoHere(fS(f))} · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}${liveBadge(f)}${loc}</button>`;
 }
 function renderCal(){
   const cal=$('#cal'), todayKey=dk(new Date());
@@ -1223,95 +1305,149 @@ function renderShop_(){
 }
 
 /* ================= time wheels (like the Android alarm) ================= */
-function makeWheel(values,idx,onPick,cls){
+// A scrolling dial. With loop, the values repeat so you can roll straight from 12 to 1 or 59 to 00.
+// Tapping the number in the middle calls onTapSel (used to switch to typing).
+function makeWheel(values,idx,onPick,cls,opt){
+  opt=opt||{}; const L=values.length, loop=!!opt.loop, C=loop?9:1, mid=loop?4*L:0;
   const w=document.createElement('div'); w.className='wheel'+(cls?' '+cls:''); const hh=()=>{ const el=w.querySelector('.wi'); return (el&&el.getBoundingClientRect().height)||64; };
-  w.innerHTML='<div class="pad"></div>'+values.map((v,i)=>`<div class="wi" data-i="${i}">${v}</div>`).join('')+'<div class="pad"></div>';
-  const mark=i=>w.querySelectorAll('.wi').forEach((el,j)=>el.classList.toggle('sel',j===i));
-  let t, cur=idx; mark(idx);
-  w.addEventListener('scroll',()=>{ const i=Math.max(0,Math.min(values.length-1,Math.round(w.scrollTop/hh()))); if(i!==cur){ cur=i; mark(i); } clearTimeout(t); t=setTimeout(()=>onPick(cur),80); });
-  w.querySelectorAll('.wi').forEach(el=>el.onclick=()=>w.scrollTo({top:+el.dataset.i*hh(),behavior:'smooth'}));
-  w.setTo=i=>{ w.scrollTop=i*hh(); cur=i; mark(i); };
+  let items=''; for(let c=0;c<C;c++) values.forEach((v,i)=>items+=`<div class="wi" data-r="${c*L+i}">${v}</div>`);
+  w.innerHTML='<div class="pad"></div>'+items+'<div class="pad"></div>';
+  const all=()=>w.querySelectorAll('.wi');
+  let raw=mid+idx, t, t2;
+  const mark=r=>{ const els=all(); els.forEach(el=>el.classList.remove('sel')); if(els[r]) els[r].classList.add('sel'); };
+  w.addEventListener('scroll',()=>{ const r=Math.max(0,Math.min(C*L-1,Math.round(w.scrollTop/hh()))); if(r!==raw){ raw=r; mark(r); }
+    clearTimeout(t); t=setTimeout(()=>onPick(raw%L),80);
+    clearTimeout(t2); if(loop) t2=setTimeout(()=>{ if(raw<2*L||raw>=7*L){ const i=raw%L; raw=mid+i; w.scrollTop=raw*hh(); mark(raw); } },260); });
+  w.addEventListener('click',e=>{ const el=e.target.closest('.wi'); if(!el) return; const r=+el.dataset.r;
+    if(r===raw&&opt.onTapSel){ opt.onTapSel(); return; } w.scrollTo({top:r*hh(),behavior:'smooth'}); });
+  w.setTo=i=>{ raw=mid+i; w.scrollTop=raw*hh(); mark(raw); };
   requestAnimationFrame(()=>w.setTo(idx));
   return w;
 }
+const toMin=hm=>{ const [h,m]=hm.split(':').map(Number); return h*60+m; };
+const fromMin=n=>{ n=((n%1440)+1440)%1440; return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); };
+const durTxt=n=>{ const h=Math.floor(n/60), m=n%60; return (h?h+' hr'+(h>1?'s':''):'')+(h&&m?' ':'')+(m?m+' min':''); };
+// next whole hour (between 7am and 8pm) for a new entry
+function defaultTime(){ const h=new Date().getHours()+1; return String(Math.min(20,Math.max(7,h))).padStart(2,'0')+':00'; }
 function timePicker(box,st){
   const draw=()=>{
-    box.innerHTML=`<div class="opts" style="margin-bottom:12px"><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button></div><div id="tpArea"></div><div id="durBox"></div>`;
-    box.querySelectorAll('[data-allday]').forEach(b=>b.onclick=()=>{ if(b.dataset.allday==='1') st.time=''; else if(!st.time) st.time='09:00'; draw(); });
+    box.innerHTML=`<div class="opts" style="margin-bottom:10px"><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button></div><div id="tpArea"></div>`;
+    box.querySelectorAll('[data-allday]').forEach(b=>b.onclick=()=>{ if(b.dataset.allday==='1') st.time=''; else if(!st.time) st.time=defaultTime(); draw(); });
     if(!st.time) return;
-    const area=box.querySelector('#tpArea');
-    let [H,M]=st.time.split(':').map(Number);
-    const setT=()=>{ st.time=String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'); endLbl(); };
-    const DUR=[15,30,45,60,90,120,180,240], dtxt=n=>n<60?n+' min':n%60?Math.floor(n/60)+'½ hr':(n/60)+' hr'+(n>60?'s':'');
     if(!st.dur) st.dur=60;
-    const endLbl=()=>{ const e=box.querySelector('#endTxt'); if(e) e.textContent='Ends '+t12(endOf(st.time,st.dur)); };
-    const drawDur=()=>{ const db=box.querySelector('#durBox');
-      db.innerHTML=`<div class="step" style="margin-top:12px">How long? <span id="endTxt" style="font-weight:800;color:var(--ink);margin-left:8px"></span></div><div class="opts">${DUR.map(n=>`<button class="opt ${st.dur===n?'on':''}" data-dur="${n}">${dtxt(n)}</button>`).join('')}</div>`;
-      db.querySelectorAll('[data-dur]').forEach(b=>b.onclick=()=>{ st.dur=+b.dataset.dur; drawDur(); }); endLbl(); };
-    if(!DUR.includes(st.dur)) DUR.push(st.dur), DUR.sort((a,b)=>a-b);
-    drawDur();
-    if(st.typing){
-      area.innerHTML=`<div class="timewrap"><div class="typed"><input id="hh" inputmode="numeric" maxlength="2" value="${(H%12)||12}"><span class="colon">:</span><input id="mm" inputmode="numeric" maxlength="2" value="${String(M).padStart(2,'0')}"></div>
-        <div class="opts"><button class="opt ${H<12?'on':''}" data-ap="am">am</button><button class="opt ${H>=12?'on':''}" data-ap="pm">pm</button></div>
-        <button class="linkbtn" id="toWheel">🎡 Use the wheels</button></div>`;
-      const hh=area.querySelector('#hh'), mm=area.querySelector('#mm');
-      const read=()=>{ let h=Math.min(12,Math.max(1,parseInt(hh.value)||12)), m=Math.min(59,Math.max(0,parseInt(mm.value)||0)); const pm=H>=12; H=(h%12)+(pm?12:0); M=m; setT(); };
-      hh.oninput=()=>{ if(hh.value.length>=2) mm.focus(); read(); }; mm.oninput=read;
-      hh.onfocus=()=>hh.select(); mm.onfocus=()=>mm.select();
-      area.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ read(); H=(H%12)+(b.dataset.ap==='pm'?12:0); setT(); draw(); });
-      area.querySelector('#toWheel').onclick=()=>{ read(); st.typing=false; draw(); };
-      setTimeout(()=>hh.focus(),50);
-      return;
-    }
-    area.innerHTML='<div class="timewrap"><div class="wheels" id="wh"></div><button class="linkbtn" id="toType">⌨️ Type it in</button></div>';
-    const wh=area.querySelector('#wh');
-    const hours=Array.from({length:12},(_,i)=>String(i+1)), mins=Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
-    wh.appendChild(makeWheel(hours,((H%12)||12)-1,i=>{ const pm=H>=12; H=((i+1)%12)+(pm?12:0); setT(); }));
-    const c=document.createElement('span'); c.className='colon'; c.textContent=':'; wh.appendChild(c);
-    wh.appendChild(makeWheel(mins,M,i=>{ M=i; setT(); }));
-    wh.appendChild(makeWheel(['am','pm'],H>=12?1:0,i=>{ H=(H%12)+(i?12:0); setT(); },'ampm'));
-    area.querySelector('#toType').onclick=()=>{ st.typing=true; draw(); };
+    const area=box.querySelector('#tpArea');
+    const endHM=()=>fromMin(toMin(st.time)+st.dur);
+    const lenTxt=()=>`${durTxt(st.dur)}${toMin(st.time)+st.dur>=1440?' · finishes the next day':''}`;
+    area.innerHTML=`<div class="tdial"><div class="tdl">Starts</div><div id="d0"></div></div>
+      <div class="tdial"><div class="tdl">Finishes</div><div id="d1"></div></div>
+      <div class="tlen"><b id="lenTxt">${lenTxt()}</b><span class="tquick">${[30,60,90,120].map(n=>`<button class="opt sm ${st.dur===n?'on':''}" data-q="${n}">${durTxt(n)}</button>`).join('')}</span></div>
+      <div class="note" style="margin-top:4px">Tap the time to type it.</div>`;
+    const refresh=()=>{ area.querySelector('#lenTxt').textContent=lenTxt(); area.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('on',+b.dataset.q===st.dur)); };
+    const dial=(el,get,set,which)=>{
+      let [H,M]=get().split(':').map(Number);
+      const put=()=>set(String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'));
+      if(st.typing===which){
+        el.innerHTML=`<div class="typed"><input class="hh" inputmode="numeric" maxlength="2" value="${(H%12)||12}"><span class="colon">:</span><input class="mm" inputmode="numeric" maxlength="2" value="${String(M).padStart(2,'0')}">
+          <div class="opts apbox"><button class="opt ${H<12?'on':''}" data-ap="am">am</button><button class="opt ${H>=12?'on':''}" data-ap="pm">pm</button></div><button class="opt sm okt">✓</button></div>`;
+        const hh=el.querySelector('.hh'), mm=el.querySelector('.mm');
+        const read=()=>{ const h=Math.min(12,Math.max(1,parseInt(hh.value)||12)), m=Math.min(59,Math.max(0,parseInt(mm.value)||0)); H=(h%12)+(H>=12?12:0); M=m; put(); };
+        hh.oninput=()=>{ if(hh.value.length>=2) mm.focus(); read(); }; mm.oninput=read;
+        hh.onfocus=()=>hh.select(); mm.onfocus=()=>mm.select();
+        el.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ read(); H=(H%12)+(b.dataset.ap==='pm'?12:0); put(); el.querySelectorAll('[data-ap]').forEach(x=>x.classList.toggle('on',x===b)); });
+        el.querySelector('.okt').onclick=()=>{ read(); st.typing=false; draw(); };
+        mm.onkeydown=hh.onkeydown=e=>{ if(e.key==='Enter'){ read(); st.typing=false; draw(); } };
+        setTimeout(()=>hh.focus(),50); return null;
+      }
+      const wh=document.createElement('div'); wh.className='wheels'; el.appendChild(wh);
+      const type=()=>{ st.typing=which; draw(); };
+      const hours=Array.from({length:12},(_,i)=>String(i+1)), mins=Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
+      const hw=makeWheel(hours,((H%12)||12)-1,i=>{ H=((i+1)%12)+(H>=12?12:0); put(); },'',{loop:true,onTapSel:type});
+      const c=document.createElement('span'); c.className='colon'; c.textContent=':';
+      const mw=makeWheel(mins,M,i=>{ M=i; put(); },'',{loop:true,onTapSel:type});
+      const aw=makeWheel(['am','pm'],H>=12?1:0,i=>{ H=(H%12)+(i?12:0); put(); },'ampm',{onTapSel:type});
+      wh.append(hw,c,mw,aw);
+      return {set:hm=>{ [H,M]=hm.split(':').map(Number); hw.setTo(((H%12)||12)-1); mw.setTo(M); aw.setTo(H>=12?1:0); }};
+    };
+    let endDial=null;
+    dial(area.querySelector('#d0'),()=>st.time,v=>{ st.time=v; if(endDial) endDial.set(endHM()); refresh(); },'start');    // moving the start keeps the length
+    endDial=dial(area.querySelector('#d1'),endHM,v=>{ let d=toMin(v)-toMin(st.time); if(d<=0) d+=1440; st.dur=d; refresh(); },'end');
+    area.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ st.dur=+b.dataset.q; if(endDial) endDial.set(endHM()); else draw(); refresh(); });
   };
   draw();
 }
 
 /* ================= add / edit calendar entry ================= */
+// Address suggestions as you type (OpenStreetMap search via Photon; leans towards Auckland). Free, no key.
+function addrSearch(input,list,onSet){
+  let t=null, seq=0;
+  const label=p=>{ const a=[p.housenumber&&p.street?p.housenumber+' '+p.street:(p.street||''), p.name&&p.name!==p.street?p.name:'', p.district||p.locality||'', p.city||p.county||''];
+    const out=[]; for(const x of a) if(x&&!out.includes(x)) out.push(x); if(p.name&&p.name!==p.street&&out[0]!==p.name){ out.splice(out.indexOf(p.name),1); out.unshift(p.name); } return out.join(', '); };
+  const hide=()=>{ list.hidden=true; list.innerHTML=''; };
+  input.addEventListener('input',()=>{ onSet(input.value); clearTimeout(t); const q=input.value.trim(); if(q.length<3){ hide(); return; }
+    t=setTimeout(async()=>{ const my=++seq;
+      try{ const r=await fetch('https://photon.komoot.io/api/?limit=6&lang=en&lat=-36.85&lon=174.76&q='+encodeURIComponent(q)); if(!r.ok) return; const j=await r.json(); if(my!==seq) return;
+        const seen=new Set(), items=(j.features||[]).map(f=>label(f.properties||{})).filter(x=>x&&!seen.has(x)&&seen.add(x));
+        if(!items.length){ hide(); return; }
+        list.innerHTML=items.map(x=>`<button type="button" class="addropt">📍 ${esc(x)}</button>`).join('')+'<div class="addrsrc">© OpenStreetMap</div>'; list.hidden=false;
+        list.querySelectorAll('.addropt').forEach((b,i)=>b.onclick=()=>{ input.value=items[i]; onSet(items[i]); hide(); });
+      }catch(e){ hide(); } },350); });
+  input.addEventListener('keydown',e=>{ if(e.key==='Escape') hide(); });
+  input.addEventListener('blur',()=>setTimeout(hide,250));
+}
 function openAdd(existing,onSaved,heading,opt){
   const isNew=!existing||!existing.id;
-  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing?.time||'',dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
+  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing&&existing.id?(existing.time||''):(existing?.time||defaultTime()),dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
   const canRepeat=!(opt&&opt.noRepeat)&&!(existing&&existing.todoId);
-  const t=new Date(), dayOpts=[];
-  for(let i=0;i<8;i++){ const d=addDays(t,i); dayOpts.push([dk(d),i===0?'Today':i===1?'Tomorrow':fmtD(d,{weekday:'short',day:'numeric',month:'short'})]); }
-  const ensure=()=>{ if(!dayOpts.some(o=>o[0]===st.date)) dayOpts.unshift([st.date,fmtD(new Date(st.date+'T12:00'),{weekday:'short',day:'numeric',month:'short'})]); };
-  ensure();
+  // Overseas phones can enter times in their own zone: vs holds the local date/time, st stays NZ (what gets saved)
+  st.zone='nz'; const vs={dur:st.dur,typing:false};
+  const cur=()=>st.zone==='here'?vs:st;
+  const localToday=()=>AWAY_TZ?new Intl.DateTimeFormat('en-CA',{timeZone:DEVICE_TZ}).format(new Date()):dk(new Date());
+  const nzToHere=(date,time)=>{ const d=new Date(date+'T'+(time||'12:00')), p=partsIn(DEVICE_TZ,d); return {date:new Intl.DateTimeFormat('en-CA',{timeZone:DEVICE_TZ}).format(d),time:time?String(+p.hour%24).padStart(2,'0')+':'+p.minute:''}; };
+  const hereToNz=(date,time)=>{ if(!time) return {date,time:''}; const d=new window.DeviceDate(date+'T'+time); return {date:dk(d),time:String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}; };
+  let dayOpts=[];
+  const buildDays=()=>{ dayOpts=[]; const k0=st.zone==='here'?localToday():dk(new Date());
+    for(let i=0;i<8;i++){ const k=dk(addDays(kd(k0),i)); dayOpts.push([k,i===0?'Today':i===1?'Tomorrow':fmtD(kd(k),{weekday:'short',day:'numeric',month:'short'})]); } };
+  const ensure=()=>{ const c=cur(); if(!dayOpts.some(o=>o[0]===c.date)) dayOpts.unshift([c.date,fmtD(kd(c.date),{weekday:'short',day:'numeric',month:'short'})]); };
+  buildDays(); ensure();
   modal((m,close)=>{
     m.classList.add('wide');
     m.innerHTML=`<div class="row" style="justify-content:space-between"><h2>${heading||(isNew?'Add to the calendar':'Change this')}</h2>${isNew&&!heading&&traveller()?`<button class="xbtn" id="addPdf" style="background:#ffe5a8;font-weight:800">📄 Load ${esc(tName(traveller()))}'s roster PDF</button>`:''}</div>
     <div class="whatwhere"><div><div class="step">1. What is it?</div><input class="txt" id="evTitle" value="${esc(st.title)}" placeholder="e.g. Doctor, school trip, swimming"></div>
-    <div><div class="step">📍 Where? <span style="font-weight:500">(optional)</span></div><div class="row" style="flex-wrap:nowrap"><input class="txt" id="evAddr" value="${esc(st.addr)}" placeholder="Address or place">${st.addr?`<a class="xbtn navbtn" href="${navUrl(st.addr)}" target="_blank" rel="noopener">🧭 Go</a>`:''}</div></div></div>
+    <div><div class="step">📍 Where? <span style="font-weight:500">(optional)</span></div><div class="row addrrow" style="flex-wrap:nowrap"><input class="txt" id="evAddr" value="${esc(st.addr)}" placeholder="Start typing an address or place" autocomplete="off"><div class="addrlist" id="addrList" hidden></div>${st.addr?`<a class="xbtn navbtn" href="${navUrl(st.addr)}" target="_blank" rel="noopener">🧭 Go</a>`:''}</div></div></div>
     <div class="addgrid"><div>
     <div class="step">2. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
     <div class="step">3. Which day?</div><div class="opts" id="dayBox"></div>
     ${canRepeat?'<div class="step">Does it repeat?</div><div id="rptBox"></div>':''}
     </div><div>
-    <div class="step">4. What time, and how long?</div><div id="timeBox"></div>
+    <div class="step">4. What time, and how long?</div>${AWAY_TZ?`<div class="opts" id="zoneBox" style="margin-bottom:6px"><button class="opt sm" data-zone="nz">🇳🇿 NZ time</button><button class="opt sm" data-zone="here">📍 ${esc(HERE)} time</button></div><div class="nzwarn" id="zoneEq"></div>`:''}<div id="timeBox"></div>
     </div></div>
     <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
     const drawWho=()=>{ const b=m.querySelector('#whoBox');
       b.innerHTML=S.people.map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
       b.querySelectorAll('[data-who]').forEach(x=>x.onclick=()=>{ const id=x.dataset.who; st.whos=st.whos.includes(id)?st.whos.filter(i=>i!==id):[...st.whos,id]; drawWho(); }); };
     const drawDays=()=>{ const b=m.querySelector('#dayBox');
-      b.innerHTML=dayOpts.map(o=>`<button class="opt ${st.date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
-      b.querySelectorAll('[data-day]').forEach(x=>x.onclick=()=>{ st.date=x.dataset.day; drawDays(); });
-      b.querySelector('#dIn').onchange=e=>{ if(e.target.value){ st.date=e.target.value; ensure(); drawDays(); } }; };
+      b.innerHTML=dayOpts.map(o=>`<button class="opt ${cur().date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
+      b.querySelectorAll('[data-day]').forEach(x=>x.onclick=()=>{ cur().date=x.dataset.day; drawDays(); });
+      b.querySelector('#dIn').onchange=e=>{ if(e.target.value){ cur().date=e.target.value; ensure(); drawDays(); } }; };
+    const zb=m.querySelector('#zoneBox'), zq=m.querySelector('#zoneEq');
+    const syncNz=()=>{ if(st.zone==='here'){ const n=hereToNz(vs.date,vs.time); st.date=n.date; st.time=n.time; st.dur=vs.dur; } };
+    const drawZone=()=>{ if(!zb) return; zb.querySelectorAll('[data-zone]').forEach(b=>b.classList.toggle('on',b.dataset.zone===st.zone)); };
+    const eq=()=>{ if(!zq) return; if(!m.isConnected){ clearInterval(eqT); return; } syncNz(); if(!st.time){ zq.textContent='All day, '+fmtD(kd(st.date),{weekday:'short',day:'numeric',month:'short'})+' NZ'; return; }
+      const d=new Date(st.date+'T'+st.time); zq.textContent=st.zone==='here'?`= ${fmtD(d,{weekday:'short',day:'numeric',month:'short'})} ${fmtTime(d,HOME_TZ)} NZ time (saved like this for the family)`:`= ${hereT(d)} time`; };
+    const eqT=zq?setInterval(eq,400):null;
+    if(zb) zb.querySelectorAll('[data-zone]').forEach(b=>b.onclick=()=>{ const z=b.dataset.zone; if(z===st.zone) return;
+      if(z==='here'){ const h=nzToHere(st.date,st.time); vs.date=h.date; vs.time=h.time; vs.dur=st.dur; vs.typing=false; } else syncNz();
+      st.zone=z; buildDays(); ensure(); drawDays(); drawZone(); timePicker(m.querySelector('#timeBox'),cur()); eq(); });
+    drawZone();
     const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); requirePin(()=>pickRosterPdf()); };
-    drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),st); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
+    drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),cur()); if(typeof eq==='function') eq(); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
     const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
-    const ad=m.querySelector('#evAddr'); ad.oninput=()=>st.addr=ad.value;
+    const ad=m.querySelector('#evAddr'); addrSearch(ad,m.querySelector('#addrList'),v=>st.addr=v);
     m.querySelector('#cBtn').onclick=close;
     if(!isNew) m.querySelector('#dBtn').onclick=()=>{ S.events=S.events.filter(e=>e.id!==existing.id); const tj=todoOf(existing); if(tj) tj.eventId=null; save(); close(); renderCal(); renderTodo(); toast(tj?'Taken off the calendar, back on the to-do list':'Deleted'); };
     const db=m.querySelector('#doneBtn'); if(db) db.onclick=()=>{ const tj=todoOf(existing); close(); if(tj) markDone(tj,true); else { existing.done=true; save(); renderCal(); } toast('Nice one ✓'); };
     m.querySelector('#sBtn').onclick=()=>{
+      syncNz();
       if(!st.whos.length){ toast('Tap who it is for'); return; }
       if(!st.title.trim()){ toast('Type what it is'); ti.focus(); return; }
       const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),addr:st.addr.trim(),date:st.date,time:st.time,dur:st.time?st.dur||60:0};
@@ -1339,7 +1475,7 @@ function openFlight(f){
     m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>${liveBox(f)}
     <p style="font-size:21px">${liveOf(f)&&liveOf(f).off?'Took off':'Leaves'} <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
     ${liveOf(f)&&liveOf(f).on?'Landed':'Lands'} <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
-    ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time':''}<br>`:''}${f.hotel&&!S.hideHotels?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
+    ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time ('+fmtTime(new Date(f.pickup),'Pacific/Auckland')+' NZ)':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time ('+fmtTime(new Date(f.report),'Pacific/Auckland')+' NZ)':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time ('+fmtTime(new Date(f.signOut),'Pacific/Auckland')+' NZ)':''}<br>`:''}${f.hotel&&!S.hideHotels?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
     ${(t=>t?`<p style="font-size:18px;line-height:1.6">${t.pick?`🚕 Taxi pick-up <b>${fmtTime(t.pick,'Pacific/Auckland')}</b> (${taxiSet().before} min before sign-on at ${fmtTime(t.signOn,'Pacific/Auckland')})<br>`:''}${t.drop?`🚕 Taxi drop-off about <b>${fmtTime(t.drop,'Pacific/Auckland')}</b> (${taxiSet().after} min after landing)`:''}</p>`:'')(taxiOf(f))}
     <p class="note">${liveOf(f)?'Times are the latest the airline has published. ':''}Flights come from the roster. To change them, load an updated roster (📄 Load roster PDF).</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
     m.querySelector('#ok').onclick=close;
@@ -1425,17 +1561,30 @@ function openGlobe(){
       <div class="bar2" style="height:8px;border-radius:99px;background:rgba(255,255,255,.7);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${(frac*100).toFixed(0)}%;background:#2b2f3a"></i></div></div>`;
     return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away${r.last&&r.last.hotel&&!S.hideHotels?`<br>🏨 Staying at ${esc(r.last.hotel.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))}`:''}${r.next&&r.next.pickup?`<br>🚐 Pick-up ${fmtD(new Date(r.next.pickup),{weekday:'short'})} ${fmtTime(new Date(r.next.pickup),r.a[1])} ${esc(r.a[0])} time`:''}</div></div>`;
   };
+  // the one card on the globe: flight number, flying or not, how it's tracking, and when she lands (NZ time)
+  function flightCardHTML(){
+    if(!tp) return '';
+    const hc=homeCancelled(tp,now); if(hc) return `<div class="gc-k">🏠 Coming home</div><div class="gc-t">❌ ${esc(hc.flight||'')} cancelled</div><div class="gc-s">Check with ${who} for the new plan</div>`;
+    if(r&&r.air){ const f=r.air, tag=liveTag(f), lt=lateMin(liveOf(f));
+      return `<div class="gc-k">✈️ ${esc(f.flight||'')} · flying to ${esc(r.a?r.a[0]:f.to)} ${r.a?r.a[3]:''}</div>
+        <div class="gc-t">Lands ${fmtTime(fE(f),HOME_TZ)}<small> NZ</small></div>
+        <div class="gc-s">${tag&&tag!=='🛫 In the air'?`<span class="lv ${liveCls(f)}">${tag.replace(/^🛫 In the air · /,'⏰ ')}</span>`:liveOf(f)?'<span class="lv lv-ok">✅ On time</span>':''} in ${relTime(fE(f),now)}${AWAY_TZ?' · '+esc(hereT(fE(f))):''}</div>
+        <div class="gc-bar"><i style="width:${(frac*100).toFixed(0)}%"></i></div>`; }
+    if(r&&r.a){ const t=hm(now,r.a[1]), nf=r.next&&fS(r.next)>now?r.next:null;
+      return `<div class="gc-k">💼 ${who} · ${esc(r.a[0])} ${r.a[3]}</div><div class="gc-t">${t.txt}<small>${t.ap} there</small></div>
+        ${nf?`<div class="gc-s">✈️ ${esc(nf.flight||'')} ${whenWord(fS(nf),now)} ${fmtTime(fS(nf),HOME_TZ)} NZ${liveTag(nf)?` · <span class="lv ${liveCls(nf)}">${liveTag(nf)}</span>`:''}</div>`:''}`; }
+    const sf=soonFlight(tp,now);
+    return `<div class="gc-k">🏠 ${who} is home</div>${sf?`<div class="gc-s">✈️ ${esc(sf.flight||'')} ${whenWord(fS(sf),now)} at ${fmtTime(fS(sf),HOME_TZ)}${liveTag(sf)?` · <span class="lv ${liveCls(sf)}">${liveTag(sf)}</span>`:''}</div>`:''}`;
+  }
   const homeT=hm(now,'Pacific/Auckland');
   const hc=tp?homeCancelled(tp,now):null;
   const etaCard=hc?`<div class="icard" style="background:#ffe1e1"><div class="c">🏠 Coming home</div><div class="t" style="font-size:26px">❌ ${esc(hc.flight||'')} cancelled</div><div class="s">The ${fmtD(fS(hc),{weekday:'long'})} flight home is cancelled. Check with ${who} for the new plan, then load the updated roster.</div></div>`:eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
+  const fc=flightCardHTML();
   L.innerHTML=`<div class="space"><div class="starsbg">${starHTML}</div>
    <div class="stage" id="stage"></div>
-   <div class="info"><h2>🌏 Where's ${who}?</h2>
-     ${herCard()}${etaCard}
-     <div class="icard" style="background:#fff6d6"><div class="c">🏠 Home · Auckland 🇳🇿</div><div class="t" style="font-size:30px">${homeT.txt}<small style="font-size:18px">${homeT.ap}</small></div><div class="s">${dateIn(now,'Pacific/Auckland')}</div></div>
-     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(fS(r.next),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?(fixAt?`The white dot is the last radar fix (${fmtTime(new Date(fixAt),'Pacific/Auckland')}). Since then the plane is moved on at the speed it was making. `:'The plane position is worked out from the flight times, so it is an estimate. '):''}The shaded side is night time. Drag the globe to spin it.</span></div>
-     <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button id="gPdf">📄 Load new roster</button><button class="close" id="gClose">✕ Back</button></div>
-   </div></div>`;
+   ${fc?`<button class="fcard" id="gCard" title="Find ${who}">${fc}</button>`:''}
+   <div class="sptop"><button class="spbtn" id="gMore" aria-label="More">⋯</button><button class="spbtn gclose" id="gClose" aria-label="Close">✕</button></div>
+  </div>`;
 
   const stage=$('#stage'), rect=stage.getBoundingClientRect();
   const size=Math.max(260,Math.min(rect.width-30,rect.height-30,760));
@@ -1455,19 +1604,20 @@ function openGlobe(){
   const visible=ll=>d3.geoDistance(ll,proj.invert([cx,cy]))<Math.PI/2;
   function pin(ll,label,sub,fill){
     const p=proj(ll); if(!p||!visible(ll)) return '';
-    const w=Math.max(label.length*8.4,sub.length*7.2)+26; let x=p[0]+14; const y=p[1]-46; if(x+w>SW-4) x=Math.max(4,p[0]-14-w);
+    const w=Math.max(label.length*8.4,(sub||'').length*7.9)+28, hh=sub?44:28; let x=p[0]+14; const y=p[1]-hh-2; if(x+w>SW-4) x=Math.max(4,p[0]-14-w);
     return `<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="12" fill="${fill}"/><circle cx="${p[0]}" cy="${p[1]}" r="8" fill="${fill}" stroke="#fff" stroke-width="3"/>
-      <g transform="translate(${x},${y})"><rect class="lbl-bg" width="${w}" height="44" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(label)}</text><text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text></g>`;
+      <g transform="translate(${x},${y})"><rect class="lbl-bg" width="${w}" height="${hh}" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(label)}</text>${sub?`<text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text>`:''}</g>`;
   }
-  // a sleek black jet with a silver fern-green stripe (not an airline logo)
-  const PLANE=`<g filter="url(#pshadow)">
-    <path d="M-6,-3 L-14,-24 L-8,-24 L8,-3Z" fill="#111" stroke="#fff" stroke-width=".8"/>
-    <path d="M-6,3 L-14,24 L-8,24 L8,3Z" fill="#111" stroke="#fff" stroke-width=".8"/>
-    <path d="M-20,-2 L-25,-10 L-21,-10 L-15,-2Z" fill="#111" stroke="#fff" stroke-width=".6"/>
-    <path d="M-20,2 L-25,10 L-21,10 L-15,2Z" fill="#111" stroke="#fff" stroke-width=".6"/>
-    <path d="M-24,0 C-24,-3.5 -20,-4.2 -14,-4.2 L16,-3.6 C22,-3.2 26,-1.6 27,0 C26,1.6 22,3.2 16,3.6 L-14,4.2 C-20,4.2 -24,3.5 -24,0Z" fill="#111" stroke="#fff" stroke-width="1"/>
-    <path d="M-18,0 L20,0" stroke="#9fd8cf" stroke-width="1.6" stroke-linecap="round"/>
-    <circle cx="21" cy="0" r="1.6" fill="#9fd3ee"/></g>`;
+  // grey top-down twin-engine airliner, nose pointing along +x
+  const PLANE=`<g filter="url(#pshadow)" stroke="#3a3d42" stroke-width=".7" stroke-linejoin="round">
+    <path d="M9,-3.1 L-12,-27 Q-14.5,-30 -17.5,-28.6 L-8,-3.1Z" fill="#6c7076"/>
+    <path d="M9,3.1 L-12,27 Q-14.5,30 -17.5,28.6 L-8,3.1Z" fill="#6c7076"/>
+    <rect x="-1" y="-12.6" width="10" height="4.6" rx="2.2" fill="#5a5e63"/>
+    <rect x="-1" y="8" width="10" height="4.6" rx="2.2" fill="#5a5e63"/>
+    <path d="M-21,-2.4 L-28.5,-11 L-31.5,-10.6 L-27.5,-2.4Z" fill="#6c7076"/>
+    <path d="M-21,2.4 L-28.5,11 L-31.5,10.6 L-27.5,2.4Z" fill="#6c7076"/>
+    <path d="M31,0 C31,-2.7 28,-3.6 23,-3.6 L-22,-3 C-27,-2.8 -31,-1.4 -33,0 C-31,1.4 -27,2.8 -22,3 L23,3.6 C28,3.6 31,2.7 31,0Z" fill="#7a7e84"/>
+    <path d="M27,0 L-28,0" stroke="#9a9ea4" stroke-width="1" fill="none"/></g>`;
   function draw(){
     proj.rotate(rot);
     let h=`<path d="${path({type:'Sphere'})}" fill="url(#ocean)"/><path d="${path(grat)}" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width=".7"/>`;
@@ -1481,18 +1631,17 @@ function openGlobe(){
         const fp=proj(fixLL); if(fp&&visible(fixLL)) h+=`<circle cx="${fp[0]}" cy="${fp[1]}" r="4.5" fill="#fff" stroke="#ffd45c" stroke-width="2"/>`;
       } else h+=`<path d="${path({type:'LineString',coordinates:[arcFrom,planeLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round"/>`;
     } else if(arcTo) h+=`<path class="arc" d="${path({type:'LineString',coordinates:[arcFrom,arcTo]})||''}"/>`;
-    h+=pin(homeLL,'🏠 Home',`Auckland · ${fmtTime(new Date(),'Pacific/Auckland')}`,'#f59e0b');
-    if(thereLL&&!planeLL) h+=pin(thereLL,`💼 ${tName(r.tp)}`,`${r.a[0]} · ${fmtTime(new Date(),r.a[1])}`,'#ef6f8f');
+    h+=pin(homeLL,'🏠 Home',r&&eta?`${tName(tp)} home ${whenShort(eta,now)}`:`Auckland ${fmtTime(new Date(),'Pacific/Auckland')}`,'#f59e0b');
+    if(thereLL&&!planeLL) h+=pin(thereLL,`💼 ${r.a[0]}`,'','#ef6f8f');
     if(planeLL){
-      if(!HOME.includes(r.code)||!r.from||HOME.includes(r.air.from)) h+=pin(arcTo,`🛬 ${r.a[0]}`,`lands ${fmtTime(fE(r.air),r.a[1])}`,'#ef6f8f');
-      if(r.from&&!HOME.includes(r.air.from)) h+=pin(arcFrom,`🛫 ${r.from[0]}`,'departed','#a78bfa');
+      if(!HOME.includes(r.code)||!r.from||HOME.includes(r.air.from)) h+=pin(arcTo,`🛬 ${r.a[0]}`,'','#ef6f8f');
+      if(r.from&&!HOME.includes(r.air.from)) h+=pin(arcFrom,`${r.from[0]}`,'','#a78bfa');
       const p=proj(planeLL), q=proj(planeAhead);
       if(p&&visible(planeLL)){
         const ang=q&&(Math.abs(q[0]-p[0])+Math.abs(q[1]-p[1])>0.01)?Math.atan2(q[1]-p[1],q[0]-p[0])*180/Math.PI:0;
-        h+=`<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="18" fill="#ffd45c"/><g transform="translate(${p[0]},${p[1]}) rotate(${ang.toFixed(1)}) scale(1.35)">${PLANE}</g>`;
-        const lbl=`✈️ ${tName(r.tp)} · lands in ${relTime(fE(r.air),new Date())}`, sub=whereOver(planeLL);
-        const w=Math.max(lbl.length*8.4,sub.length*7.2)+26;
-        h+=`<g transform="translate(${p[0]-w/2},${p[1]+30})"><rect class="lbl-bg" width="${w}" height="44" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(lbl)}</text><text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text></g>`;
+        h+=`<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="20" fill="#ffd45c"/><g transform="translate(${p[0]},${p[1]}) rotate(${ang.toFixed(1)}) scale(1.15)">${PLANE}</g>`;
+        const lbl=r.air.flight||'✈️', w=lbl.length*9+18;
+        h+=`<g transform="translate(${p[0]-w/2},${p[1]+30})"><rect class="lbl-bg" width="${w}" height="26" rx="13"/><text x="${w/2}" y="18" text-anchor="middle" font-size="15" font-weight="800" fill="#2b2f3a">${esc(lbl)}</text></g>`;
       }
     }
     gl.innerHTML=h;
@@ -1523,9 +1672,12 @@ function openGlobe(){
     if(!dg) return; const k=120/proj.scale(); rot=[dg.r[0]+(e.clientX-dg.x)*k*1.2,Math.max(-80,Math.min(80,dg.r[1]-(e.clientY-dg.y)*k*1.2))]; draw(); });
   const up=e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch=null; if(pts.size===1){ const [p]=[...pts.values()]; dg={x:p[0],y:p[1],r:[...rot]}; } else if(!pts.size) dg=null; };
   svg.addEventListener('pointerup',up); svg.addEventListener('pointercancel',up);
-  $('#gSpin').onclick=()=>spinTo(target,1400);
-  $('#gSet').onclick=()=>requirePin(()=>openWhere(()=>{ openGlobe(); }));
-  $('#gPdf').onclick=()=>requirePin(()=>{ pickRosterPdf(); });
+  const gc=$('#gCard'); if(gc) gc.onclick=()=>spinTo(target,1400);
+  $('#gMore').onclick=()=>modal((m,close)=>{ m.innerHTML=`<h2>Where's ${who}?</h2><div class="opts" style="flex-direction:column;align-items:stretch">
+      <button class="opt" id="mSet">📍 Change ${who}'s city</button><button class="opt" id="mPdf">📄 Load new roster</button></div><div class="mact"><button class="cancel" id="mX">Close</button></div>`;
+    m.querySelector('#mX').onclick=close;
+    m.querySelector('#mSet').onclick=()=>{ close(); requirePin(()=>openWhere(()=>{ openGlobe(); })); };
+    m.querySelector('#mPdf').onclick=()=>{ close(); requirePin(()=>{ pickRosterPdf(); }); }; });
   $('#gClose').onclick=()=>{ closeGlobe(); if(isPhone()) setTab('cal'); };
 }
 
@@ -2120,7 +2272,7 @@ function renderPhoneTop(){
   if(r&&r.a){ const tt=hm(now,r.a[1]); mum=r.air?`✈️ ${esc(tName(r.tp))} → ${esc(r.a[0])} · lands ${relTime(fE(r.air),now)}${/late|early/.test(liveTag(r.air))?' · '+liveTag(r.air).replace(/^.*· /,'').replace(/^⏰ |^⏩ /,''):''}`:`${r.a[3]} ${esc(tName(r.tp))} · ${esc(r.a[0])} ${tt.txt}${tt.ap}`; }
   const ph=r&&r.a?phase(hm(now,r.a[1]).h,hm(now,r.a[1]).m):'';
   const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph]||'#fff';
-  el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div></div>
+  el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div>${AWAY_TZ?`<div class="pt-nz">🇳🇿 NZ time · you ${fmtTime(now,DEVICE_TZ)}</div>`:''}</div>
     <button class="pt-mum" id="ptMum" style="background:${bg}">${mum}</button><button class="pt-set" id="ptSet" aria-label="Settings">⚙️</button>`;
   $('#ptSet').onclick=()=>requirePin(openSettings); const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
 }
@@ -2270,7 +2422,7 @@ function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.in
 const TABS=['cal','todo','shop','where'];
 (function(){ let sx=0,sy=0,ok=false,t0=0;
   document.addEventListener('touchstart',e=>{ if(!isPhone()||e.touches.length!==1){ ok=false; return; }
-    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate,.pw-top,.pw-days')&&!(drag&&drag.live);
+    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate,.pw-top,.pw-days,.pc-sheet,.fday')&&!(drag&&drag.live);
     sx=e.touches[0].clientX; sy=e.touches[0].clientY; t0=Date.now(); },{passive:true});
   document.addEventListener('touchend',e=>{ if(!ok||(drag&&drag.live)) return; const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
     if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.8&&Date.now()-t0<700){ const i=TABS.indexOf(document.body.dataset.tab||'cal'), n=i+(dx<0?1:-1); if(n>=0&&n<TABS.length) setTab(TABS[n]); } },{passive:true});
