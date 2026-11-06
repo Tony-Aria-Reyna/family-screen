@@ -314,6 +314,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .pinpad button{height:66px;border-radius:18px;background:var(--soft);font-size:28px;font-weight:700}
 .pinpad button:active{background:var(--accent)}
 .pinpad .pk-s{font-size:17px;font-weight:600;background:transparent}
+.codebox{white-space:pre-wrap;word-break:break-word;font-size:12px;max-height:280px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;user-select:text;-webkit-user-select:text}
 .tabbar{display:none}
 @media (max-width:900px){
   body{font-size:18px}
@@ -1540,6 +1541,7 @@ function openNotify(){
   modal((m,close)=>{ const draw=()=>{
     const hash=myPush(), dev=hash?SYNC.getDevices()[hash]:null, nt=SYNC.getNotifier(), running=nt&&nt.lastRun&&Date.now()-nt.lastRun<20*60e3;
     const devs=Object.entries(SYNC.getDevices());
+    const latestV=NOTIFIER?+((NOTIFIER.code.match(/HELPER_VERSION = (\d+)/)||[])[1]||0):0, needUpd=!!(nt&&latestV&&(nt.version||0)<latestV);
     const fileText=f=>NOTIFIER?(f==='code'?NOTIFIER.code.replace('__PROJECT_ID__',CONFIG.projectId).replace('__APP_URL__',location.origin+location.pathname):NOTIFIER.manifest):'';
     m.innerHTML=`<h2>🔔 Notifications</h2>
     <p class="note">Reminders before calendar entries, a 7am “today” summary, and a nudge when a booked job’s time has passed. Each phone chooses what it hears about.</p>
@@ -1557,9 +1559,12 @@ function openNotify(){
       :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${(CONFIG&&CONFIG.vapidKey)||S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
         <p class="note">Do this on each phone. On Android, install Family Screen first (⚙️ → 📲 Install) so notifications arrive even when it’s closed.</p>`}
     </div>
-    <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}</h4>
+    <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}${running&&needUpd?' <span class="pill-wait">⬆️ update available</span>':''}</h4>
       ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}
-      ${running?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':`
+      ${running&&needUpd?`<p class="note">A newer helper is available (adds lock-screen privacy). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
+        <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button></div>`:''}
+      ${running&&!needUpd?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':''}
+      ${running?`<details class="how"><summary>Show the helper code and settings file</summary><div class="row" style="margin:8px 0"><button class="xbtn" data-copy="code">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div><pre class="codebox">${esc(fileText('code'))}</pre></details>`:`
       <p class="note">One-off, on a computer, about 10 minutes. It runs free in your Google account and sends the reminders.</p>
       <ol style="font-size:16px;line-height:1.55;margin:6px 0 10px 18px;padding:0">
         <li>Go to <b>script.google.com</b> (same Google account as Firebase) → <b>New project</b>. Click “Untitled project” and name it <b>Family Screen helper</b>.</li>

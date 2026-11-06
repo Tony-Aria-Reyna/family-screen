@@ -4,6 +4,7 @@
  * sends reminders to the phones that turned notifications on in Family Screen.
  * Set-up: paste this file, paste appsscript.json, then run setup() once and allow access.
  */
+const HELPER_VERSION = 3;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -33,7 +34,7 @@ function tick() {
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
-    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err }, testPing: null });
+    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION }, testPing: null });
   }
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
