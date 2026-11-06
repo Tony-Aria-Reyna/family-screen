@@ -197,6 +197,8 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .srccard h4{margin:0 0 6px;font-size:20px;display:flex;align-items:center;gap:8px}
 .srcline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;padding:6px 0;border-top:1px dashed var(--line)}
 .srcline:first-of-type{border-top:0}
+.lv{display:inline-block;border-radius:999px;padding:1px 8px;font-size:13px;font-weight:800;background:#dff3e6;color:#1d6b3a;vertical-align:middle;white-space:nowrap}.lv-bad{background:#ffe1e1;color:#a3242f}
+.livebox{border-radius:16px;padding:12px 14px;margin:6px 0 10px;background:#eef7f1;font-size:18px;line-height:1.5}.livebox.bad{background:#fff0ef}.livebox small{display:block;font-size:13px;opacity:.7}
 .pill-ok{background:#dff3e6;color:#1d6b3a;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
 .pill-wait{background:#fff3cf;color:#7a5b00;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
 details.how{background:var(--soft);border-radius:14px;padding:10px 14px;margin:8px 0;font-size:16px}
@@ -614,13 +616,32 @@ window.closeModal=()=>{ $('#layer').innerHTML=''; relockSoon(); };
 function relockSoon(){ setTimeout(()=>{ if(!$('#layer').innerHTML&&typeof pinUntil!=='undefined') pinUntil=0; },1200); }
 
 /* ================= where is the traveller? ================= */
+// live status from the helper (AeroDataBox): estimated / actual times win over the roster
+const liveOf=f=>(f&&S.live&&S.live[f.id])||null;
+const isCx=l=>!!(l&&/Canceled/.test(l.status||''));
+function fS(f){ const l=liveOf(f); return new Date(l&&l.dep&&!isCx(l)?l.dep:f.start); }
+function fE(f){ const l=liveOf(f); return new Date(l&&l.arr&&!isCx(l)?l.arr:f.end); }
+function lateMin(l){ return !l?0:l.arr&&l.arrS?Math.round((l.arr-l.arrS)/6e4):l.dep&&l.depS?Math.round((l.dep-l.depS)/6e4):0; }
+// short status words for a flight, e.g. "⏰ 45 min late" (empty when there's no live data)
+function liveTag(f){
+  const l=liveOf(f); if(!l||!l.status||l.status==='NoData') return '';
+  if(isCx(l)) return '❌ Cancelled'; if(l.status==='Diverted') return '↪️ Diverted';
+  const m=lateMin(l), late=m>=15?`⏰ ${m} min late`:m<=-15?`⏩ ${-m} min early`:'';
+  if(l.on||/Arrived|Landed/.test(l.status)) return '🛬 Landed'+(late?' · '+late.slice(2):'');
+  if(l.off||/EnRoute|Departed|Approaching/.test(l.status)) return '🛫 In the air'+(late?' · '+late.slice(2):'');
+  return late||'✅ On time';
+}
+const liveCls=f=>{ const t=liveTag(f); return /Cancelled|Diverted|late/.test(t)?'lv-bad':t?'lv-ok':''; };
+const liveBadge=f=>{ let t=liveTag(f); if(!t) return ''; if(/late|early/.test(t)) t=t.replace(/^.*· /,'').replace(/^(?![⏰⏩])/,'⏰ '); return `<span class="lv ${liveCls(f)}" style="white-space:normal;margin-top:3px">${t}</span>`; };
+// the flight that brings this person home, if it's been cancelled
+function homeCancelled(tp,now){ const f=S.flights.filter(f=>f.who===tp.id&&HOME.includes(f.to)&&fE(f)>now).sort((a,b)=>fS(a)-fS(b))[0]; return f&&isCx(liveOf(f))?f:null; }
 function travellerNow(now){
   const tp=traveller(); if(!tp) return null;
   if(S.override){ if(S.override.code==='HOME') return null; const a=AIRPORTS[S.override.code]; return a?{tp,code:S.override.code,a,manual:true}:null; }
-  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>fS(a)-fS(b));
   let loc=null, inAir=null, last=null;
-  for(const f of fl){ const s=new Date(f.start), e=new Date(f.end); if(s<=now&&now<e){ inAir=f; break; } if(e<=now){ loc=f.to; last=f; } }
-  const next=fl.find(f=>new Date(f.start)>now);
+  for(const f of fl){ const s=fS(f), e=fE(f); if(s<=now&&now<e){ inAir=f; break; } if(e<=now){ loc=f.to; last=f; } }
+  const next=fl.find(f=>fS(f)>now);
   if(inAir){ return {tp,air:inAir,code:inAir.to,a:AIRPORTS[inAir.to]||null,from:AIRPORTS[inAir.from]||null,next}; }
   if(!loc||HOME.includes(loc)) return null;
   const a=AIRPORTS[loc]; if(!a) return null;
@@ -637,8 +658,8 @@ function orbStyle(h,m){
 }
 const tName=tp=>tp?(tp.nick||tp.name):'';
 function homeETA(tp,now){
-  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>new Date(a.start)-new Date(b.start));
-  const f=fl.find(f=>new Date(f.end)>now&&HOME.includes(f.to)); return f?new Date(f.end):null;
+  const fl=S.flights.filter(f=>f.who===tp.id).sort((a,b)=>fS(a)-fS(b));
+  const f=fl.find(f=>fE(f)>now&&HOME.includes(f.to)); return f?fE(f):null;
 }
 function relTime(d,now){
   const mins=Math.max(0,Math.round((d-now)/6e4)), dd=Math.floor(mins/1440), hh=Math.floor((mins%1440)/60), mm=mins%60;
@@ -650,7 +671,7 @@ function clockHTML(tz,city,sub,extra,badge){
   return {cls:'cc '+phase(t.h,t.m), html:`${STARS}<span class="hill"></span><span class="orb ${o.cls}" style="${o.style}"></span>${badge?`<span class="badge">${badge}</span>`:''}
     <span class="city">${city}</span><span class="time">${t.txt}<small>${t.ap}</small></span><span class="sub">${sub}</span>${extra||''}`};
 }
-function flightProgress(f,now){ return Math.min(1,Math.max(0,(now-new Date(f.start))/(new Date(f.end)-new Date(f.start)))); }
+function flightProgress(f,now){ return Math.min(1,Math.max(0,(now-fS(f))/(fE(f)-fS(f)))); }
 function renderClock(){
   const now=new Date(), hc=$('#homeClock'), tp=traveller();
   $('#globeLbl').textContent=tp?`WHERE'S ${tName(tp).toUpperCase()}?`:'WHERE?';
@@ -659,11 +680,11 @@ function renderClock(){
   const r=travellerNow(now), box=$('#awayBox');
   if(!r){ box.innerHTML=''; return; }
   const name=esc(tName(r.tp)), eta=homeETA(r.tp,now);
-  const etaLine=eta?`🏠 Home ${etaTxt(eta)} · in ${relTime(eta,now)}`:'';
+  const etaLine=homeCancelled(r.tp,now)?'❌ Flight home cancelled':eta?`🏠 Home ${etaTxt(eta)} · in ${relTime(eta,now)}`:'';
   if(!r.a){ box.innerHTML=`<button class="cc day" id="awayBtn"><span class="city">✈️ ${name}</span><span class="time" style="font-size:30px">${esc(r.air.from)} → ${esc(r.air.to)}</span><span class="sub">In the air</span></button>`; }
   else if(r.air){
     const p=flightProgress(r.air,now), tz=r.a[1];
-    const c=clockHTML(tz,`✈️ ${name} → ${esc(r.a[0])} ${r.a[3]}`,`🛬 lands in ${relTime(new Date(r.air.end),now)} · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ`,
+    const c=clockHTML(tz,`✈️ ${name} → ${esc(r.a[0])} ${r.a[3]}`,`${liveTag(r.air)&&liveTag(r.air)!=='🛫 In the air'?liveTag(r.air)+' · ':''}🛬 lands in ${relTime(fE(r.air),now)} · ${fmtTime(fE(r.air),'Pacific/Auckland')} NZ`,
       `<span class="bar2"><i style="width:${(p*100).toFixed(0)}%"></i></span>${HOME.includes(r.code)?'':`<span class="sub2">${etaLine}</span>`}`);
     box.innerHTML=`<button class="${c.cls}" id="awayBtn">${c.html}</button>`;
   } else {
@@ -766,10 +787,10 @@ function dayBlocks(key){
       const [h,m]=e.time.split(':').map(Number), s=h*60+m;
       timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
     else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day',attr:'data-where="1"'}); }
-    else { const f=it.f, s0=new Date(f.start), e0=new Date(f.end), a=AIRPORTS[f.from], b=AIRPORTS[f.to];
+    else { const f=it.f, s0=fS(f), e0=fE(f), a=AIRPORTS[f.from], b=AIRPORTS[f.to];
       if(it.k==='arr'&&dk(s0)===key) continue;
       const s=Math.max(0,mins(s0)), e=Math.min(1440,mins(e0));
-      const title=`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${b?b[0]:f.to}`;
+      const title=`✈️ ${f.flight||''} ${a?a[0]:f.from} → ${b?b[0]:f.to}${liveTag(f)?' · '+liveTag(f):''}`;
       const sub=it.k==='arr'?`🛬 lands ${fmtTime(e0,'Pacific/Auckland')}${b&&b[1]!=='Pacific/Auckland'?' · '+fmtTime(e0,b[1])+' local':''}`:`${fmtTime(s0,'Pacific/Auckland')}–${dk(e0)===key?fmtTime(e0,'Pacific/Auckland'):'next day '+fmtTime(e0,'Pacific/Auckland')}${a&&a[1]!=='Pacific/Auckland'?' · departs '+fmtTime(s0,a[1])+' local':''}${f.report&&a?' · report '+fmtTime(new Date(f.report),a[1]):''}`;
       timed.push({s,e:Math.max(e,s+30),bg:col(f.who),title,sub:tName(person(f.who))+' · '+sub,attr:`data-fl="${f.id}"`,flight:true}); }
   }
@@ -810,7 +831,7 @@ function itemsForDay(key){
   for(const e of S.events) if(shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const flyers=new Set();
-  for(const f of S.flights){ if(!shown([f.who])) continue; const s=new Date(f.start), e=new Date(f.end);
+  for(const f of S.flights){ if(!shown([f.who])) continue; const s=fS(f), e=fE(f);
     if(dk(s)===key){ out.push({k:'fl',sort:hhmm(s),f}); flyers.add(f.who); }
     if(dk(e)===key&&dk(s)!==key){ out.push({k:'arr',sort:hhmm(e),f}); flyers.add(f.who); } }
   // whole days away: show where they are, so a trip reads as one continuous stretch until they land
@@ -821,8 +842,8 @@ function itemsForDay(key){
 // where a person is at a moment, from their flights: null = home
 function whereAt(pid,t){
   let loc=null;
-  for(const f of S.flights.filter(x=>x.who===pid).sort((a,b)=>new Date(a.start)-new Date(b.start))){
-    const s=new Date(f.start), e=new Date(f.end);
+  for(const f of S.flights.filter(x=>x.who===pid).sort((a,b)=>fS(a)-fS(b))){
+    const s=fS(f), e=fE(f);
     if(s<=t&&t<e) return {air:f};
     if(e<=t) loc=f.to; else break;
   }
@@ -842,15 +863,15 @@ function evHTML(it,compact){
     return `<button class="ev away-ev" style="--c:${c}" data-where="1"><small>All day · ${esc(nm(it.who))}</small>${txt}</button>`;
   }
   if(it.k==='arr'){
-    const f=it.f, b=AIRPORTS[f.to], e=new Date(f.end), home=HOME.includes(f.to);
+    const f=it.f, b=AIRPORTS[f.to], e=fE(f), home=HOME.includes(f.to);
     const lbl=`🛬 ${home?'Home':'Lands '+esc(b?b[0]:f.to)} ${fmtTime(e,'Pacific/Auckland')}`;
     if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
-    return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(e,'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')} lands</small>${lbl}<small>✈️ ${esc(f.from)}→${esc(f.to)}${b&&b[1]!=='Pacific/Auckland'?` · ${new Intl.DateTimeFormat('en-NZ',{timeZone:b[1],weekday:'short'}).format(e)} ${fmtTime(e,b[1])} ${esc(b[0])} time`:''}${f.signOut&&home?` · signs out ${fmtTime(new Date(f.signOut),'Pacific/Auckland')}`:''}</small></button>`;
+    return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(e,'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')} lands</small>${lbl}${liveBadge(f)}<small>✈️ ${esc(f.from)}→${esc(f.to)}${b&&b[1]!=='Pacific/Auckland'?` · ${new Intl.DateTimeFormat('en-NZ',{timeZone:b[1],weekday:'short'}).format(e)} ${fmtTime(e,b[1])} ${esc(b[0])} time`:''}${f.signOut&&home?` · signs out ${fmtTime(new Date(f.signOut),'Pacific/Auckland')}`:''}</small></button>`;
   }
   const f=it.f, lbl=`✈️ ${esc(f.from)}→${esc(f.to)}`;
   if(compact) return `<div class="mpill" style="background:${col(f.who)}">${lbl}</div>`;
-  const fa=AIRPORTS[f.from], loc=fa&&fa[1]!=='Pacific/Auckland'?`<small>${new Intl.DateTimeFormat('en-NZ',{timeZone:fa[1],weekday:'short'}).format(new Date(f.start))} ${fmtTime(new Date(f.start),fa[1])} ${esc(fa[0])} time</small>`:'';
-  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(new Date(f.start),'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}${loc}</button>`;
+  const fa=AIRPORTS[f.from], loc=fa&&fa[1]!=='Pacific/Auckland'?`<small>${new Intl.DateTimeFormat('en-NZ',{timeZone:fa[1],weekday:'short'}).format(fS(f))} ${fmtTime(fS(f),fa[1])} ${esc(fa[0])} time</small>`:'';
+  return `<button class="ev" style="background:${col(f.who)}" data-fl="${f.id}"><small>${fmtTime(fS(f),'Pacific/Auckland')} NZ · ${esc(nm(f.who))} ${esc(f.flight||'')}</small>${lbl}${liveBadge(f)}${loc}</button>`;
 }
 function renderCal(){
   const cal=$('#cal'), todayKey=dk(new Date());
@@ -1158,15 +1179,25 @@ function openAdd(existing,onSaved,heading,opt){
   });
 }
 
+function liveBox(f){
+  const l=liveOf(f);
+  if(!l){ const nt=!LOCAL&&SYNC.getNotifier&&SYNC.getNotifier(), on=nt&&nt.flights&&nt.flights.key;
+    return on&&f.flight&&fE(f)>new Date()?`<div class="livebox"><small>🛰️ Live status starts 4 hours before take-off.</small></div>`:''; }
+  if(l.status==='NoData') return `<div class="livebox"><small>🛰️ No live information for ${esc(f.flight)} yet. Checked ${fmtTime(new Date(l.checked),'Pacific/Auckland')}.</small></div>`;
+  const m=lateMin(l), bad=isCx(l)||l.status==='Diverted'||m>=15, rs=new Date(f.start), re=new Date(f.end);
+  const moved=!isCx(l)&&(Math.abs(fS(f)-rs)>=5*6e4||Math.abs(fE(f)-re)>=5*6e4);
+  return `<div class="livebox ${bad?'bad':''}"><b>🛰️ ${liveTag(f)}</b>${moved?`<br><span style="opacity:.7">Rostered: leaves ${fmtTime(rs,'Pacific/Auckland')}, lands ${fmtTime(re,'Pacific/Auckland')} NZ</span>`:''}${isCx(l)?'<br>Check with the crew for the new plan.':''}${l.gate&&!l.off?`<br>Gate ${esc(l.gate)}`:''}
+    <small>Live from AeroDataBox · checked ${fmtTime(new Date(l.checked),'Pacific/Auckland')}</small></div>`;
+}
 function openFlight(f){
-  const a=AIRPORTS[f.from], b=AIRPORTS[f.to], s=new Date(f.start), e=new Date(f.end);
+  const a=AIRPORTS[f.from], b=AIRPORTS[f.to], s=fS(f), e=fE(f);
   const nz=d=>d.toLocaleString('en-NZ',{weekday:'long',hour:'numeric',minute:'2-digit'});
   modal((m,close)=>{
-    m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>
-    <p style="font-size:21px">Leaves <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
-    Lands <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
+    m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>${liveBox(f)}
+    <p style="font-size:21px">${liveOf(f)&&liveOf(f).off?'Took off':'Leaves'} <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
+    ${liveOf(f)&&liveOf(f).on?'Landed':'Lands'} <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
     ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time':''}<br>`:''}${f.hotel&&!S.hideHotels?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
-    <p class="note">From the roster. To change it, load an updated roster (📄 Load roster PDF).</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
+    <p class="note">${liveOf(f)?'Times are the latest the airline has published. ':''}Flights come from the roster. To change them, load an updated roster (📄 Load roster PDF).</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
     m.querySelector('#ok').onclick=close;
   });
 }
@@ -1202,11 +1233,15 @@ function openGlobe(){
   const now=new Date(), r=travellerNow(now), tp=traveller(), home=AIRPORTS[HOME_AP];
   const who=tp?esc(tName(tp)):'everyone';
   const homeLL=[home[5],home[4]];
-  let thereLL=null, planeLL=null, arcFrom=homeLL, arcTo=null, frac=0, planeAhead=null;
+  let thereLL=null, planeLL=null, arcFrom=homeLL, arcTo=null, frac=0, planeAhead=null, fixAt=0;
   if(r&&r.a) thereLL=[r.a[5],r.a[4]];
   if(r&&r.air&&r.from&&r.a){
     arcFrom=[r.from[5],r.from[4]]; arcTo=[r.a[5],r.a[4]]; frac=flightProgress(r.air,now);
     const ip=d3.geoInterpolate(arcFrom,arcTo); planeLL=ip(frac); planeAhead=ip(Math.min(1,frac+0.01));
+    const lp=liveOf(r.air)&&liveOf(r.air).pos, end=fE(r.air).getTime();
+    if(lp&&lp.at&&now-lp.at<6*36e5&&end>lp.at){ // carry on from the last radar fix towards the destination
+      const ip2=d3.geoInterpolate([lp.lon,lp.lat],arcTo), g=Math.min(1,Math.max(0,(now-lp.at)/(end-lp.at)));
+      planeLL=ip2(g); planeAhead=ip2(Math.min(1,g+0.01)); fixAt=lp.at; }
   } else if(thereLL) arcTo=thereLL;
   const focus=planeLL||(arcTo?d3.geoInterpolate(arcFrom,arcTo)(0.5):homeLL);
   const her=r&&r.a?r.a[6]:null;
@@ -1230,19 +1265,20 @@ function openGlobe(){
     const t=hm(new Date(),r.a[1]), ph=phase(t.h,t.m);
     const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph];
     if(r.air) return `<div class="icard" style="background:#d5e8f6"><div class="c">✈️ ${who} is flying ${esc(r.air.flight||'')} to ${esc(r.a[0])} ${r.a[3]}</div>
-      <div class="t" style="font-size:28px">Lands in ${relTime(new Date(r.air.end),now)}</div>
-      <div class="s">Somewhere ${whereOver(planeLL)} (estimated)<br>Lands ${fmtTime(new Date(r.air.end),r.a[1])} ${esc(r.a[0])} time · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ time</div>
+      <div class="t" style="font-size:28px">Lands in ${relTime(fE(r.air),now)}</div>
+      ${liveTag(r.air)&&liveTag(r.air)!=='🛫 In the air'?`<div class="s"><span class="lv ${liveCls(r.air)}" style="font-size:16px">${liveTag(r.air)}</span></div>`:''}<div class="s">${fixAt?'About':'Somewhere'} ${whereOver(planeLL)}${fixAt?'':' (estimated)'}<br>Lands ${fmtTime(fE(r.air),r.a[1])} ${esc(r.a[0])} time · ${fmtTime(fE(r.air),'Pacific/Auckland')} NZ time</div>
       <div class="bar2" style="height:8px;border-radius:99px;background:rgba(255,255,255,.7);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${(frac*100).toFixed(0)}%;background:#2b2f3a"></i></div></div>`;
     return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away${r.last&&r.last.hotel&&!S.hideHotels?`<br>🏨 Staying at ${esc(r.last.hotel.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))}`:''}${r.next&&r.next.pickup?`<br>🚐 Pick-up ${fmtD(new Date(r.next.pickup),{weekday:'short'})} ${fmtTime(new Date(r.next.pickup),r.a[1])} ${esc(r.a[0])} time`:''}</div></div>`;
   };
   const homeT=hm(now,'Pacific/Auckland');
-  const etaCard=eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
+  const hc=tp?homeCancelled(tp,now):null;
+  const etaCard=hc?`<div class="icard" style="background:#ffe1e1"><div class="c">🏠 Coming home</div><div class="t" style="font-size:26px">❌ ${esc(hc.flight||'')} cancelled</div><div class="s">The ${fmtD(fS(hc),{weekday:'long'})} flight home is cancelled. Check with ${who} for the new plan, then load the updated roster.</div></div>`:eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
   L.innerHTML=`<div class="space"><div class="starsbg">${starHTML}</div>
    <div class="stage" id="stage"></div>
    <div class="info"><h2>🌏 Where's ${who}?</h2>
      ${herCard()}${etaCard}
      <div class="icard" style="background:#fff6d6"><div class="c">🏠 Home · Auckland 🇳🇿</div><div class="t" style="font-size:30px">${homeT.txt}<small style="font-size:18px">${homeT.ap}</small></div><div class="s">${dateIn(now,'Pacific/Auckland')}</div></div>
-     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(new Date(r.next.start),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?'The plane position is worked out from the rostered times, so it is an estimate. ':''}The shaded side is night time. Drag the globe to spin it.</span></div>
+     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(fS(r.next),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?(fixAt?`The plane position is from the last radar fix (${fmtTime(new Date(fixAt),'Pacific/Auckland')}), carried on from there. `:'The plane position is worked out from the flight times, so it is an estimate. '):''}The shaded side is night time. Drag the globe to spin it.</span></div>
      <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button id="gPdf">📄 Load new roster</button><button class="close" id="gClose">✕ Back</button></div>
    </div></div>`;
 
@@ -1288,13 +1324,13 @@ function openGlobe(){
     h+=pin(homeLL,'🏠 Home',`Auckland · ${fmtTime(new Date(),'Pacific/Auckland')}`,'#f59e0b');
     if(thereLL&&!planeLL) h+=pin(thereLL,`💼 ${tName(r.tp)}`,`${r.a[0]} · ${fmtTime(new Date(),r.a[1])}`,'#ef6f8f');
     if(planeLL){
-      if(!HOME.includes(r.code)||!r.from||HOME.includes(r.air.from)) h+=pin(arcTo,`🛬 ${r.a[0]}`,`lands ${fmtTime(new Date(r.air.end),r.a[1])}`,'#ef6f8f');
+      if(!HOME.includes(r.code)||!r.from||HOME.includes(r.air.from)) h+=pin(arcTo,`🛬 ${r.a[0]}`,`lands ${fmtTime(fE(r.air),r.a[1])}`,'#ef6f8f');
       if(r.from&&!HOME.includes(r.air.from)) h+=pin(arcFrom,`🛫 ${r.from[0]}`,'departed','#a78bfa');
       const p=proj(planeLL), q=proj(planeAhead);
       if(p&&visible(planeLL)){
         const ang=q&&(Math.abs(q[0]-p[0])+Math.abs(q[1]-p[1])>0.01)?Math.atan2(q[1]-p[1],q[0]-p[0])*180/Math.PI:0;
         h+=`<circle class="pulse" cx="${p[0]}" cy="${p[1]}" r="18" fill="#ffd45c"/><g transform="translate(${p[0]},${p[1]}) rotate(${ang.toFixed(1)}) scale(1.35)">${PLANE}</g>`;
-        const lbl=`✈️ ${tName(r.tp)} · lands in ${relTime(new Date(r.air.end),new Date())}`, sub=whereOver(planeLL);
+        const lbl=`✈️ ${tName(r.tp)} · lands in ${relTime(fE(r.air),new Date())}`, sub=whereOver(planeLL);
         const w=Math.max(lbl.length*8.4,sub.length*7.2)+26;
         h+=`<g transform="translate(${p[0]-w/2},${p[1]+30})"><rect class="lbl-bg" width="${w}" height="44" rx="12"/><text x="12" y="19" font-size="15" font-weight="800" fill="#2b2f3a">${esc(lbl)}</text><text x="12" y="36" font-size="13" font-weight="600" fill="#7a7f8c">${esc(sub)}</text></g>`;
       }
@@ -1538,6 +1574,23 @@ async function refreshPushToken(){ // keep this phone's address up to date
     const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(VK,reg), hash=hashStr(token), old=lsGet('fs.pushHash',''), dev=SYNC.getDevices()[old];
     if(hash!==old&&dev){ await SYNC.saveDevice(hash,Object.assign({},dev,{token,at:Date.now()})); await SYNC.removeDevice(old); lsSet('fs.pushHash',hash); } }catch(e){}
 }
+function flightCard(nt,needUpd){
+  const fl=nt.flights;
+  if(!fl) return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-wait">needs the new helper</span></h4><p class="note">Update the helper (above) to switch this on.</p></div>`;
+  if(!fl.key) return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-wait">needs a free key</span></h4>
+    <p class="note">Tracks each flight from 4 hours before take-off, shows delays on the calendar and globe, and pings phones if a flight is running 15+ minutes late or is cancelled. One-off, on a computer, about 5 minutes:</p>
+    <ol style="font-size:16px;line-height:1.55;margin:6px 0 10px 18px;padding:0">
+      <li>Go to <b>rapidapi.com</b> and sign up (free, “Sign up with Google” is fine).</li>
+      <li>Search for <b>AeroDataBox</b> → <b>Pricing</b> → <b>Basic</b> ($0) → <b>Subscribe</b>. No card needed.</li>
+      <li>On the AeroDataBox page, open any endpoint and copy the <b>X-RapidAPI-Key</b> value (a long jumble of letters and numbers).</li>
+      <li>At <b>script.google.com</b> open your <b>Family Screen helper</b> → ⚙️ <b>Project Settings</b> → scroll to <b>Script properties</b> → <b>Add script property</b>.</li>
+      <li>Property: <b>AERODATABOX_KEY</b> · Value: paste the key → <b>Save script properties</b>.</li>
+      <li>This box turns green within 5 minutes.</li></ol>
+    <p class="note">The key stays in your Google account. It never goes on the website or GitHub.</p></div>`;
+  return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-ok">✓ on</span></h4>
+    ${fl.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(fl.error)}</p>`:''}
+    <p class="note">${fl.used||0} of ${fl.budget||280} free checks used this month. Each flight is checked about 10–15 times, more often near take-off and landing. Turn delay pings on or off for each phone above.</p></div>`;
+}
 function openNotify(){
   if(LOCAL){ modal((m,close)=>{ m.innerHTML='<h2>🔔 Notifications</h2><p class="note">Notifications work in the real app once you’re signed in, not in the demo.</p><div class="mact"><button class="save" id="ok">OK</button></div>'; m.querySelector('#ok').onclick=close; }); return; }
   modal((m,close)=>{ const draw=()=>{
@@ -1557,13 +1610,13 @@ function openNotify(){
         <div class="step">Remind me</div>
         <div class="opts">${[0,15,30,60].map(n=>`<button class="opt ${(dev.remind===false?0:(dev.lead||30))===n?'on':''}" data-nl="${n}">${n?n+' min before':'No reminders'}</button>`).join('')}</div>
         <div class="step">Also</div>
-        <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button><button class="opt ${dev.private?'on':''}" data-np2="1">🔒 Hide details on the lock screen</button></div>`
+        <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button><button class="opt ${dev.flights!==false?'on':''}" data-nt="flights">✈️ Flight delays & cancellations</button><button class="opt ${dev.private?'on':''}" data-np2="1">🔒 Hide details on the lock screen</button></div>`
       :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${(CONFIG&&CONFIG.vapidKey)||S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
         <p class="note">Do this on each phone. On Android, install Family Screen first (⚙️ → 📲 Install) so notifications arrive even when it’s closed.</p>`}
     </div>
     <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}${running&&needUpd?' <span class="pill-wait">⬆️ update available</span>':''}</h4>
       ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}
-      ${running&&needUpd?`<p class="note">A newer helper is available (adds lock-screen privacy). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
+      ${running&&needUpd?`<p class="note">A newer helper is available (adds live flight status). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
         <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button></div>`:''}
       ${running&&!needUpd?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':''}
       ${running?`<details class="how"><summary>Show the helper code and settings file</summary><div class="row" style="margin:8px 0"><button class="xbtn" data-copy="code">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div><pre class="codebox">${esc(fileText('code'))}</pre></details>`:`
@@ -1577,6 +1630,7 @@ function openNotify(){
         <li>This box turns green within 5 minutes.</li></ol>
       <div class="row"><button class="xbtn" data-copy="manifest">📋 Copy settings file</button><button class="xbtn" data-copy="code">📋 Copy helper code</button></div>`}
     </div>
+    ${running?flightCard(nt,needUpd):''}
     ${devs.length?`<div class="step">Phones with notifications on</div>${devs.map(([k,d])=>`<div class="srcline"><span>${esc(d.label||'Device')}${k===hash?' <b>(this one)</b>':''}</span><span class="note">${d.people&&d.people.length?d.people.map(nm).filter(Boolean).join(', '):'everyone'}</span></div>`).join('')}`:''}
     <div class="mact"><button class="save" id="ok">Done</button></div>`;
     const upd=async ch=>{ try{ await SYNC.saveDevice(hash,Object.assign({},dev,ch)); setTimeout(draw,250); }catch(e){ toast('Could not save'); } };
@@ -1884,7 +1938,7 @@ function renderPhoneTop(){
   const el=$('#phoneTop'); if(!el) return;
   const now=new Date(), t=hm(now,'Pacific/Auckland'), r=travellerNow(now);
   let mum='';
-  if(r&&r.a){ const tt=hm(now,r.a[1]); mum=r.air?`✈️ ${esc(tName(r.tp))} → ${esc(r.a[0])} · lands ${relTime(new Date(r.air.end),now)}`:`${r.a[3]} ${esc(tName(r.tp))} · ${esc(r.a[0])} ${tt.txt}${tt.ap}`; }
+  if(r&&r.a){ const tt=hm(now,r.a[1]); mum=r.air?`✈️ ${esc(tName(r.tp))} → ${esc(r.a[0])} · lands ${relTime(fE(r.air),now)}${/late|early/.test(liveTag(r.air))?' · '+liveTag(r.air).replace(/^.*· /,'').replace(/^⏰ |^⏩ /,''):''}`:`${r.a[3]} ${esc(tName(r.tp))} · ${esc(r.a[0])} ${tt.txt}${tt.ap}`; }
   const ph=r&&r.a?phase(hm(now,r.a[1]).h,hm(now,r.a[1]).m):'';
   const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph]||'#fff';
   el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div></div>
@@ -1958,7 +2012,7 @@ function setPMode(m){ pMode=m; lsSet('fs.pmode2',m); renderPCal(); }
 function dayLines(key){ return itemsForDay(key).map(it=>{
   if(it.k==='ev') return {c:evBg(it.e.whos),t:(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
   if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; return {c:col(it.who),t:a?'💼 '+a[0]:'✈️'}; }
-  if(it.k==='arr') return {c:col(it.f.who),t:'🛬 '+fmtTime(new Date(it.f.end),'Pacific/Auckland')};
+  if(it.k==='arr') return {c:col(it.f.who),t:'🛬 '+fmtTime(fE(it.f),'Pacific/Auckland')};
   return {c:col(it.f.who),t:'✈️ '+it.f.from+'→'+it.f.to};
 }); }
 function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.innerHTML=`<span>Add on ${d.getDate()} ${fmtD(d,{month:'short'})}</span><b>＋</b>`; f.onclick=()=>openAdd({date:pSel}); }

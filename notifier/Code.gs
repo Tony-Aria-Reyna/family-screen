@@ -3,8 +3,10 @@
  * Runs every 5 minutes in your own Google account. Reads the family calendar from Firebase and
  * sends reminders to the phones that turned notifications on in Family Screen.
  * Set-up: paste this file, paste appsscript.json, then run setup() once and allow access.
+ * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
+ * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 3;
+const HELPER_VERSION = 4;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -26,15 +28,17 @@ function tick() {
   const props = PropertiesService.getScriptProperties();
   const sent = props.getProperties();
   const now = new Date();
+  const flightNote = { key: !!props.getProperty('AERODATABOX_KEY'), used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: '' };
   for (const h of listDocs('households')) {
     let err = '';
     try {
       const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights') };
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
+      try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
-    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION }, testPing: null });
+    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
   }
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
@@ -96,6 +100,100 @@ function planNotifications(h, data, now, already) {
     }
   }
   return out;
+}
+
+/* ---------- live flight status (AeroDataBox, free plan = 300 checks a month) ---------- */
+const FLIGHT_BUDGET = 280;                 // stop a little short of the free 300
+const AIRPORT_INFO = {/*@TZ@*/};           // code: [time zone, city], filled in from the app's airport list
+const tzOf = c => (AIRPORT_INFO[c] || [])[0] || 'Pacific/Auckland', cityOf = c => (AIRPORT_INFO[c] || [])[1] || c;
+const FINAL = ['Arrived', 'Landed', 'Canceled', 'CanceledUncertain', 'Diverted'];
+
+// How long to wait between checks of one flight (minutes), or null = don't check now.
+function checkEvery(f, lv, now, tight) {
+  if (!/^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(String(f.flight || '').replace(/\s/g, ''))) return null;
+  lv = lv || {};
+  if (lv.final) return null;
+  const dep = lv.dep || Date.parse(f.start), arr = lv.arr || Date.parse(f.end), t = now.getTime();
+  if (t < dep - 4 * 36e5 || t > arr + 2 * 36e5) return null;            // only from 4 hrs before take-off to just after landing
+  const airborne = lv.status === 'EnRoute' || lv.status === 'Departed' || lv.status === 'Approaching' || !!lv.off;
+  let m;
+  if (!airborne) m = t < dep - 2 * 36e5 ? 90 : t < dep ? 40 : 20;       // at the gate: tighter as departure gets close
+  else m = arr - t > 75 * 60e3 ? 180 : 45;                                // in the air: every 3 hrs, then once near landing
+  return tight ? m * 2 : m;
+}
+const adbTime = o => o && o.utc ? Date.parse(String(o.utc).replace(' ', 'T')) : null;
+function parseFlight(f, list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const x = list.find(y => y.departure && y.departure.airport && y.departure.airport.iata === f.from && (!y.arrival || !y.arrival.airport || y.arrival.airport.iata === f.to))
+    || list.find(y => y.departure && y.departure.airport && y.departure.airport.iata === f.from) || null;
+  if (!x) return null;
+  const d = x.departure || {}, a = x.arrival || {};
+  const depS = adbTime(d.scheduledTime), arrS = adbTime(a.scheduledTime);
+  const off = adbTime(d.runwayTime) || (/EnRoute|Departed|Approaching|Arrived|Landed/.test(x.status || '') ? adbTime(d.revisedTime) : null);
+  const dep = off || adbTime(d.revisedTime) || adbTime(d.predictedTime) || depS;
+  const on = adbTime(a.runwayTime) || (/Arrived|Landed/.test(x.status || '') ? adbTime(a.revisedTime) : null);
+  const arr = on || adbTime(a.revisedTime) || adbTime(a.predictedTime) || (arrS && dep && depS ? arrS + (dep - depS) : arrS);
+  const out = { status: x.status || 'Unknown', depS, arrS, dep, arr, off: off || null, on: on || null,
+    gate: d.gate || '', final: FINAL.indexOf(x.status) >= 0 };
+  if (x.location && x.location.lat != null) out.pos = { lat: x.location.lat, lon: x.location.lon, alt: (x.location.altitude || {}).feet || 0, kt: (x.location.groundSpeed || {}).kt || 0, trk: (x.location.trueTrack || {}).deg || 0, at: Date.parse(String(x.location.reportedAtUtc || '').replace(' ', 'T')) || Date.now() };
+  return out;
+}
+// Delay / cancellation messages when the status moves on (pure logic, no network)
+function flightAlerts(h, f, prev, cur) {
+  const out = [], people = h.people || [], who = ((people.find(p => p.id === f.who) || {}).nick) || ((people.find(p => p.id === f.who) || {}).name) || '';
+  const route = cityOf(f.from) + '→' + cityOf(f.to), name = (f.flight || '') + ' ' + route;
+  const late = cur.arr && cur.arrS ? Math.round((cur.arr - cur.arrS) / 60e3) : cur.dep && cur.depS ? Math.round((cur.dep - cur.depS) / 60e3) : 0;
+  cur.told = prev.told || 0; cur.toldStatus = prev.toldStatus || '';
+  if (/Canceled/.test(cur.status) && cur.toldStatus !== 'Canceled') {
+    cur.toldStatus = 'Canceled';
+    out.push({ tag: 'fl' + f.id, title: '❌ ' + (who ? who + "'s flight " : 'Flight ') + name + ' is cancelled', body: 'The airline has cancelled it. Check with ' + (who || 'the crew') + ' for the new plan.', who: f.who });
+  } else if (cur.status === 'Diverted' && cur.toldStatus !== 'Diverted') {
+    cur.toldStatus = 'Diverted';
+    out.push({ tag: 'fl' + f.id, title: '↪️ ' + name + ' has been diverted', body: (who ? who + "'s" : 'The') + ' flight is landing somewhere other than ' + cityOf(f.to) + '.', who: f.who });
+  } else if (!cur.final || cur.status === 'Landed' || cur.status === 'Arrived') {
+    const step = Math.abs(late - cur.told);
+    if (Math.abs(late) >= 15 && step >= 15 && !cur.on) {
+      const tz = tzOf(f.to), when = Utilities.formatDate(new Date(cur.arr), tz, 'h:mma').toLowerCase();
+      const nz = tz === 'Pacific/Auckland' ? '' : ' (' + Utilities.formatDate(new Date(cur.arr), 'Pacific/Auckland', 'h:mma').toLowerCase() + ' NZ)';
+      out.push({ tag: 'fl' + f.id, title: (late > 0 ? '⏰ ' : '⏩ ') + name + ' running ' + Math.abs(late) + ' min ' + (late > 0 ? 'late' : 'early'),
+        body: (who ? who + ' now lands ' : 'Now lands ') + cityOf(f.to) + ' about ' + when + nz + '.', who: f.who });
+      cur.told = late;
+    } else if (Math.abs(cur.told) >= 15 && Math.abs(late) < 10 && !cur.on) {
+      out.push({ tag: 'fl' + f.id, title: '✅ ' + name + ' is back on time', body: (who ? who + "'s" : 'The') + ' flight has caught up.', who: f.who });
+      cur.told = 0;
+    }
+  }
+  return out;
+}
+function trackFlights(h, flights, now, props, msgs) {
+  const key = props.getProperty('AERODATABOX_KEY'); if (!key) return;
+  const mk = 'adb|' + keyOf(now).slice(0, 7);
+  const live = Object.assign({}, h.live || {}); let changed = false;
+  // forget flights that are long over or no longer on the calendar
+  Object.keys(live).forEach(id => { const f = flights.find(x => x.id === id); if (!f || now.getTime() - (live[id].arr || Date.parse(f.end)) > 2 * 864e5) { delete live[id]; changed = true; } });
+  for (const f of flights.sort((a, b) => Date.parse(a.start) - Date.parse(b.start))) {
+    let used = +(props.getProperty(mk) || 0); if (used >= FLIGHT_BUDGET) break;
+    const prev = live[f.id] || {}, every = checkEvery(f, prev, now, used > FLIGHT_BUDGET * 0.7);
+    if (every == null || (prev.checked && now.getTime() - prev.checked < every * 60e3 - 30e3)) continue;
+    const day = Utilities.formatDate(new Date(f.start), tzOf(f.from), 'yyyy-MM-dd');
+    const r = UrlFetchApp.fetch('https://aerodatabox.p.rapidapi.com/flights/number/' + encodeURIComponent(String(f.flight).replace(/\s/g, '')) + '/' + day + '?withAircraftImage=false&withLocation=true&dateLocalRole=Departure',
+      { headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com' }, muteHttpExceptions: true });
+    props.setProperty(mk, String(++used));
+    const code = r.getResponseCode();
+    if (code === 401 || code === 403) throw new Error('AeroDataBox did not accept the key (' + code + '). Check AERODATABOX_KEY.');
+    if (code === 429) throw new Error('AeroDataBox says the monthly allowance is used up.');
+    let cur = code === 200 ? parseFlight(f, JSON.parse(r.getContentText() || '[]')) : null;
+    if (!cur) { live[f.id] = Object.assign({}, prev, { checked: now.getTime(), status: prev.status || 'NoData' }); changed = true; continue; }
+    cur.flight = f.flight; cur.checked = now.getTime();
+    for (const a of flightAlerts(h, f, prev, cur)) for (const hash of Object.keys(h.devices || {})) {
+      const dev = h.devices[hash]; if (!dev || !dev.token || dev.flights === false) continue;
+      if (dev.people && dev.people.length && dev.people.indexOf(a.who) < 0) continue;
+      msgs.push({ device: hash, key: 'f|' + hash + '|' + f.id + '|' + cur.told + '|' + cur.toldStatus + '|' + now.getTime(), tag: a.tag,
+        title: dev.private ? '✈️ Family Screen' : a.title, body: dev.private ? 'A flight time has changed.' : a.body });
+    }
+    live[f.id] = cur; changed = true;
+  }
+  if (changed) { patch('households/' + h._id, { live: live }); h.live = live; }
 }
 
 /* ---------- dates (the script runs in NZ time; see appsscript.json) ---------- */
@@ -163,4 +261,4 @@ function send(h, hash, title, body, tag) {
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
 }
-if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn };
+if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn, checkEvery, parseFlight, flightAlerts, trackFlights };
