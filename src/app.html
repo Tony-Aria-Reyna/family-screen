@@ -78,7 +78,16 @@ input,select{font:inherit;color:inherit}
 #todoPanel,#shopPanel{container-type:inline-size}
 @container (max-width:400px){ .ph .tip{display:none} }
 @media (max-width:900px){ .hidep{display:none} }
-.hidep{background:var(--soft);border-radius:10px;padding:6px 9px;font-size:14px;flex:none;color:var(--muted)}
+.hidep{position:absolute;top:8px;right:8px;z-index:3;background:var(--soft);border-radius:10px;width:30px;height:30px;font-size:17px;line-height:1;color:var(--muted);flex:none}
+.hidep:hover{background:#e9e2d6;color:var(--ink)}
+@media (min-width:901px){ #todoPanel .ph,#shopPanel .ph{padding-right:44px;flex-wrap:wrap;row-gap:4px} }
+@container (max-width:320px){ .ph h2{font-size:22px} }
+.dock{display:none}
+.dockp{flex:1;min-height:0;background:var(--card);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0;box-shadow:0 1px 0 var(--line);overflow:hidden}
+.dockp:hover{background:#fffdf8}
+.dockp .chev{font-size:17px;color:var(--muted);background:var(--soft);border-radius:10px;width:30px;height:30px;line-height:30px;flex:none}
+.dockp .vt{writing-mode:vertical-rl;font-weight:800;font-size:17px;white-space:nowrap;letter-spacing:.3px}
+.dockp .n{font-size:13px;font-weight:800;color:var(--muted)}
 .restorep{background:var(--card);border-radius:12px;padding:7px 12px;font-size:15px;font-weight:700;box-shadow:0 1px 0 var(--line);white-space:nowrap}
 @media (min-width:901px){
   .app{column-gap:0}
@@ -87,6 +96,7 @@ input,select{font:inherit;color:inherit}
   .split:hover::after,.split.drag::after{background:#8fb8ad}
   .app.hideT #todoPanel,.app.hideS #shopPanel,.app.hideT .split[data-split=b],.app.hideS .split[data-split=b]{display:none}
   .app.hideT.hideS .right,.app.hideT.hideS .split{display:none}
+  .app.hideT .dock,.app.hideS .dock{display:flex;flex-direction:column;gap:12px;margin-left:10px;min-height:0}
   .app.hideT .right,.app.hideS .right{grid-template-rows:1fr}
 }
 @media (min-width:901px) and (max-width:1499px){ .split[data-split=b]{display:none} .right{margin:0} }
@@ -381,8 +391,33 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 /* ---------- phone calendar ---------- */
 #pcal{display:none;position:relative;height:calc(100vh - 150px - env(safe-area-inset-bottom));height:calc(100dvh - 150px - env(safe-area-inset-bottom));overflow:hidden;padding:0 8px;flex-direction:column}
 .pc-head{display:flex;align-items:center;gap:6px;padding:4px 6px 8px}
-.pc-head h2{margin:0;font-size:30px;margin-right:auto}
+.pc-head h2{margin:0;font-size:25px;margin-right:auto;white-space:nowrap}
 .pc-head button{background:var(--card);border-radius:12px;min-width:40px;height:40px;font-size:20px;box-shadow:0 1px 0 var(--line)}
+.pv-seg{display:flex;background:var(--soft);border-radius:12px;padding:3px;gap:2px}
+.pc-head .pv-seg button{box-shadow:none;background:none;min-width:0;height:34px;padding:0 9px;font-size:14px;font-weight:700;border-radius:9px;color:var(--muted)}
+.pc-head .pv-seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.pc-head h2.pw-title{font-size:21px;white-space:nowrap}
+.pw-wrap{display:flex;flex-direction:column;height:calc(100% - 52px);min-height:0}
+.pw-days,.pw-all{display:grid;grid-template-columns:30px repeat(7,minmax(0,1fr));gap:2px;flex:none}
+.pw-d{display:flex;flex-direction:column;align-items:center;padding:2px 0 6px;border-radius:12px}
+.pw-d small{font-size:12px;font-weight:700;color:var(--muted)}
+.pw-d b{font-size:18px;width:32px;height:32px;line-height:32px;border-radius:50%}
+.pw-d.today b{background:#9fd9cc}.pw-d.sel b{outline:2px solid var(--ink)}
+.pw-all{padding-bottom:4px;border-bottom:1px solid var(--line)}
+.pw-all>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pw-a,.pw-more{font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 3px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.pw-more{color:var(--muted);text-align:center}
+.pw-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:90px}
+.pw-grid{position:relative;margin-top:8px}
+.pw-h{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
+.pw-h span{position:absolute;left:0;top:-8px;width:26px;text-align:right;font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding-right:2px}
+.pw-cols{position:absolute;left:32px;right:0;top:0;bottom:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.pw-col{position:relative;border-left:1px solid #efe9df}
+.pw-col.today{background:rgba(159,217,204,.13)}
+.pw-b{position:absolute;border-radius:6px;padding:2px 3px;font-size:10.5px;line-height:1.15;font-weight:700;text-align:left;overflow:hidden;word-break:break-word;color:var(--ink);box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);margin-left:1px}
+.pw-now{position:absolute;left:-2px;right:0;height:2px;background:#e5484d;z-index:2;pointer-events:none}
+.pw-now:before{content:"";position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e5484d}
+.pw-nowlbl{position:absolute;left:0;width:30px;margin-top:-8px;font-size:10px;font-weight:800;color:#e5484d;text-align:right;background:var(--bg);z-index:3}
 .pc-head .pc-today{border:2px solid var(--ink);font-weight:800;font-size:16px}
 .pc-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:13px;font-weight:700;color:var(--muted);padding-bottom:6px;transition:opacity .2s}
 .pc-dow span:last-child{color:#d0453b}
@@ -452,8 +487,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
       <button class="cc" id="homeClock" aria-label="Open the globe"></button>
       <div id="awayBox" style="display:contents"></div>
       <button class="globebtn" id="globeBtn" aria-label="Where is everyone">🌏<span id="globeLbl">WHERE?</span></button>
-      <div id="restore" style="margin-left:auto;display:flex;flex-direction:column;gap:6px"></div>
-      <button class="iconbtn" id="setBtn" aria-label="Settings">⚙️</button>
+      <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
       <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
     </div>
     <div class="bar" id="bar"></div>
@@ -465,6 +499,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
     <div class="split" data-split="b" title="Drag to resize · double-tap to reset"></div>
     <div class="panel" id="shopPanel"></div>
   </div>
+  <div class="dock" id="dock"></div>
 </div>
 <button class="pc-fab" id="pcFab"></button>
 <nav class="tabbar"><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button></nav>
@@ -1042,7 +1077,7 @@ function renderTodo_(){
      <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
      <span class="nm">${esc(x.title)}${extra||''}${whoTag(x)}</span>
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
-  let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Hide the to-do list">✕</button></div>
+  let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Minimise the to-do list" aria-label="Minimise">»</button></div>
   <form class="addrow" id="tForm"><input id="tIn" placeholder="Add a job…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form><div class="list">`;
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
@@ -1107,7 +1142,7 @@ function moveItem(id,sid){
 function renderShop(){ keepInput('sIn',renderShop_); }
 function renderShop_(){
   const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
-  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Hide the shopping list">✕</button></div>
+  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Minimise the shopping list" aria-label="Minimise">»</button></div>
   <form class="addrow" id="sForm"><input id="sIn" placeholder="Add an item…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
   <div class="shops"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
   <div class="list">`;
@@ -2034,8 +2069,46 @@ function renderPhoneTop(){
 /* ================= phone calendar: month grid with a sliding day sheet ================= */
 let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
 const ROW=58, MODES=['day','week','split','month'];
+let pView=lsGet('fs.pview','month'), pwScroll=null;
+const pvSeg=()=>`<div class="pv-seg"><button data-pv="month" class="${pView==='month'?'on':''}">Month</button><button data-pv="week" class="${pView==='week'?'on':''}">Week</button></div>`;
+function wirePvSeg(el){ el.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{ if(pView===b.dataset.pv) return; pView=b.dataset.pv; lsSet('fs.pview',pView); pwScroll=null; renderPCal(); }); }
+// phone week: 7 columns on a time grid (like Samsung's week view)
+function renderPWeek(el){
+  const HW=46, m=monday(kd(pSel)), todayK=dk(new Date()), now=new Date(), nmin=now.getHours()*60+now.getMinutes();
+  const days=Array.from({length:7},(_,i)=>addDays(m,i)), e6=days[6];
+  const label=m.getMonth()===e6.getMonth()?`${m.getDate()}–${e6.getDate()} ${fmtD(e6,{month:'short'})}`:`${m.getDate()} ${fmtD(m,{month:'short'})} – ${e6.getDate()} ${fmtD(e6,{month:'short'})}`;
+  const keep=el.querySelector('.pw-scroll'); if(keep&&el.dataset.week===dk(m)) pwScroll=keep.scrollTop;
+  el.dataset.week=dk(m); el.dataset.day='';
+  const B=days.map(d=>{ const k=dk(d); return {k,d,...dayBlocks(k)}; });
+  let first=24*60; B.forEach(b=>b.timed.forEach(t=>first=Math.min(first,t.s)));
+  const hours=Array.from({length:24},(_,h)=>`<div class="pw-h" style="top:${h*HW}px"><span>${h===0?'':((h%12)||12)+(h<12?'a':'p')}</span></div>`).join('');
+  const cols=B.map(b=>`<div class="pw-col ${b.k===todayK?'today':''}" data-pwcol="${b.k}">${b.timed.map(t=>{ const top=t.s/60*HW, h=Math.max(20,(t.e-t.s)/60*HW-2);
+      return `<button class="pw-b ${t.done?'done-ev':''}" ${t.attr} style="top:${top}px;height:${h}px;left:calc(${t.col} * 100% / ${t.cols});width:calc(100% / ${t.cols} - 2px);background:${t.bg}">${esc(t.title)}</button>`; }).join('')}
+      ${b.k===todayK?`<div class="pw-now" style="top:${nmin/60*HW}px"></div>`:''}</div>`).join('');
+  const anyAll=B.some(b=>b.all.length);
+  el.innerHTML=`<div class="pc-head"><h2 class="pw-title">${label}</h2>${pvSeg()}<button id="pwPrev" aria-label="Previous week">‹</button><button id="pwNext" aria-label="Next week">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
+    <div class="pw-wrap">
+      <div class="pw-days"><span></span>${B.map((b,i)=>`<button class="pw-d ${b.k===todayK?'today':''} ${b.k===pSel?'sel':''}" data-pwd="${b.k}"><small>${'MTWTFSS'[i]}</small><b>${b.d.getDate()}</b></button>`).join('')}</div>
+      ${anyAll?`<div class="pw-all"><span></span>${B.map(b=>`<div>${b.all.slice(0,2).map(o=>`<button class="pw-a" style="background:${o.bg}" ${o.attr}>${esc(o.title)}</button>`).join('')}${b.all.length>2?`<button class="pw-more" data-pwd="${b.k}">+${b.all.length-2}</button>`:''}</div>`).join('')}</div>`:''}
+      <div class="pw-scroll"><div class="pw-grid" style="height:${24*HW}px">${hours}<div class="pw-cols">${cols}</div>${B.some(b=>b.k===todayK)?`<div class="pw-nowlbl" style="top:${nmin/60*HW}px">${fmtTime(now,'Pacific/Auckland').replace(/(am|pm)$/,'')}</div>`:''}</div></div>
+    </div>`;
+  const sc=el.querySelector('.pw-scroll');
+  sc.scrollTop=pwScroll!=null?pwScroll:Math.max(0,((B.some(b=>b.k===todayK)?nmin-90:Math.min(first,7*60)-30)/60)*HW);
+  wirePvSeg(el); wireTimeline(el,pSel);
+  const go=n=>{ pSel=dk(addDays(kd(pSel),7*n)); pMonth=null; pwScroll=sc.scrollTop; renderPCal(); updateFab(); };
+  $('#pwPrev').onclick=()=>go(-1); $('#pwNext').onclick=()=>go(1);
+  $('#pcToday').onclick=()=>{ pSel=dk(new Date()); pMonth=null; pwScroll=null; renderPCal(); updateFab(); };
+  el.querySelectorAll('[data-pwd]').forEach(b=>b.onclick=()=>{ pSel=b.dataset.pwd; pMonth=null; pView='month'; lsSet('fs.pview','month'); pMode='split'; lsSet('fs.pmode2','split'); renderPCal(); updateFab(); });
+  el.querySelectorAll('[data-pwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HW*4)*15));
+    openAdd({date:c.dataset.pwcol,time:String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0')}); });
+  // swipe left/right on the week for the next/previous week
+  const wrap=el.querySelector('.pw-wrap'); let sx=0,sy=0,t0=0;
+  wrap.addEventListener('touchstart',e=>{ sx=e.touches[0].clientX; sy=e.touches[0].clientY; t0=Date.now(); },{passive:true});
+  wrap.addEventListener('touchend',e=>{ const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy; if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6&&Date.now()-t0<700){ suppressClick=true; setTimeout(()=>suppressClick=false,350); go(dx<0?1:-1); } },{passive:true});
+}
 function renderPCal(){
   const el=$('#pcal'); if(!el||!isPhone()) return;
+  if(pView==='week'){ renderPWeek(el); return; }
   const sel=kd(pSel), todayK=dk(new Date());
   if(!pMonth) pMonth=new Date(sel.getFullYear(),sel.getMonth(),1);
   const first=new Date(pMonth), start=monday(first), lastDay=new Date(first.getFullYear(),first.getMonth()+1,0);
@@ -2048,7 +2121,7 @@ function renderPCal(){
   const T=timelineHTML(pSel), keepScroll=el.querySelector('.ps-scroll');
   if(keepScroll&&el.dataset.day===pSel) pScroll=keepScroll.scrollTop; else pScroll=null;
   el.dataset.day=pSel;
-  el.innerHTML=`<div class="pc-head"><h2>${fmtD(pMonth,{month:'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</h2><button id="pcPrev" aria-label="Previous month">‹</button><button id="pcNext" aria-label="Next month">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
+  el.innerHTML=`<div class="pc-head"><h2>${fmtD(pMonth,{month:'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</h2>${pvSeg()}<button id="pcPrev" aria-label="Previous month">‹</button><button id="pcNext" aria-label="Next month">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
     <div class="pc-dow">${['M','T','W','T','F','S','S'].map(x=>`<span>${x}</span>`).join('')}</div>
     <div class="pc-gridwrap" id="pcWrap"><div class="pc-grid" id="pcGrid">${cells}</div></div>
     <div class="pc-sheet" id="pcSheet"><div class="pc-grab"></div>
@@ -2071,6 +2144,7 @@ function renderPCal(){
   const sc=$('#psScroll'); sc.scrollTop=pScroll!=null?pScroll:T.scrollTo;
   // taps
   el.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>{ if(suppressClick) return; const k=b.dataset.pd; if(k===pSel&&pMode==='month'){ setPMode('split'); return; } pSel=k; const d=kd(k); if(d.getMonth()!==pMonth.getMonth()) pMonth=new Date(d.getFullYear(),d.getMonth(),1); renderPCal(); updateFab(); });
+  wirePvSeg(el);
   $('#pcPrev').onclick=()=>{ pMonth=new Date(pMonth.getFullYear(),pMonth.getMonth()-1,1); renderPCal(); };
   $('#pcNext').onclick=()=>{ pMonth=new Date(pMonth.getFullYear(),pMonth.getMonth()+1,1); renderPCal(); };
   $('#pcToday').onclick=()=>{ pSel=dk(new Date()); pMonth=null; renderPCal(); updateFab(); };
@@ -2108,7 +2182,7 @@ function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.in
 const TABS=['cal','todo','shop','where'];
 (function(){ let sx=0,sy=0,ok=false,t0=0;
   document.addEventListener('touchstart',e=>{ if(!isPhone()||e.touches.length!==1){ ok=false; return; }
-    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate')&&!(drag&&drag.live);
+    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate,.pw-wrap')&&!(drag&&drag.live);
     sx=e.touches[0].clientX; sy=e.touches[0].clientY; t0=Date.now(); },{passive:true});
   document.addEventListener('touchend',e=>{ if(!ok||(drag&&drag.live)) return; const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
     if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.8&&Date.now()-t0<700){ const i=TABS.indexOf(document.body.dataset.tab||'cal'), n=i+(dx<0?1:-1); if(n>=0&&n<TABS.length) setTab(TABS[n]); } },{passive:true});
@@ -2135,15 +2209,17 @@ function applyLayout(){
   const app=$('.app'); if(!app) return;
   const ph=isPhone(), wide=innerWidth>=1500;
   app.classList.toggle('hideT',!ph&&!!LAY.hideT); app.classList.toggle('hideS',!ph&&!!LAY.hideS);
-  const rs=$('#restore'); if(rs) rs.innerHTML=ph?'':(LAY.hideT?'<button class="restorep" data-showp="T">✅ To do</button>':'')+(LAY.hideS?'<button class="restorep" data-showp="S">🛒 Shopping</button>':'');
+  const dock=$('#dock'), nT=S.todos.filter(t=>!t.done).length, nS=S.groceries.filter(x=>!x.done).length;
+  if(dock) dock.innerHTML=ph?'':(LAY.hideT?`<button class="dockp" data-showp="T" title="Show the to-do list"><span class="chev">«</span><span class="vt">✅ To do</span>${nT?`<span class="n">${nT}</span>`:''}</button>`:'')+(LAY.hideS?`<button class="dockp" data-showp="S" title="Show the shopping list"><span class="chev">«</span><span class="vt">🛒 Shopping</span>${nS?`<span class="n">${nS}</span>`:''}</button>`:'');
   document.querySelectorAll('[data-showp]').forEach(b=>b.onclick=()=>{ LAY['hide'+b.dataset.showp]=false; saveLay(); applyLayout(); });
   if(ph){ app.style.gridTemplateColumns=''; return; }
-  const maxSide=Math.max(260,innerWidth-560);   // the calendar always keeps at least ~520px
+  const maxSide=Math.max(260,innerWidth-560-((LAY.hideT||LAY.hideS)?62:0));   // the calendar always keeps at least ~520px
   ['t','s','r'].forEach(k=>LAY[k]=Math.max(240,Math.min(maxSide,LAY[k])));
   if(wide&&!LAY.hideT&&!LAY.hideS&&LAY.t+LAY.s+28>maxSide){ const f=(maxSide-28)/(LAY.t+LAY.s); LAY.t=Math.max(240,Math.round(LAY.t*f)); LAY.s=Math.max(240,Math.round(LAY.s*f)); }
   let cols=['minmax(0,1fr)'];
   if(wide){ if(!LAY.hideT) cols.push('14px',LAY.t+'px'); if(!LAY.hideS) cols.push('14px',LAY.s+'px'); }
   else if(!(LAY.hideT&&LAY.hideS)) cols.push('14px',LAY.r+'px');
+  if(LAY.hideT||LAY.hideS) cols.push('62px');
   app.style.gridTemplateColumns=cols.join(' ');
 }
 function initSplits(){
@@ -2161,10 +2237,10 @@ function initSplits(){
     };
     sp.ondblclick=()=>{ Object.assign(LAY,{t:340,s:360,r:400}); saveLay(); applyLayout(); };
   });
-  document.addEventListener('click',e=>{ const b=e.target.closest('[data-hidep]'); if(!b) return; LAY['hide'+b.dataset.hidep]=true; saveLay(); applyLayout(); toast('Hidden. Tap “'+(b.dataset.hidep==='T'?'✅ To do':'🛒 Shopping')+'” at the top to bring it back'); });
+  document.addEventListener('click',e=>{ const b=e.target.closest('[data-hidep]'); if(!b) return; LAY['hide'+b.dataset.hidep]=true; saveLay(); applyLayout(); toast('Minimised. Tap the strip on the right to open it again'); });
   addEventListener('resize',applyLayout); applyLayout();
 }
-function renderAll(){ if(!S.people.length) return; if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
+function renderAll(){ if(!S.people.length) return; if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
