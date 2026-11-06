@@ -8,3 +8,4 @@ export async function signInWithCredential(a,c){ sessionStorage.setItem('mockuse
 export async function signInWithPopup(){ const e=new Error('popup'); e.code='auth/popup-closed-by-user'; throw e; }
 export async function signInWithRedirect(){}
 export async function signOut(){ sessionStorage.removeItem('mockuser'); emit(); }
+export async function reauthenticateWithPopup(){ return {}; }

@@ -304,6 +304,16 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 @media (max-width:900px){ .addgrid,.whatwhere{display:block} }
 .addr{color:#1f6feb!important;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .navbtn{text-decoration:none;color:var(--ink);white-space:nowrap;flex:none}
+.pinmodal{width:min(380px,100%)!important}
+.pindots{display:flex;justify-content:center;gap:18px;margin:18px 0 6px}
+.pindots i{width:18px;height:18px;border-radius:50%;border:3px solid var(--ink)}
+.pindots i.on{background:var(--ink)}
+.pindots.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:0 auto}
+.pinpad button{height:66px;border-radius:18px;background:var(--soft);font-size:28px;font-weight:700}
+.pinpad button:active{background:var(--accent)}
+.pinpad .pk-s{font-size:17px;font-weight:600;background:transparent}
 .tabbar{display:none}
 @media (max-width:900px){
   body{font-size:18px}
@@ -1127,7 +1137,7 @@ function openAdd(existing,onSaved,heading,opt){
       b.innerHTML=dayOpts.map(o=>`<button class="opt ${st.date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
       b.querySelectorAll('[data-day]').forEach(x=>x.onclick=()=>{ st.date=x.dataset.day; drawDays(); });
       b.querySelector('#dIn').onchange=e=>{ if(e.target.value){ st.date=e.target.value; ensure(); drawDays(); } }; };
-    const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); pickRosterPdf(); };
+    const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); requirePin(()=>pickRosterPdf()); };
     drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),st); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
     const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
     const ad=m.querySelector('#evAddr'); ad.oninput=()=>st.addr=ad.value;
@@ -1299,8 +1309,8 @@ function openGlobe(){
   svg.addEventListener('pointermove',e=>{ if(!dg) return; const k=120/proj.scale(); rot=[dg.r[0]+(e.clientX-dg.x)*k*1.2,Math.max(-80,Math.min(80,dg.r[1]-(e.clientY-dg.y)*k*1.2))]; draw(); });
   svg.addEventListener('pointerup',()=>dg=null); svg.addEventListener('pointercancel',()=>dg=null);
   $('#gSpin').onclick=()=>spinTo(target,1400);
-  $('#gSet').onclick=()=>openWhere(()=>{ openGlobe(); });
-  $('#gPdf').onclick=()=>{ cancelAnimationFrame(globeTimer); L.innerHTML=''; pickRosterPdf(); };
+  $('#gSet').onclick=()=>requirePin(()=>openWhere(()=>{ openGlobe(); }));
+  $('#gPdf').onclick=()=>requirePin(()=>{ pickRosterPdf(); });
   $('#gClose').onclick=()=>{ closeGlobe(); if(isPhone()) setTab('cal'); };
 }
 
@@ -1576,6 +1586,48 @@ function openNotify(){
   }; draw(); });
 }
 
+/* ================= Settings PIN (keeps little fingers out of the settings) ================= */
+let pinUntil=0, pinFails=0, pinWaitUntil=0;
+async function pinHashOf(pin){ const salt=(LOCAL?'demo':(SYNC.householdId()||''))+'|family-screen|'; const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(salt+pin)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+const pinTrusted=()=>!!lsGet('fs.pinTrust',false);
+function requirePin(fn){
+  if(!S.pinHash||pinTrusted()||Date.now()<pinUntil){ fn(); return; }
+  pinPad('Enter the Settings PIN',async pin=>{ if(await pinHashOf(pin)===S.pinHash){ pinUntil=Date.now()+5*60e3; pinFails=0; return true; } pinFails++; if(pinFails>=3){ pinWaitUntil=Date.now()+30e3; pinFails=0; } return false; },fn,true);
+}
+function pinPad(title,check,onOk,canForget){
+  modal((m,close)=>{ let val='';
+    const draw=()=>{
+      const wait=Math.max(0,Math.ceil((pinWaitUntil-Date.now())/1000));
+      m.classList.add('pinmodal');
+      m.innerHTML=`<h2 style="text-align:center">🔒 ${esc(title)}</h2>
+        <div class="pindots">${[0,1,2,3].map(i=>`<i class="${i<val.length?'on':''}"></i>`).join('')}</div>
+        <p class="note" id="pinMsg" style="text-align:center;min-height:22px">${wait?`Too many tries. Wait ${wait} seconds.`:''}</p>
+        <div class="pinpad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')}<button data-k="x" class="pk-s">Cancel</button><button data-k="0">0</button><button data-k="b" class="pk-s">⌫</button></div>
+        ${canForget?'<p style="text-align:center;margin:10px 0 0"><button class="linkbtn" id="pinForgot">Forgot the PIN?</button></p>':''}`;
+      m.querySelectorAll('[data-k]').forEach(b=>b.onclick=async()=>{
+        const k=b.dataset.k;
+        if(k==='x'){ close(); return; }
+        if(Date.now()<pinWaitUntil){ draw(); return; }
+        if(k==='b'){ val=val.slice(0,-1); draw(); return; }
+        if(val.length<4) val+=k; draw();
+        if(val.length===4){ const ok=await check(val); if(ok){ close(); onOk&&onOk(val); } else { val=''; draw(); const msg=m.querySelector('#pinMsg'); if(msg&&!msg.textContent) msg.textContent='That PIN isn’t right'; m.querySelector('.pindots').classList.add('shake'); } }
+      });
+      const f=m.querySelector('#pinForgot'); if(f) f.onclick=async()=>{
+        if(LOCAL){ S.pinHash=''; save(); close(); toast('PIN removed'); onOk&&onOk(); return; }
+        try{ await SYNC.reauth(); S.pinHash=''; save(); close(); toast('PIN removed. Set a new one in ⚙️ Settings.'); onOk&&onOk(); }
+        catch(e){ toast('Only a family member’s Google sign-in can reset the PIN'); }
+      };
+    };
+    draw();
+    m.tabIndex=-1; m.focus(); m.onkeydown=e=>{ if(/^[0-9]$/.test(e.key)) m.querySelector(`[data-k="${e.key}"]`).click(); if(e.key==='Backspace') m.querySelector('[data-k="b"]').click(); };
+  });
+}
+function setPinFlow(after){
+  pinPad('Choose a 4-digit PIN',async pin=>{ setPinFlow.first=pin; return true; },()=>{
+    pinPad('Type it again',async pin=>pin===setPinFlow.first,async pin=>{ S.pinHash=await pinHashOf(pin); pinUntil=Date.now()+5*60e3; save(); toast('Settings PIN set'); after&&after(); },false);
+  },false);
+}
+
 /* ================= privacy & our data ================= */
 function openPrivacy(){
   modal((m,close)=>{ const draw=()=>{
@@ -1667,6 +1719,10 @@ function openSettings(){
       <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
       <div id="invList" class="note">Loading invites…</div>
       <div class="row" style="margin-top:8px"><input type="email" id="invIn" placeholder="e.g. friend@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="invAdd">✉️ Invite</button></div>`:''}`}
+    <div class="srccard" style="margin:12px 0"><h4>🔢 Settings PIN ${S.pinHash?'<span class="pill-ok">on</span>':'<span class="pill-wait">off</span>'}</h4>
+      <p class="note">Stops the kids changing settings, loading rosters or changing Mummy's city. The calendar and lists stay open for everyone.</p>
+      <div class="row">${S.pinHash?'<button class="xbtn" id="pinChange">Change PIN</button><button class="xbtn" id="pinOff">Turn off</button>':'<button class="xbtn" id="pinSet" style="background:#ffe5a8;font-weight:800">Set a PIN</button>'}
+      ${S.pinHash?`<label class="small"><input type="checkbox" id="pinTrust" ${pinTrusted()?'checked':''}> Don't ask on this device (a parent's phone)</label>`:''}</div></div>
     <div class="step">People: type each name and tap a colour</div>
     ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
       ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
@@ -1686,6 +1742,9 @@ function openSettings(){
     <div class="mact"><button class="save" id="ok">Done</button></div>`;
     const re=()=>{ save(); renderAll(); };
     m.querySelector('#goSync').onclick=()=>{ close(); openSync(); };
+    const ps=m.querySelector('#pinSet')||m.querySelector('#pinChange'); if(ps) ps.onclick=()=>{ close(); setPinFlow(()=>openSettings()); };
+    const po=m.querySelector('#pinOff'); if(po) po.onclick=()=>{ S.pinHash=''; save(); draw(); toast('Settings PIN turned off'); };
+    const pt=m.querySelector('#pinTrust'); if(pt) pt.onchange=()=>{ lsSet('fs.pinTrust',pt.checked); toast(pt.checked?'This device won’t ask for the PIN':'This device will ask for the PIN'); };
     m.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ person(i.dataset.pn).name=i.value.trim()||'—'; re(); });
     m.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{ person(b.dataset.pc).color=b.dataset.c; re(); draw(); });
     m.querySelectorAll('[data-nick]').forEach(i=>i.onchange=()=>{ person(i.dataset.nick).nick=i.value.trim(); re(); });
@@ -1823,7 +1882,7 @@ function renderPhoneTop(){
   const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph]||'#fff';
   el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div></div>
     <button class="pt-mum" id="ptMum" style="background:${bg}">${mum}</button><button class="pt-set" id="ptSet" aria-label="Settings">⚙️</button>`;
-  $('#ptSet').onclick=openSettings; const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
+  $('#ptSet').onclick=()=>requirePin(openSettings); const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
 }
 /* ================= phone calendar: month grid with a sliding day sheet ================= */
 let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
@@ -1923,7 +1982,7 @@ window.addEventListener('popstate',()=>{
 /* ================= boot ================= */
 function renderAll(){ if(!S.people.length) return; if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
-$('#setBtn').onclick=openSettings;
+$('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
 $('#homeClock').onclick=openGlobe;
 document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
