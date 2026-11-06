@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 4;
+const HELPER_VERSION = 5;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -114,11 +114,11 @@ function checkEvery(f, lv, now, tight) {
   lv = lv || {};
   if (lv.final) return null;
   const dep = lv.dep || Date.parse(f.start), arr = lv.arr || Date.parse(f.end), t = now.getTime();
-  if (t < dep - 4 * 36e5 || t > arr + 2 * 36e5) return null;            // only from 4 hrs before take-off to just after landing
+  if (t < dep - 3 * 36e5 || t > arr + 2 * 36e5) return null;            // only from 3 hrs before take-off to just after landing
   const airborne = lv.status === 'EnRoute' || lv.status === 'Departed' || lv.status === 'Approaching' || !!lv.off;
   let m;
-  if (!airborne) m = t < dep - 2 * 36e5 ? 90 : t < dep ? 40 : 20;       // at the gate: tighter as departure gets close
-  else m = arr - t > 75 * 60e3 ? 180 : 45;                                // in the air: every 3 hrs, then once near landing
+  if (!airborne) m = t < dep ? 115 : 25;                                 // before take-off: about 3 hrs and 1 hr before, then until it's airborne
+  else m = arr - t > 70 * 60e3 ? 240 : 50;                                // in the air: every 4 hrs (the app fills in between), then once near landing
   return tight ? m * 2 : m;
 }
 const adbTime = o => o && o.utc ? Date.parse(String(o.utc).replace(' ', 'T')) : null;
@@ -185,6 +185,9 @@ function trackFlights(h, flights, now, props, msgs) {
     let cur = code === 200 ? parseFlight(f, JSON.parse(r.getContentText() || '[]')) : null;
     if (!cur) { live[f.id] = Object.assign({}, prev, { checked: now.getTime(), status: prev.status || 'NoData' }); changed = true; continue; }
     cur.flight = f.flight; cur.checked = now.getTime();
+    if (!cur.pos && prev.pos && !cur.on) cur.pos = prev.pos;                       // keep the last radar fix
+    if (cur.pos && prev.pos && cur.pos.at > prev.pos.at + 60e3) cur.prev = { lat: prev.pos.lat, lon: prev.pos.lon, at: prev.pos.at };
+    else if (prev.prev) cur.prev = prev.prev;
     for (const a of flightAlerts(h, f, prev, cur)) for (const hash of Object.keys(h.devices || {})) {
       const dev = h.devices[hash]; if (!dev || !dev.token || dev.flights === false) continue;
       if (dev.people && dev.people.length && dev.people.indexOf(a.who) < 0) continue;

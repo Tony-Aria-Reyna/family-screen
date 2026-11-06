@@ -74,6 +74,22 @@ input,select{font:inherit;color:inherit}
 .panel{background:var(--card);border-radius:var(--r);min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative}
 .ph{display:flex;align-items:center;gap:10px;padding:10px 14px 2px}
 .ph .tip{font-size:12px;color:var(--muted);margin-left:auto;text-align:right;line-height:1.2;max-width:150px}
+.split{display:none}
+#todoPanel,#shopPanel{container-type:inline-size}
+@container (max-width:400px){ .ph .tip{display:none} }
+@media (max-width:900px){ .hidep{display:none} }
+.hidep{background:var(--soft);border-radius:10px;padding:6px 9px;font-size:14px;flex:none;color:var(--muted)}
+.restorep{background:var(--card);border-radius:12px;padding:7px 12px;font-size:15px;font-weight:700;box-shadow:0 1px 0 var(--line);white-space:nowrap}
+@media (min-width:901px){
+  .app{column-gap:0}
+  .split{display:block;cursor:col-resize;position:relative;touch-action:none;min-width:14px}
+  .split::after{content:'';position:absolute;left:5px;width:4px;top:calc(50% - 30px);height:60px;border-radius:4px;background:#ddd5c8;transition:background .15s}
+  .split:hover::after,.split.drag::after{background:#8fb8ad}
+  .app.hideT #todoPanel,.app.hideS #shopPanel,.app.hideT .split[data-split=b],.app.hideS .split[data-split=b]{display:none}
+  .app.hideT.hideS .right,.app.hideT.hideS .split{display:none}
+  .app.hideT .right,.app.hideS .right{grid-template-rows:1fr}
+}
+@media (min-width:901px) and (max-width:1499px){ .split[data-split=b]{display:none} .right{margin:0} }
 .ph .clr{background:var(--soft);border-radius:10px;padding:6px 10px;font-size:13px;flex:none}
 .ph h2{margin:0;font-size:22px;white-space:nowrap}
 .ph .n{color:var(--muted);font-size:16px}
@@ -405,6 +421,9 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .tb b{font-size:15px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb small{font-size:12px;opacity:.8;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tb.short{flex-direction:row;align-items:center;gap:6px}.tb.short small{display:none}
+.wk-now{position:relative;height:2px;background:#e5484d;margin:7px 0 7px 8px;border-radius:2px;pointer-events:none;flex:none}
+.wk-now::before{content:'';position:absolute;left:-7px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e5484d}
+.wk-now span{position:absolute;right:0;top:-9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;padding:1px 6px;border-radius:99px}
 .tl-now{position:absolute;left:52px;right:0;height:2px;background:#e5484d;z-index:2;pointer-events:none}
 .tl-now:before{content:"";position:absolute;left:-6px;top:-5px;width:12px;height:12px;border-radius:50%;background:#e5484d}
 .tl-now span{position:absolute;left:-54px;top:-9px;font-size:11px;font-weight:800;color:#e5484d;background:var(--bg);padding:0 2px}
@@ -431,14 +450,17 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
       <button class="cc" id="homeClock" aria-label="Open the globe"></button>
       <div id="awayBox" style="display:contents"></div>
       <button class="globebtn" id="globeBtn" aria-label="Where is everyone">🌏<span id="globeLbl">WHERE?</span></button>
-      <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
+      <div id="restore" style="margin-left:auto;display:flex;flex-direction:column;gap:6px"></div>
+      <button class="iconbtn" id="setBtn" aria-label="Settings">⚙️</button>
       <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
     </div>
     <div class="bar" id="bar"></div>
     <div class="panel" id="calWrap"><div class="calhead" id="calhead"></div><div class="calbody" id="cal"></div></div>
   </div>
+  <div class="split" data-split="a" title="Drag to resize · double-tap to reset"></div>
   <div class="right">
     <div class="panel" id="todoPanel"></div>
+    <div class="split" data-split="b" title="Drag to resize · double-tap to reset"></div>
     <div class="panel" id="shopPanel"></div>
   </div>
 </div>
@@ -672,13 +694,22 @@ function clockHTML(tz,city,sub,extra,badge){
     <span class="city">${city}</span><span class="time">${t.txt}<small>${t.ap}</small></span><span class="sub">${sub}</span>${extra||''}`};
 }
 function flightProgress(f,now){ return Math.min(1,Math.max(0,(now-fS(f))/(fE(f)-fS(f)))); }
+// the traveller's next flight, if it leaves within 24 hours
+function soonFlight(tp,now){ const f=S.flights.filter(x=>x.who===tp.id&&fS(x)>now).sort((a,b)=>fS(a)-fS(b))[0]; return f&&fS(f)-now<24*36e5?f:null; }
+function whenWord(d,now){ const same=dk(d)===dk(now), h=+hm(d,'Pacific/Auckland').h; return same?(h>=17?'tonight':h<12?'this morning':'this afternoon'):dk(d)===dk(addDays(now,1))?(h<12?'tomorrow morning':h>=17?'tomorrow night':'tomorrow'):fmtD(d,{weekday:'long'}); }
+function liveWait(f,now){ const nt=!LOCAL&&SYNC.getNotifier&&SYNC.getNotifier(), on=nt&&nt.flights&&nt.flights.key; if(!on||!f.flight) return ''; const st=new Date(fS(f)-3*36e5); return st>now?`🛰️ Live status from ${fmtTime(st,'Pacific/Auckland')}`:'🛰️ Checking…'; }
+function soonCard(f,tp,now){
+  const b=AIRPORTS[f.to], d=fS(f), tag=liveTag(f)||liveWait(f,now);
+  return `<button class="cc day" id="awayBtn"><span class="city">✈️ ${esc(tName(tp))} flies ${whenWord(d,now)}</span><span class="time">${fmtTime(d,'Pacific/Auckland').replace(/(am|pm)$/,'<small>$1</small>')}</span>
+    <span class="sub">${esc(f.flight||'')} to ${esc(b?b[0]:f.to)} ${b?b[3]:''} · in ${relTime(d,now)}</span>${tag?`<span class="sub2">${liveTag(f)?`<span class="lv ${liveCls(f)}">${tag}</span>`:tag}</span>`:''}</button>`;
+}
 function renderClock(){
   const now=new Date(), hc=$('#homeClock'), tp=traveller();
   $('#globeLbl').textContent=tp?`WHERE'S ${tName(tp).toUpperCase()}?`:'WHERE?';
   const h=clockHTML('Pacific/Auckland','🏠 Home · Auckland',dateIn(now,'Pacific/Auckland'));
   hc.className=h.cls; hc.innerHTML=h.html;
   const r=travellerNow(now), box=$('#awayBox');
-  if(!r){ box.innerHTML=''; return; }
+  if(!r){ const sc=tp&&soonFlight(tp,now); box.innerHTML=sc?soonCard(sc,tp,now):''; const b=$('#awayBtn'); if(b) b.onclick=()=>openFlight(sc); return; }
   const name=esc(tName(r.tp)), eta=homeETA(r.tp,now);
   const etaLine=homeCancelled(r.tp,now)?'❌ Flight home cancelled':eta?`🏠 Home ${etaTxt(eta)} · in ${relTime(eta,now)}`:'';
   if(!r.a){ box.innerHTML=`<button class="cc day" id="awayBtn"><span class="city">✈️ ${name}</span><span class="time" style="font-size:30px">${esc(r.air.from)} → ${esc(r.air.to)}</span><span class="sub">In the air</span></button>`; }
@@ -692,7 +723,8 @@ function renderClock(){
     const diff=(offsetMin(tz,now)-offsetMin('Pacific/Auckland',now))/60;
     const dtxt=diff===0?'same time':`${Math.abs(diff)}h ${diff<0?'behind':'ahead'}`;
     const status=night?'🌙 asleep?':t.h<9?'☕ early there':'📞 good time to call';
-    const c=clockHTML(tz,`💼 ${name} · ${esc(r.a[0])} ${r.a[3]}`,`${dtxt} · ${status}`,etaLine?`<span class="sub2">${etaLine}</span>`:'',r.manual?'set by hand':'');
+    const nf=!r.manual&&soonFlight(r.tp,now), nfl=nf&&fS(nf)-now<14*36e5?`✈️ ${esc(nf.flight||'')} ${whenWord(fS(nf),now)} ${fmtTime(fS(nf),tz)} ${esc(r.a[0])} time${liveTag(nf)?' · '+liveTag(nf):''}`:'';
+    const c=clockHTML(tz,`💼 ${name} · ${esc(r.a[0])} ${r.a[3]}`,`${dtxt} · ${status}`,(nfl||etaLine)?`<span class="sub2">${nfl||etaLine}</span>`:'',r.manual?'set by hand':'');
     box.innerHTML=`<button class="${c.cls}" id="awayBtn">${c.html}</button>`;
   }
   $('#awayBtn').onclick=openGlobe;
@@ -822,6 +854,17 @@ function wireTimeline(box,key){
   if(tl) tl.onclick=e=>{ if(e.target!==tl&&!e.target.classList.contains('tl-h')) return; const r=tl.getBoundingClientRect(), m=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HOUR*4)*15));
     openAdd({date:key,time:String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}); };
 }
+// week view: a red "now" line in today's column, between what's been and what's still to come
+function placeWeekNow(){
+  const col=document.querySelector('#cal .week .day.today .evs'); if(!col) return;
+  col.querySelectorAll('.wk-now').forEach(n=>n.remove());
+  const d=new Date(), now=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const its=itemsForDay(dk(d)); let i=its.findIndex(it=>it.sort>now&&!(it.k==='away'||(it.k==='ev'&&!it.e.time)));
+  if(i<0) i=its.length;
+  const n=document.createElement('div'); n.className='wk-now'; n.innerHTML=`<span>${fmtTime(d,'Pacific/Auckland')}</span>`;
+  col.insertBefore(n,col.children[i]||null);
+}
+setInterval(placeWeekNow,60000);
 setInterval(()=>{ document.querySelectorAll('.tl-now').forEach(n=>{ const d=new Date(); n.style.top=((d.getHours()*60+d.getMinutes())/60*HOUR)+'px'; n.querySelector('span').textContent=fmtTime(d,'Pacific/Auckland'); }); },30000);
 
 /* ================= calendar ================= */
@@ -891,7 +934,7 @@ function renderCal(){
       h+=`<div class="day ${isT?'today':''} ${i>4?'wkend':''}" data-drop="${key}"><h3>${isT?'Today':fmtD(d,{weekday:'long'})}<b>${d.getDate()} ${fmtD(d,{month:'short'})}</b></h3>
           <div class="evs">${itemsForDay(key).map(x=>evHTML(x)).join('')}<button class="addday" data-add="${key}">＋ add</button></div></div>`;
     }
-    cal.innerHTML=h+'</div>';
+    cal.innerHTML=h+'</div>'; placeWeekNow();
   } else {
     const t=new Date(), first=new Date(t.getFullYear(),t.getMonth()+monthOff,1), start=monday(first), mon=first.getMonth();
     let h='<div class="mgrid">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="mhead">${x}</div>`).join('')+'</div><div class="mgrid mbody">';
@@ -975,7 +1018,7 @@ function renderTodo_(){
      <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
      <span class="nm">${esc(x.title)}${extra||''}${whoTag(x)}</span>
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
-  let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button></div>
+  let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Hide the to-do list">✕</button></div>
   <form class="addrow" id="tForm"><input id="tIn" placeholder="Add a job…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form><div class="list">`;
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
@@ -1040,7 +1083,7 @@ function moveItem(id,sid){
 function renderShop(){ keepInput('sIn',renderShop_); }
 function renderShop_(){
   const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
-  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button></div>
+  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Hide the shopping list">✕</button></div>
   <form class="addrow" id="sForm"><input id="sIn" placeholder="Add an item…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
   <div class="shops"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
   <div class="list">`;
@@ -1182,7 +1225,7 @@ function openAdd(existing,onSaved,heading,opt){
 function liveBox(f){
   const l=liveOf(f);
   if(!l){ const nt=!LOCAL&&SYNC.getNotifier&&SYNC.getNotifier(), on=nt&&nt.flights&&nt.flights.key;
-    return on&&f.flight&&fE(f)>new Date()?`<div class="livebox"><small>🛰️ Live status starts 4 hours before take-off.</small></div>`:''; }
+    return on&&f.flight&&fE(f)>new Date()?`<div class="livebox"><small>🛰️ Live status starts 3 hours before take-off.</small></div>`:''; }
   if(l.status==='NoData') return `<div class="livebox"><small>🛰️ No live information for ${esc(f.flight)} yet. Checked ${fmtTime(new Date(l.checked),'Pacific/Auckland')}.</small></div>`;
   const m=lateMin(l), bad=isCx(l)||l.status==='Diverted'||m>=15, rs=new Date(f.start), re=new Date(f.end);
   const moved=!isCx(l)&&(Math.abs(fS(f)-rs)>=5*6e4||Math.abs(fE(f)-re)>=5*6e4);
@@ -1226,6 +1269,19 @@ function subsolar(d){
   return [-(mins+eqt-720)/4, decl*180/Math.PI];
 }
 function closeGlobe(){ cancelAnimationFrame(globeTimer); $('#spaceLayer').innerHTML=''; }
+// Where the plane probably is now: start from the last radar fix and carry on towards the destination
+// at the average speed it was making (between the last two fixes, else since take-off).
+function deadReckon(f,from,to,now){
+  const l=liveOf(f), p=l&&l.pos; if(!p||!p.at||l.on||now-p.at>10*36e5) return null;
+  const fix=[p.lon,p.lat]; let v=0;                         // radians of the earth per millisecond
+  if(l.prev&&p.at-l.prev.at>20*6e4) v=d3.geoDistance([l.prev.lon,l.prev.lat],fix)/(p.at-l.prev.at);
+  const t0=l.off||l.dep; if(!v&&t0&&p.at-t0>20*6e4) v=d3.geoDistance(from,fix)/(p.at-t0);
+  if(!v&&p.kt) v=p.kt*1.852/6371/36e5;
+  const rem=d3.geoDistance(fix,to), end=fE(f).getTime();
+  const g=v&&rem>0?Math.min(.99,v*(now-p.at)/rem):Math.min(.99,Math.max(0,(now-p.at)/Math.max(1,end-p.at)));
+  const ip=d3.geoInterpolate(fix,to), ll=ip(g), tot=d3.geoDistance(from,to);
+  return {ll,ahead:ip(Math.min(1,g+.01)),at:p.at,fix,frac:tot?Math.min(1,d3.geoDistance(from,ll)/tot):0};
+}
 function openGlobe(){
   if(isPhone()&&document.body.dataset.tab!=='where'){ setTab('where'); return; }
   const L=$('#spaceLayer');
@@ -1233,15 +1289,13 @@ function openGlobe(){
   const now=new Date(), r=travellerNow(now), tp=traveller(), home=AIRPORTS[HOME_AP];
   const who=tp?esc(tName(tp)):'everyone';
   const homeLL=[home[5],home[4]];
-  let thereLL=null, planeLL=null, arcFrom=homeLL, arcTo=null, frac=0, planeAhead=null, fixAt=0;
+  let thereLL=null, planeLL=null, arcFrom=homeLL, arcTo=null, frac=0, planeAhead=null, fixAt=0, fixLL=null;
   if(r&&r.a) thereLL=[r.a[5],r.a[4]];
   if(r&&r.air&&r.from&&r.a){
     arcFrom=[r.from[5],r.from[4]]; arcTo=[r.a[5],r.a[4]]; frac=flightProgress(r.air,now);
     const ip=d3.geoInterpolate(arcFrom,arcTo); planeLL=ip(frac); planeAhead=ip(Math.min(1,frac+0.01));
-    const lp=liveOf(r.air)&&liveOf(r.air).pos, end=fE(r.air).getTime();
-    if(lp&&lp.at&&now-lp.at<6*36e5&&end>lp.at){ // carry on from the last radar fix towards the destination
-      const ip2=d3.geoInterpolate([lp.lon,lp.lat],arcTo), g=Math.min(1,Math.max(0,(now-lp.at)/(end-lp.at)));
-      planeLL=ip2(g); planeAhead=ip2(Math.min(1,g+0.01)); fixAt=lp.at; }
+    const dr=deadReckon(r.air,arcFrom,arcTo,now);
+    if(dr){ planeLL=dr.ll; planeAhead=dr.ahead; fixAt=dr.at; fixLL=dr.fix; frac=dr.frac; }
   } else if(thereLL) arcTo=thereLL;
   const focus=planeLL||(arcTo?d3.geoInterpolate(arcFrom,arcTo)(0.5):homeLL);
   const her=r&&r.a?r.a[6]:null;
@@ -1260,7 +1314,7 @@ function openGlobe(){
   const distKm=thereLL?Math.round(d3.geoDistance(homeLL,thereLL)*6371):0;
   const herCard=()=>{
     if(!tp) return '';
-    if(!r) return `<div class="icard" style="background:#c3e8cc"><div class="c">🏠 ${who} is home!</div><div class="s">Everyone is in Auckland right now.</div></div>`;
+    if(!r) return `<div class="icard" style="background:#c3e8cc"><div class="c">🏠 ${who} is home!</div><div class="s">Everyone is in Auckland right now.${soonFlight(tp,now)?(f=>`<br>✈️ Flies ${whenWord(fS(f),now)} at ${fmtTime(fS(f),'Pacific/Auckland')}: ${esc(f.flight||'')} to ${esc((AIRPORTS[f.to]||[f.to])[0])}${liveTag(f)?` · ${liveTag(f)}`:''}`)(soonFlight(tp,now)):''}</div></div>`;
     if(!r.a) return `<div class="icard" style="background:#d5e8f6"><div class="c">✈️ ${who} is flying</div><div class="t" style="font-size:30px">${esc(r.air.from)} → ${esc(r.air.to)}</div></div>`;
     const t=hm(new Date(),r.a[1]), ph=phase(t.h,t.m);
     const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph];
@@ -1278,7 +1332,7 @@ function openGlobe(){
    <div class="info"><h2>🌏 Where's ${who}?</h2>
      ${herCard()}${etaCard}
      <div class="icard" style="background:#fff6d6"><div class="c">🏠 Home · Auckland 🇳🇿</div><div class="t" style="font-size:30px">${homeT.txt}<small style="font-size:18px">${homeT.ap}</small></div><div class="s">${dateIn(now,'Pacific/Auckland')}</div></div>
-     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(fS(r.next),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?(fixAt?`The plane position is from the last radar fix (${fmtTime(new Date(fixAt),'Pacific/Auckland')}), carried on from there. `:'The plane position is worked out from the flight times, so it is an estimate. '):''}The shaded side is night time. Drag the globe to spin it.</span></div>
+     <div class="stat">${r&&r.next&&!(r.air)?`🗓️ Next flight: ${esc(r.next.from)} → ${esc(r.next.to)}, ${fmtD(fS(r.next),{weekday:'long',day:'numeric',month:'short'})}<br>`:''}<span style="opacity:.75">${r&&r.air?(fixAt?`The white dot is the last radar fix (${fmtTime(new Date(fixAt),'Pacific/Auckland')}). Since then the plane is moved on at the speed it was making. `:'The plane position is worked out from the flight times, so it is an estimate. '):''}The shaded side is night time. Drag the globe to spin it.</span></div>
      <div class="btns"><button id="gSpin">🔄 ${r&&r.air?'Find the plane':'Spin to '+who}</button><button id="gSet">📍 Change city</button><button id="gPdf">📄 Load new roster</button><button class="close" id="gClose">✕ Back</button></div>
    </div></div>`;
 
@@ -1319,7 +1373,11 @@ function openGlobe(){
     h+=`<path d="${path(night)}" fill="#1b1f4a" fill-opacity=".38"/>`;
     if(planeLL){
       h+=`<path d="${path({type:'LineString',coordinates:[planeLL,arcTo]})||''}" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 8" stroke-opacity=".9"/>`;
-      h+=`<path d="${path({type:'LineString',coordinates:[arcFrom,planeLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round"/>`;
+      if(fixLL){ // flown (up to the last radar fix) solid; carried-on estimate since then lighter
+        h+=`<path d="${path({type:'LineString',coordinates:[arcFrom,fixLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round"/>`;
+        h+=`<path d="${path({type:'LineString',coordinates:[fixLL,planeLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 7" stroke-opacity=".85"/>`;
+        const fp=proj(fixLL); if(fp&&visible(fixLL)) h+=`<circle cx="${fp[0]}" cy="${fp[1]}" r="4.5" fill="#fff" stroke="#ffd45c" stroke-width="2"/>`;
+      } else h+=`<path d="${path({type:'LineString',coordinates:[arcFrom,planeLL]})||''}" fill="none" stroke="#ffd45c" stroke-width="4" stroke-linecap="round"/>`;
     } else if(arcTo) h+=`<path class="arc" d="${path({type:'LineString',coordinates:[arcFrom,arcTo]})||''}"/>`;
     h+=pin(homeLL,'🏠 Home',`Auckland · ${fmtTime(new Date(),'Pacific/Auckland')}`,'#f59e0b');
     if(thereLL&&!planeLL) h+=pin(thereLL,`💼 ${tName(r.tp)}`,`${r.a[0]} · ${fmtTime(new Date(),r.a[1])}`,'#ef6f8f');
@@ -1578,7 +1636,7 @@ function flightCard(nt,needUpd){
   const fl=nt.flights;
   if(!fl) return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-wait">needs the new helper</span></h4><p class="note">Update the helper (above) to switch this on.</p></div>`;
   if(!fl.key) return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-wait">needs a free key</span></h4>
-    <p class="note">Tracks each flight from 4 hours before take-off, shows delays on the calendar and globe, and pings phones if a flight is running 15+ minutes late or is cancelled. One-off, on a computer, about 5 minutes:</p>
+    <p class="note">Tracks each flight from 3 hours before take-off, shows delays on the calendar and globe, and pings phones if a flight is running 15+ minutes late or is cancelled. One-off, on a computer, about 5 minutes:</p>
     <ol style="font-size:16px;line-height:1.55;margin:6px 0 10px 18px;padding:0">
       <li>Go to <b>rapidapi.com</b> and sign up (free, “Sign up with Google” is fine).</li>
       <li>Search for <b>AeroDataBox</b> → <b>Pricing</b> → <b>Basic</b> ($0) → <b>Subscribe</b>. No card needed.</li>
@@ -1589,7 +1647,7 @@ function flightCard(nt,needUpd){
     <p class="note">The key stays in your Google account. It never goes on the website or GitHub.</p></div>`;
   return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-ok">✓ on</span></h4>
     ${fl.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(fl.error)}</p>`:''}
-    <p class="note">${fl.used||0} of ${fl.budget||280} free checks used this month. Each flight is checked about 10–15 times, more often near take-off and landing. Turn delay pings on or off for each phone above.</p></div>`;
+    <p class="note">${fl.used||0} of ${fl.budget||280} free checks used this month. Each flight is checked about 5–8 times: before take-off, every few hours in the air, and near landing. In between, the globe moves the plane on at the speed it was making. Turn delay pings on or off for each phone above.</p></div>`;
 }
 function openNotify(){
   if(LOCAL){ modal((m,close)=>{ m.innerHTML='<h2>🔔 Notifications</h2><p class="note">Notifications work in the real app once you’re signed in, not in the demo.</p><div class="mact"><button class="save" id="ok">OK</button></div>'; m.querySelector('#ok').onclick=close; }); return; }
@@ -1616,7 +1674,7 @@ function openNotify(){
     </div>
     <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}${running&&needUpd?' <span class="pill-wait">⬆️ update available</span>':''}</h4>
       ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}
-      ${running&&needUpd?`<p class="note">A newer helper is available (adds live flight status). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
+      ${running&&needUpd?`<p class="note">A newer helper is available (fewer flight checks, and keeps the last radar fix for the globe). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
         <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button></div>`:''}
       ${running&&!needUpd?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':''}
       ${running?`<details class="how"><summary>Show the helper code and settings file</summary><div class="row" style="margin:8px 0"><button class="xbtn" data-copy="code">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div><pre class="codebox">${esc(fileText('code'))}</pre></details>`:`
@@ -1938,6 +1996,7 @@ function renderPhoneTop(){
   const el=$('#phoneTop'); if(!el) return;
   const now=new Date(), t=hm(now,'Pacific/Auckland'), r=travellerNow(now);
   let mum='';
+  if(!r&&traveller()&&soonFlight(traveller(),now)){ const f=soonFlight(traveller(),now); mum=`✈️ ${esc(tName(traveller()))} flies ${fmtTime(fS(f),'Pacific/Auckland')}${liveTag(f)?' · '+liveTag(f):''}`; }
   if(r&&r.a){ const tt=hm(now,r.a[1]); mum=r.air?`✈️ ${esc(tName(r.tp))} → ${esc(r.a[0])} · lands ${relTime(fE(r.air),now)}${/late|early/.test(liveTag(r.air))?' · '+liveTag(r.air).replace(/^.*· /,'').replace(/^⏰ |^⏩ /,''):''}`:`${r.a[3]} ${esc(tName(r.tp))} · ${esc(r.a[0])} ${tt.txt}${tt.ap}`; }
   const ph=r&&r.a?phase(hm(now,r.a[1]).h,hm(now,r.a[1]).m):'';
   const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph]||'#fff';
@@ -2041,6 +2100,42 @@ window.addEventListener('popstate',()=>{
 });
 
 /* ================= boot ================= */
+/* ================= fridge layout: drag to resize, hide/show panels (saved on this device) ================= */
+let LAY=Object.assign({t:340,s:360,r:400,hideT:false,hideS:false},lsGet('fs.layout',{}));
+const saveLay=()=>lsSet('fs.layout',LAY);
+function applyLayout(){
+  const app=$('.app'); if(!app) return;
+  const ph=isPhone(), wide=innerWidth>=1500;
+  app.classList.toggle('hideT',!ph&&!!LAY.hideT); app.classList.toggle('hideS',!ph&&!!LAY.hideS);
+  const rs=$('#restore'); if(rs) rs.innerHTML=ph?'':(LAY.hideT?'<button class="restorep" data-showp="T">✅ To do</button>':'')+(LAY.hideS?'<button class="restorep" data-showp="S">🛒 Shopping</button>':'');
+  document.querySelectorAll('[data-showp]').forEach(b=>b.onclick=()=>{ LAY['hide'+b.dataset.showp]=false; saveLay(); applyLayout(); });
+  if(ph){ app.style.gridTemplateColumns=''; return; }
+  const maxSide=Math.max(260,innerWidth-560);   // the calendar always keeps at least ~520px
+  ['t','s','r'].forEach(k=>LAY[k]=Math.max(240,Math.min(maxSide,LAY[k])));
+  if(wide&&!LAY.hideT&&!LAY.hideS&&LAY.t+LAY.s+28>maxSide){ const f=(maxSide-28)/(LAY.t+LAY.s); LAY.t=Math.max(240,Math.round(LAY.t*f)); LAY.s=Math.max(240,Math.round(LAY.s*f)); }
+  let cols=['minmax(0,1fr)'];
+  if(wide){ if(!LAY.hideT) cols.push('14px',LAY.t+'px'); if(!LAY.hideS) cols.push('14px',LAY.s+'px'); }
+  else if(!(LAY.hideT&&LAY.hideS)) cols.push('14px',LAY.r+'px');
+  app.style.gridTemplateColumns=cols.join(' ');
+}
+function initSplits(){
+  document.querySelectorAll('.split').forEach(sp=>{
+    sp.onpointerdown=e=>{
+      e.preventDefault(); sp.setPointerCapture(e.pointerId); sp.classList.add('drag');
+      const x0=e.clientX, wide=innerWidth>=1500, st={...LAY}, which=sp.dataset.split;
+      const move=ev=>{ const dx=ev.clientX-x0;
+        if(which==='b'){ const tot=st.t+st.s; LAY.t=Math.max(240,Math.min(tot-240,st.t+dx)); LAY.s=tot-LAY.t; }
+        else if(wide){ if(!LAY.hideT) LAY.t=st.t-dx; else LAY.s=st.s-dx; }
+        else LAY.r=st.r-dx;
+        applyLayout(); };
+      const up=()=>{ sp.classList.remove('drag'); sp.removeEventListener('pointermove',move); sp.removeEventListener('pointerup',up); sp.removeEventListener('pointercancel',up); saveLay(); if(typeof renderCal==='function') renderCal(); };
+      sp.addEventListener('pointermove',move); sp.addEventListener('pointerup',up); sp.addEventListener('pointercancel',up);
+    };
+    sp.ondblclick=()=>{ Object.assign(LAY,{t:340,s:360,r:400}); saveLay(); applyLayout(); };
+  });
+  document.addEventListener('click',e=>{ const b=e.target.closest('[data-hidep]'); if(!b) return; LAY['hide'+b.dataset.hidep]=true; saveLay(); applyLayout(); toast('Hidden. Tap “'+(b.dataset.hidep==='T'?'✅ To do':'🛒 Shopping')+'” at the top to bring it back'); });
+  addEventListener('resize',applyLayout); applyLayout();
+}
 function renderAll(){ if(!S.people.length) return; if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
@@ -2048,6 +2143,7 @@ $('#globeBtn').onclick=openGlobe;
 $('#homeClock').onclick=openGlobe;
 document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'cal'; }catch(e){ return 'cal'; } })());
+initSplits();
 if(LOCAL){ gate(null); renderAll(); save(); setTimeout(()=>refreshLinks(false),2000); }
 else {
   gate('loading');
