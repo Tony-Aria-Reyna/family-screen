@@ -2392,8 +2392,10 @@ const shop=id=>S.shops.find(s=>s.id===id)||S.shops[S.shops.length-1];
 const col=id=>{ const p=person(id); return p?p.color:'#e5e7eb'; };
 const nm=id=>{ const p=person(id); return p?p.name:''; };
 function toast(m){ const b=document.createElement('div'); b.className='banner'; b.textContent=m; document.body.appendChild(b); setTimeout(()=>b.remove(),2600); }
-function modal(draw){ const L=$('#layer'); L.innerHTML='<div class="scrim"><div class="modal"></div></div>'; const close=()=>{ L.innerHTML=''; }; window.closeModal=close; L.querySelector('.scrim').onclick=e=>{ if(e.target.classList.contains('scrim')) close(); }; draw(L.querySelector('.modal'),close); }
-window.closeModal=()=>{ $('#layer').innerHTML=''; };
+function modal(draw){ const L=$('#layer'); L.innerHTML='<div class="scrim"><div class="modal"></div></div>'; const close=()=>{ L.innerHTML=''; relockSoon(); }; window.closeModal=close; L.querySelector('.scrim').onclick=e=>{ if(e.target.classList.contains('scrim')) close(); }; draw(L.querySelector('.modal'),close); }
+window.closeModal=()=>{ $('#layer').innerHTML=''; relockSoon(); };
+// settings lock again as soon as nothing is open (moving between settings screens doesn't count)
+function relockSoon(){ setTimeout(()=>{ if(!$('#layer').innerHTML&&typeof pinUntil!=='undefined') pinUntil=0; },1200); }
 
 /* ================= where is the traveller? ================= */
 function travellerNow(now){
@@ -3784,7 +3786,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mw49dvyp';
+const FS_VERSION='fs-mw49qtgv';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
