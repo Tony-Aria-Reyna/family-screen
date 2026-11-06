@@ -4,5 +4,7 @@
   "projectId": "ross-family-planner",
   "storageBucket": "ross-family-planner.firebasestorage.app",
   "messagingSenderId": "573480703676",
-  "appId": "1:573480703676:web:02dbf0bc600128d21962b9"
+  "appId": "1:573480703676:web:02dbf0bc600128d21962b9",
+  "vapidKey": "BIRLhXs4WMPCGJHjfFqpCSV3O7_42VK3q3Vk_qSai7CuTcXP2rYZYPCtoYCgz6Uw654XUfivyQykSL7JhQwaHdg",
+  "admin": "tonyandreynanz@gmail.com"
 }

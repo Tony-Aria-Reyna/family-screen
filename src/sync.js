@@ -5,7 +5,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut as fbSignOut, connectAuthEmulator, signInWithCredential, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection,
-  onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField } from 'firebase/firestore';
+  onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
 const COLS = ['events', 'flights', 'groceries', 'todos', 'sources'];
@@ -121,3 +121,13 @@ export const getNotifier = () => notifier;
 export const saveDevice = (hash, data) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: clean(data) });
 export const removeDevice = hash => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: deleteField() });
 export const requestTest = hash => updateDoc(doc(db, 'households', hid), { testPing: { hash, at: Date.now() } });
+
+/* ---------- invite-only: who may start a new family ---------- */
+export async function isInvited(admin) {
+  if (me() && admin && me() === admin.toLowerCase()) return true;
+  try { const d = await getDoc(doc(db, 'invites', me())); return d.exists(); } catch (e) { return false; }
+}
+export async function listInvites() { const r = await getDocs(collection(db, 'invites')); return r.docs.map(d => Object.assign({ email: d.id }, d.data())); }
+export const addInvite = email => setDoc(doc(db, 'invites', email.trim().toLowerCase()), { by: me(), at: Date.now() });
+export const removeInvite = email => deleteDoc(doc(db, 'invites', email));
+export async function useInvite() { try { await deleteDoc(doc(db, 'invites', me())); } catch (e) {} }

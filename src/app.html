@@ -1432,18 +1432,18 @@ const deviceLabel=()=>{ const ua=navigator.userAgent; return /Android/.test(ua)?
 const myPush=()=>{ const h=lsGet('fs.pushHash',''); return h&&SYNC.getDevices()[h]?h:''; };
 async function turnOnPush(){
   if(!('Notification' in window)||!('serviceWorker' in navigator)){ toast('This browser can’t show notifications'); return false; }
-  if(!S.vapidKey){ toast('Finish the one-off Firebase step first'); return false; }
+  const VK=(CONFIG&&CONFIG.vapidKey)||S.vapidKey; if(!VK){ toast('Finish the one-off Firebase step first'); return false; }
   if(!(await SYNC.pushSupported())){ toast('Notifications aren’t supported here. Install the app first (⚙️ → Install)'); return false; }
   const perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('Notifications were blocked. Allow them in the phone’s settings for this app.'); return false; }
-  const reg=await navigator.serviceWorker.ready; const token=await SYNC.pushToken(S.vapidKey,reg);
+  const reg=await navigator.serviceWorker.ready; const token=await SYNC.pushToken(VK,reg);
   const hash=hashStr(token), me=SYNC.me(), mine=S.people.find(p=>p.email===me);
   await SYNC.saveDevice(hash,{token,email:me,label:deviceLabel()+(me?' · '+me:''),people:mine?[mine.id,'all']:[],lead:30,remind:true,morning:true,jobs:true,at:Date.now()});
   const old=lsGet('fs.pushHash',''); if(old&&old!==hash){ try{ await SYNC.removeDevice(old); }catch(e){} }
   lsSet('fs.pushHash',hash); return true;
 }
 async function refreshPushToken(){ // keep this phone's address up to date
-  try{ if(LOCAL||!S.vapidKey||!lsGet('fs.pushHash','')||Notification.permission!=='granted') return;
-    const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(S.vapidKey,reg), hash=hashStr(token), old=lsGet('fs.pushHash',''), dev=SYNC.getDevices()[old];
+  try{ const VK=(CONFIG&&CONFIG.vapidKey)||S.vapidKey; if(LOCAL||!VK||!lsGet('fs.pushHash','')||Notification.permission!=='granted') return;
+    const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(VK,reg), hash=hashStr(token), old=lsGet('fs.pushHash',''), dev=SYNC.getDevices()[old];
     if(hash!==old&&dev){ await SYNC.saveDevice(hash,Object.assign({},dev,{token,at:Date.now()})); await SYNC.removeDevice(old); lsSet('fs.pushHash',hash); } }catch(e){}
 }
 function openNotify(){
@@ -1454,7 +1454,7 @@ function openNotify(){
     const fileText=f=>NOTIFIER?(f==='code'?NOTIFIER.code.replace('__PROJECT_ID__',CONFIG.projectId).replace('__APP_URL__',location.origin+location.pathname):NOTIFIER.manifest):'';
     m.innerHTML=`<h2>🔔 Notifications</h2>
     <p class="note">Reminders before calendar entries, a 7am “today” summary, and a nudge when a booked job’s time has passed. Each phone chooses what it hears about.</p>
-    ${!S.vapidKey?`<div class="srccard" style="background:#fff7e6"><h4>Step 1 · One-off Firebase key</h4>
+    ${!((CONFIG&&CONFIG.vapidKey)||S.vapidKey)?`<div class="srccard" style="background:#fff7e6"><h4>Step 1 · One-off Firebase key</h4>
       <ol class="note" style="margin:4px 0 8px 18px;padding:0"><li>Open Firebase → ⚙️ <b>Project settings</b> → <b>Cloud Messaging</b> tab.</li><li>Scroll to <b>Web configuration → Web Push certificates</b> and click <b>Generate key pair</b>.</li><li>Copy the long key (it starts with <b>B</b>) and paste it here.</li></ol>
       <div class="row"><input class="txt" id="vk" placeholder="Paste the key pair here" style="font-size:16px"><button class="save" id="vkS" style="border-radius:14px;padding:12px 18px;font-weight:800">Save</button></div></div>`:''}
     <div class="srccard"><h4>📱 This ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</h4>
@@ -1465,7 +1465,7 @@ function openNotify(){
         <div class="opts">${[0,15,30,60].map(n=>`<button class="opt ${(dev.remind===false?0:(dev.lead||30))===n?'on':''}" data-nl="${n}">${n?n+' min before':'No reminders'}</button>`).join('')}</div>
         <div class="step">Also</div>
         <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button></div>`
-      :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
+      :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${(CONFIG&&CONFIG.vapidKey)||S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
         <p class="note">Do this on each phone. On Android, install Family Screen first (⚙️ → 📲 Install) so notifications arrive even when it’s closed.</p>`}
     </div>
     <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}</h4>
@@ -1553,9 +1553,13 @@ function openSettings(){
     m.innerHTML=`<h2>Settings</h2>
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
-      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&SYNC.getMembers().length>1?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
+      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
-      <p class="note">After adding someone, they open Family Screen on their phone and sign in with that Google account.</p>`}
+      <p class="note">After adding someone, they open Family Screen on their phone and sign in with that Google account.</p>
+      ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
+      <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
+      <div id="invList" class="note">Loading invites…</div>
+      <div class="row" style="margin-top:8px"><input type="email" id="invIn" placeholder="e.g. friend@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="invAdd">✉️ Invite</button></div>`:''}`}
     <div class="step">People: type each name and tap a colour</div>
     ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
       ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
@@ -1592,6 +1596,10 @@ function openSettings(){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
       m.querySelector('#signOut').onclick=async()=>{ close(); await SYNC.signOut(); };
+      const il=m.querySelector('#invList');
+      if(il){ SYNC.listInvites().then(list=>{ il.innerHTML=list.length?list.map(i=>`<div class="srcline"><span>✉️ ${esc(i.email)} <span class="note">· invited ${fmtD(i.at,{day:'numeric',month:'short'})} · not used yet</span></span><button class="xbtn" data-irm="${esc(i.email)}">Cancel invite</button></div>`).join(''):'No open invites.';
+          il.querySelectorAll('[data-irm]').forEach(b=>b.onclick=async()=>{ await SYNC.removeInvite(b.dataset.irm); draw(); }); }).catch(()=>{ il.textContent='Could not load invites. Check the new security rules are published.'; });
+        m.querySelector('#invAdd').onclick=async()=>{ const v=m.querySelector('#invIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addInvite(v); toast('Invited '+v); draw(); }catch(e){ toast('Could not invite. Check the new security rules are published.'); } }; }
       m.querySelector('#ok').onclick=close;
       return;
     }
@@ -1671,7 +1679,8 @@ function gate(kind,extra){
      <p class="gsmall">Only the Google accounts our family adds can see anything here.</p><p class="gsmall"><a href="?demo">Have a look at the demo</a></p>`;
   if(kind==='nohome') card=`${gateClock()}<h1>Nearly there</h1><p>You're signed in as <b>${esc(SYNC.me())}</b>, but this account isn't part of a family yet.</p>
      <p class="gsmall">Joining your family? Ask whoever set it up to add <b>${esc(SYNC.me())}</b> in ⚙️ Settings → Family accounts, then tap Check again.</p>
-     <div><button class="gbtn dark" id="gNew">🏠 Set up our family</button></div><div><button class="gbtn ghostb" id="gCheck">🔄 Check again</button></div>
+     ${extra==='invited'?`<div><button class="gbtn dark" id="gNew">🏠 Set up our family</button></div>`:`<p class="gsmall">Starting a new family? Family Screen is invite-only. Ask Tony to invite <b>${esc(SYNC.me())}</b>.</p>`}
+     <div><button class="gbtn ghostb" id="gCheck">🔄 Check again</button></div>
      <p class="gsmall"><a href="#" id="gOut">Use a different Google account</a></p>`;
   if(kind==='error') card=`${gateClock()}<h1>Hmm…</h1><p class="gerr">${esc(extra||'Something went wrong.')}</p><button class="gbtn dark" id="gRetry">Try again</button><p class="gsmall"><a href="#" id="gOut">Sign out</a></p>`;
   g.innerHTML=sc.html+`<div class="gcard">${card}</div>`;
@@ -1679,13 +1688,13 @@ function gate(kind,extra){
   const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.onclick=e=>{ e.preventDefault(); f(); }; };
   on('gIn',async()=>{ try{ await SYNC.signIn(); }catch(e){ gate('signin',e&&e.code==='auth/popup-closed-by-user'?'':'Sign-in did not finish. Please try again.'); } });
   on('gCheck',()=>enterHome());
-  on('gNew',async()=>{ gate('loading'); try{ const id=await SYNC.createHousehold(starter()); startHome(id); }catch(e){ gate('error','Could not set up the family: '+(e.code||e.message)); } });
+  on('gNew',async()=>{ gate('loading'); try{ const id=await SYNC.createHousehold(starter()); SYNC.useInvite(); startHome(id); }catch(e){ gate('error','Could not set up the family: '+(e.code||e.message)); } });
   on('gOut',()=>SYNC.signOut());
   on('gRetry',()=>location.reload());
 }
 async function enterHome(){
   gate('loading');
-  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome'); }
+  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
   catch(e){ gate('error','Could not reach the family database ('+(e.code||e.message)+'). Check the internet connection.'); }
 }
 let pendingRender=false, rTimer=null;

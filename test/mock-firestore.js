@@ -3,7 +3,7 @@ const K='mockdb'; const load=()=>JSON.parse(localStorage.getItem(K)||'{}'); cons
 let subs=[]; const me=()=>{ try{ return JSON.parse(sessionStorage.getItem('mockuser')).email; }catch(e){ return null; } };
 window.addEventListener('storage',e=>{ if(e.key===K) fire(); });
 function fire(){ subs.forEach(s=>setTimeout(()=>s.run(),0)); }
-const memberOf=(d,path)=>{ const hid=path.split('/')[1]; const h=d['households/'+hid]; return h&&h.members&&h.members.includes(me()); };
+const memberOf=(d,path)=>{ if(path.startsWith('invites')) return true; const hid=path.split('/')[1]; const h=d['households/'+hid]; return h&&h.members&&h.members.includes(me()); };
 const deny=cb=>{ const e=new Error('denied'); e.code='permission-denied'; cb&&cb(e); };
 export const initializeFirestore=()=>({}); export const persistentLocalCache=()=>({}); export const persistentMultipleTabManager=()=>({}); export const connectFirestoreEmulator=()=>{};
 export const doc=(db,...p)=>({t:'doc',path:p.join('/'),id:p[p.length-1]}); export const collection=(db,...p)=>({t:'col',path:p.join('/')});
@@ -22,3 +22,7 @@ function applyUpdate(old,data){ const n=Object.assign({},old); for(const [k,v] o
 export async function updateDoc(ref,data){ const d=load(); if(!memberOf(d,ref.path)) { const e=new Error('denied'); e.code='permission-denied'; throw e; } d[ref.path]=applyUpdate(d[ref.path],data); store(d); fire(); }
 export function writeBatch(){ const ops=[]; return { set(r,v){ops.push(['s',r,v]);}, update(r,v){ops.push(['u',r,v]);}, delete(r){ops.push(['d',r]);},
   async commit(){ const d=load(); for(const [k,r,v] of ops){ if(!memberOf(d,r.path)){ const e=new Error('denied'); e.code='permission-denied'; throw e; } if(k==='s') d[r.path]=JSON.parse(JSON.stringify(v)); else if(k==='u') d[r.path]=applyUpdate(d[r.path],v); else delete d[r.path]; } store(d); fire(); } }; }
+
+export async function getDoc(ref){ const d=load(); const v=d[ref.path]; return {exists:()=>!!v,data:()=>v,id:ref.id}; }
+export async function setDoc(ref,data){ const d=load(); d[ref.path]=JSON.parse(JSON.stringify(data)); store(d); fire(); }
+export async function deleteDoc(ref){ const d=load(); delete d[ref.path]; store(d); fire(); }
