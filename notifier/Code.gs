@@ -60,6 +60,7 @@ function planNotifications(h, data, now, already) {
           if (already(key)) continue;
           const mins = Math.max(1, Math.round((start - now) / 60e3));
           const who = (e.whos || []).map(nameOf).filter(Boolean).join(' + ');
+          if (dev.private) { out.push({ device: hash, key, tag: e.id + k, title: '⏰ Family Screen', body: 'Something on the calendar starts at ' + fmt12(e.time) + '.' }); continue; }
           out.push({ device: hash, key, tag: e.id + k, title: (e.todoId ? '☐ ' : '⏰ ') + e.title, body: `${fmt12(e.time)} (in ${mins >= 60 ? Math.round(mins / 60) + ' hr' : mins + ' min'})${who ? ' · ' + who : ''}${e.addr ? ' · 📍 ' + e.addr : ''}${e.note ? ' · ' + e.note : ''}` });
         }
       }
@@ -76,7 +77,8 @@ function planNotifications(h, data, now, already) {
           if (keyOf(s) === todayK) items.push(fmtTime(s) + ' ✈️ ' + nameOf(f.who) + ' ' + (f.flight || '') + ' ' + f.from + '→' + f.to);
           if (keyOf(en) === todayK && keyOf(s) !== todayK) items.push(fmtTime(en) + ' 🛬 ' + nameOf(f.who) + ' lands ' + f.to);
         });
-        if (items.length) out.push({ device: hash, key, tag: 'morning' + todayK, title: '☀️ Today: ' + items.length + (items.length === 1 ? ' thing' : ' things'), body: items.slice(0, 6).join('\n') + (items.length > 6 ? '\n+' + (items.length - 6) + ' more' : '') });
+        if (items.length && dev.private) out.push({ device: hash, key, tag: 'morning' + todayK, title: '☀️ Family Screen', body: 'You have ' + items.length + (items.length === 1 ? ' thing' : ' things') + ' on today.' });
+        else if (items.length) out.push({ device: hash, key, tag: 'morning' + todayK, title: '☀️ Today: ' + items.length + (items.length === 1 ? ' thing' : ' things'), body: items.slice(0, 6).join('\n') + (items.length > 6 ? '\n+' + (items.length - 6) + ' more' : '') });
       }
     }
     // 3) booked jobs whose time has passed: did it get done?
@@ -88,6 +90,7 @@ function planNotifications(h, data, now, already) {
       if (now < due || now - due > 2 * 864e5) continue;
       const key = 'j|' + hash + '|' + t.id + '|' + e.date;
       if (already(key)) continue;
+      if (dev.private) { out.push({ device: hash, key, tag: 'job' + t.id, title: '✅ Family Screen', body: 'A booked job needs checking.' }); continue; }
       out.push({ device: hash, key, tag: 'job' + t.id, title: '✅ Did it get done?', body: t.title + (t.who ? ' · ' + nameOf(t.who) : '') + ' — open Family Screen to tick it off or move it.' });
     }
   }

@@ -73,7 +73,7 @@ export function start(householdId, state, changed) {
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id)); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
-    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || '';
+    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels;
     synced.settings = JSON.stringify(settingsOf(S));
     onChange('settings');
   }, err => onChange('error', err)));
@@ -87,7 +87,7 @@ export function start(householdId, state, changed) {
   }
 }
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; }
-const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '' });
+const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
 // Write whatever changed since the last sync. Called after every edit; cheap when nothing changed.
@@ -131,3 +131,16 @@ export async function listInvites() { const r = await getDocs(collection(db, 'in
 export const addInvite = email => setDoc(doc(db, 'invites', email.trim().toLowerCase()), { by: me(), at: Date.now() });
 export const removeInvite = email => deleteDoc(doc(db, 'invites', email));
 export async function useInvite() { try { await deleteDoc(doc(db, 'invites', me())); } catch (e) {} }
+
+/* ---------- a family's own data: download and delete ---------- */
+export async function exportHousehold() {
+  const out = { exported: new Date().toISOString() };
+  const h = await getDoc(doc(db, 'households', hid)); const hd = Object.assign({}, h.data()); delete hd.devices; delete hd.linkHelper; out.family = hd;
+  for (const c of COLS) { const r = await getDocs(collection(db, 'households', hid, c)); out[c] = r.docs.map(d => Object.assign({ id: d.id }, d.data())); }
+  return out;
+}
+export async function deleteHousehold() {
+  const id = hid;
+  for (const c of COLS) { const r = await getDocs(collection(db, 'households', id, c)); for (let i = 0; i < r.docs.length; i += 400) { const b = writeBatch(db); r.docs.slice(i, i + 400).forEach(d => b.delete(d.ref || doc(db, 'households', id, c, d.id))); await b.commit(); } }
+  stop(); await deleteDoc(doc(db, 'households', id));
+}

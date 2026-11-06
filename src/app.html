@@ -1152,7 +1152,7 @@ function openFlight(f){
     m.innerHTML=`<h2>✈️ ${esc(f.flight||'')} ${esc(a?a[0]:f.from)} → ${esc(b?b[0]:f.to)}</h2>
     <p style="font-size:21px">Leaves <b>${nz(s)}</b> NZ time${a&&a[1]!=='Pacific/Auckland'?` (${fmtTime(s,a[1])} in ${esc(a[0])})`:''}<br>
     Lands <b>${nz(e)}</b> NZ time${b&&b[1]!=='Pacific/Auckland'?` (${fmtTime(e,b[1])} in ${esc(b[0])})`:''}</p>
-    ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time':''}<br>`:''}${f.hotel?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
+    ${f.pickup||f.report||f.signOut||f.hotel?`<p style="font-size:18px;line-height:1.6">${f.pickup?`🚐 Hotel pick-up ${fmtTime(new Date(f.pickup),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.report?`🕒 Reports ${fmtTime(new Date(f.report),a[1])}${a[1]!=='Pacific/Auckland'?' '+esc(a[0])+' time':''}<br>`:''}${f.signOut?`🏁 Signs out ${fmtTime(new Date(f.signOut),b[1])}${b[1]!=='Pacific/Auckland'?' '+esc(b[0])+' time':''}<br>`:''}${f.hotel&&!S.hideHotels?`🏨 ${esc(f.hotel)}`:''}</p>`:''}
     <p class="note">From the roster. To change it, load an updated roster (📄 Load roster PDF).</p><div class="mact"><button class="save" id="ok">OK</button></div>`;
     m.querySelector('#ok').onclick=close;
   });
@@ -1220,7 +1220,7 @@ function openGlobe(){
       <div class="t" style="font-size:28px">Lands in ${relTime(new Date(r.air.end),now)}</div>
       <div class="s">Somewhere ${whereOver(planeLL)} (estimated)<br>Lands ${fmtTime(new Date(r.air.end),r.a[1])} ${esc(r.a[0])} time · ${fmtTime(new Date(r.air.end),'Pacific/Auckland')} NZ time</div>
       <div class="bar2" style="height:8px;border-radius:99px;background:rgba(255,255,255,.7);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${(frac*100).toFixed(0)}%;background:#2b2f3a"></i></div></div>`;
-    return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away${r.last&&r.last.hotel?`<br>🏨 Staying at ${esc(r.last.hotel.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))}`:''}${r.next&&r.next.pickup?`<br>🚐 Pick-up ${fmtD(new Date(r.next.pickup),{weekday:'short'})} ${fmtTime(new Date(r.next.pickup),r.a[1])} ${esc(r.a[0])} time`:''}</div></div>`;
+    return `<div class="icard" style="background:${bg}"><div class="c">💼 ${who} · ${esc(r.a[0])}, ${esc(r.a[2])} ${r.a[3]}</div><div class="t">${t.txt}<small style="font-size:20px">${t.ap}</small></div><div class="s">${dayIn(new Date(),r.a[1])} · ${ph==='night'?'🌙 night time there':ph==='day'?'☀️ daytime there':ph==='dawn'?'🌅 sunrise there':'🌇 sunset there'} · ${distKm.toLocaleString('en-NZ')} km away${r.last&&r.last.hotel&&!S.hideHotels?`<br>🏨 Staying at ${esc(r.last.hotel.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))}`:''}${r.next&&r.next.pickup?`<br>🚐 Pick-up ${fmtD(new Date(r.next.pickup),{weekday:'short'})} ${fmtTime(new Date(r.next.pickup),r.a[1])} ${esc(r.a[0])} time`:''}</div></div>`;
   };
   const homeT=hm(now,'Pacific/Auckland');
   const etaCard=eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
@@ -1543,7 +1543,7 @@ function openNotify(){
         <div class="step">Remind me</div>
         <div class="opts">${[0,15,30,60].map(n=>`<button class="opt ${(dev.remind===false?0:(dev.lead||30))===n?'on':''}" data-nl="${n}">${n?n+' min before':'No reminders'}</button>`).join('')}</div>
         <div class="step">Also</div>
-        <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button></div>`
+        <div class="opts"><button class="opt ${dev.morning!==false?'on':''}" data-nt="morning">☀️ 7am summary of the day</button><button class="opt ${dev.jobs!==false?'on':''}" data-nt="jobs">✅ “Did it get done?” for jobs</button><button class="opt ${dev.private?'on':''}" data-np2="1">🔒 Hide details on the lock screen</button></div>`
       :`<div class="srcline"><span class="pill-wait">Off on this ${/Android|iPhone/.test(navigator.userAgent)?'phone':'device'}</span><button class="save" id="nOn" style="border-radius:14px;padding:10px 16px;font-weight:800" ${(CONFIG&&CONFIG.vapidKey)||S.vapidKey?'':'disabled'}>🔔 Turn on</button></div>
         <p class="note">Do this on each phone. On Android, install Family Screen first (⚙️ → 📲 Install) so notifications arrive even when it’s closed.</p>`}
     </div>
@@ -1570,7 +1570,35 @@ function openNotify(){
     m.querySelectorAll('[data-np]').forEach(b=>b.onclick=()=>{ const all=S.people.map(p=>p.id); let ps=dev.people&&dev.people.length?[...dev.people]:[...all]; const id=b.dataset.np; ps=ps.includes(id)?ps.filter(x=>x!==id):[...ps,id]; if(!ps.length){ toast('Pick at least one'); return; } upd({people:ps.length===all.length?[]:ps}); });
     m.querySelectorAll('[data-nl]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.nl; upd(n?{remind:true,lead:n}:{remind:false}); });
     m.querySelectorAll('[data-nt]').forEach(b=>b.onclick=()=>{ const k=b.dataset.nt; upd({[k]:dev[k]===false}); });
+    const pv=m.querySelector('[data-np2]'); if(pv) pv.onclick=()=>upd({private:!dev.private});
     m.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ try{ navigator.clipboard.writeText(fileText(b.dataset.copy)).then(()=>toast(b.dataset.copy==='code'?'Helper code copied':'Settings file copied')); }catch(e){ toast('Copy didn’t work on this device. Use a computer.'); } });
+    m.querySelector('#ok').onclick=close;
+  }; draw(); });
+}
+
+/* ================= privacy & our data ================= */
+function openPrivacy(){
+  modal((m,close)=>{ const draw=()=>{
+    const owner=!LOCAL&&SYNC.getOwner()===SYNC.me();
+    m.innerHTML=`<h2>🔒 Privacy &amp; our data</h2>
+    <p class="note">Your family's calendar, lists and travel are stored in Google Firebase (Sydney data centre), encrypted by Google. Only the Google accounts in ⚙️ Family accounts can open them. <a href="privacy.html" target="_blank" rel="noopener">Read the privacy statement</a>.</p>
+    <div class="srccard"><h4>✈️ Travel details</h4>
+      <div class="srcline"><span>Hide hotel names (Where's Mummy? and flight details)</span><button class="opt ${S.hideHotels?'on':''}" id="pvHotel">${S.hideHotels?'Hidden':'Shown'}</button></div>
+      <p class="note">Roster PDFs are read on the device and never uploaded. Only the flights and duties you tick are saved.</p></div>
+    <div class="srccard"><h4>🔔 Notifications</h4><p class="note">Each phone can hide entry details on its lock screen: ⚙️ → 🔔 Notifications → 🔒 Hide details on the lock screen.</p></div>
+    ${LOCAL?'':`<div class="srccard"><h4>📦 Our data</h4>
+      <div class="srcline"><span>Download everything (calendar, flights, lists) as a file</span><button class="xbtn" id="pvDl">⬇️ Download</button></div>
+      ${owner?`<div class="srcline"><span><b>Delete our family</b> and everything in it, for good</span><button class="xbtn" id="pvDel" style="background:#fde7e4;color:var(--danger);font-weight:800">Delete…</button></div>`:'<p class="note">Only the person who set up the family can delete it.</p>'}</div>`}
+    <div class="mact"><button class="save" id="ok">Done</button></div>`;
+    m.querySelector('#pvHotel').onclick=()=>{ S.hideHotels=!S.hideHotels; save(); renderAll(); draw(); };
+    const dl=m.querySelector('#pvDl'); if(dl) dl.onclick=async()=>{ dl.textContent='Preparing…'; try{ const data=await SYNC.exportHousehold(); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); a.download='family-screen-'+dk(new Date())+'.json'; document.body.appendChild(a); a.click(); a.remove(); toast('Downloaded'); }catch(e){ toast('Could not download'); } dl.textContent='⬇️ Download'; };
+    const del=m.querySelector('#pvDel'); if(del) del.onclick=()=>modal((m2,close2)=>{
+      m2.innerHTML=`<h2 style="color:var(--danger)">Delete our family?</h2><p>This permanently deletes your family's calendar, flights, to-do and shopping lists for <b>everyone</b> in the family, on every device. It can't be undone.</p><p class="note">Download a copy first if you might want it. Type <b>DELETE</b> to confirm.</p>
+        <input class="txt" id="dIn" placeholder="DELETE"><div class="mact"><button class="cancel" id="dC">Keep it</button><button class="del" id="dGo" style="margin-right:0">Delete everything</button></div>`;
+      m2.querySelector('#dC').onclick=()=>{ close2(); openPrivacy(); };
+      m2.querySelector('#dGo').onclick=async()=>{ if(m2.querySelector('#dIn').value.trim()!=='DELETE'){ toast('Type DELETE to confirm'); return; }
+        m2.querySelector('#dGo').textContent='Deleting…'; try{ await SYNC.deleteHousehold(); close2(); lsSet('fs.pushHash',''); toast('Deleted'); setTimeout(()=>location.reload(),800); }catch(e){ console.error(e); toast('Could not delete: '+(e.code||e.message)); } };
+    });
     m.querySelector('#ok').onclick=close;
   }; draw(); });
 }
@@ -1630,7 +1658,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -1671,6 +1699,7 @@ function openSettings(){
     m.querySelector('#sadd').onclick=()=>{ S.shops.push({id:uid(),name:'New shop',color:PASTELS[S.shops.length%8]}); re(); draw(); };
     m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
+    m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
     if(!LOCAL){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
@@ -1755,7 +1784,7 @@ function gate(kind,extra){
   if(kind==='loading') card=`${gateClock()}<h1>Family Screen</h1><div class="gdots"><i style="background:#bfe3f2"></i><i style="background:#ffe5a8"></i><i style="background:#f9c9d0"></i></div><p class="gsmall">Getting everything ready…</p>`;
   if(kind==='signin') card=`${gateClock()}<h1>Family Screen</h1><p>Our calendar, jobs and shopping, on the fridge and on our phones.</p>${FEATS}
      <button class="gbtn" id="gIn">${GOOGLE_G}<span>Sign in with Google</span></button>${extra?`<p class="gerr">${esc(extra)}</p>`:''}
-     <p class="gsmall">Only the Google accounts our family adds can see anything here.</p><p class="gsmall"><a href="?demo">Have a look at the demo</a></p>`;
+     <p class="gsmall">Only the Google accounts our family adds can see anything here.</p><p class="gsmall"><a href="?demo">Have a look at the demo</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`;
   if(kind==='nohome') card=`${gateClock()}<h1>Nearly there</h1><p>You're signed in as <b>${esc(SYNC.me())}</b>, but this account isn't part of a family yet.</p>
      <p class="gsmall">Joining your family? Ask whoever set it up to add <b>${esc(SYNC.me())}</b> in ⚙️ Settings → Family accounts, then tap Check again.</p>
      ${extra==='invited'?`<div><button class="gbtn dark" id="gNew">🏠 Set up our family</button></div>`:`<p class="gsmall">Starting a new family? Family Screen is invite-only. Ask Tony to invite <b>${esc(SYNC.me())}</b>.</p>`}
