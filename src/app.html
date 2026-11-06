@@ -458,6 +458,30 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .tb.short{flex-direction:row;align-items:center;gap:6px}.tb.short small{display:none}
 .taxi-ev{background:#fff !important;border:2px dashed var(--c)}
 .taxi-pill{background:#fff !important;border:1.5px dashed var(--c)}
+.fweek{display:flex;flex-direction:column;height:100%;min-height:0}
+.fw-days,.fw-all{display:grid;grid-template-columns:56px repeat(7,minmax(0,1fr));flex:none;border-bottom:1px solid var(--line)}
+.fw-d{display:flex;align-items:flex-start;padding:8px 6px 8px 10px;border-left:1px solid var(--line);min-width:0}
+.fw-d.today{background:#e6f4ef}.fw-d.wkend{background:#fbf8f3}
+.fw-dn{text-align:left;flex:1;min-width:0}
+.fw-dn small{display:block;font-size:15px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fw-dn b{display:block;font-size:24px;font-weight:800;white-space:nowrap}
+.fw-d.today .fw-dn b,.fw-d.today .fw-dn small{color:#2f8f7a}
+.fw-add{width:30px;height:30px;border-radius:10px;background:var(--soft);color:var(--muted);font-size:18px;flex:none;opacity:.7}
+.fw-add:hover{opacity:1}
+.fw-all>div{display:flex;flex-direction:column;gap:3px;padding:4px;border-left:1px solid var(--line);min-width:0}
+.fw-a{border-radius:9px;padding:3px 8px;font-size:14px;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.fw-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.fw-grid{position:relative;margin-top:10px}
+.fw-cols{position:absolute;left:56px;right:0;top:0;bottom:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.fw-col{position:relative;border-left:1px solid var(--line)}
+.fw-col.today{background:rgba(159,217,204,.12)}.fw-col.wkend{background:rgba(240,234,224,.35)}
+.fw-col .tb{margin-left:2px;padding:3px 6px}
+.fw-col .tb b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:14px;line-height:1.15;word-break:break-word}
+.fw-col .tb small{font-size:11.5px}
+.fw-now{position:absolute;left:0;right:0;height:2px;background:#e5484d;z-index:2;pointer-events:none}
+.fw-now:before{content:"";position:absolute;left:-6px;top:-5px;width:12px;height:12px;border-radius:50%;background:#e5484d}
+.fw-nowlbl{position:absolute;left:0;width:52px;height:0;z-index:3;pointer-events:none}
+.fw-nowlbl span{position:absolute;right:2px;top:-9px;font-size:11px;font-weight:800;color:#e5484d;background:var(--bg);padding:0 2px;white-space:nowrap}
 .wk-now{position:relative;height:2px;background:#e5484d;margin:7px 0 7px 8px;border-radius:2px;pointer-events:none;flex:none}
 .wk-now::before{content:'';position:absolute;left:-7px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e5484d}
 .wk-now span{position:absolute;right:0;top:-9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;padding:1px 6px;border-radius:99px}
@@ -868,7 +892,7 @@ function dayBlocks(key){
     else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day',attr:'data-where="1"'}); }
     else if(it.k==='taxi'){ const f=it.f, a0=it.kind==='pick'?it.t:it.t2, b0=it.kind==='pick'?it.t2:it.t, c=col(f.who);
       const s=Math.max(0,mins(a0)), e=Math.min(1440,mins(b0));
-      timed.push({s,e:Math.max(e,s+30),bg:`repeating-linear-gradient(135deg,${c} 0 9px,#ffffffb0 9px 18px)`,title:taxiLbl(it),sub:tName(person(f.who))+' · '+(it.kind==='pick'?`signs on ${fmtTime(it.t2,'Pacific/Auckland')}`:`lands ${fmtTime(it.t2,'Pacific/Auckland')}, customs + ride`),attr:`data-fl="${f.id}"`}); }
+      timed.push({s,e:Math.max(e,s+30),bg:`repeating-linear-gradient(135deg,${c} 0 9px,#ffffffb0 9px 18px)`,title:taxiLbl(it),sub:tName(person(f.who))+' · '+taxiSub(it),attr:`data-fl="${f.id}"`}); }
     else { const f=it.f, s0=fS(f), e0=fE(f), a=AIRPORTS[f.from], b=AIRPORTS[f.to];
       if(it.k==='arr'&&dk(s0)===key) continue;
       const s=Math.max(0,mins(s0)), e=Math.min(1440,mins(e0));
@@ -915,6 +939,7 @@ function placeWeekNow(){
   col.insertBefore(n,col.children[i]||null);
 }
 setInterval(placeWeekNow,60000);
+setInterval(()=>{ const d=new Date(), y=(d.getHours()*60+d.getMinutes())/60*60; document.querySelectorAll('.fw-now,.fw-nowlbl').forEach(n=>n.style.top=y+'px'); const l=document.querySelector('.fw-nowlbl span'); if(l) l.textContent=fmtTime(d,'Pacific/Auckland'); },30000);
 setInterval(()=>{ document.querySelectorAll('.tl-now').forEach(n=>{ const d=new Date(); n.style.top=((d.getHours()*60+d.getMinutes())/60*HOUR)+'px'; n.querySelector('span').textContent=fmtTime(d,'Pacific/Auckland'); }); },30000);
 
 /* ================= calendar ================= */
@@ -947,6 +972,7 @@ function whereAt(pid,t){
 }
 function evBg(whos){ const cs=whos.map(col); if(cs.length<2) return cs[0]||'#e5e7eb'; const step=100/cs.length; return `linear-gradient(135deg,${cs.map((c,i)=>`${c} ${(i*step).toFixed(0)}%,${c} ${((i+1)*step).toFixed(0)}%`).join(',')})`; }
 const taxiLbl=it=>it.kind==='pick'?`🚕 Taxi pick-up ${fmtTime(it.t,'Pacific/Auckland')}`:`🚕 Taxi drop-off ~${fmtTime(it.t,'Pacific/Auckland')}`;
+const taxiSub=it=>it.kind==='pick'?`travelling to sign-on ${fmtTime(it.t2,'Pacific/Auckland')}`:`lands ${fmtTime(it.t2,'Pacific/Auckland')} · customs + ride`;
 function evHTML(it,compact){
   if(it.k==='ev'){
     const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
@@ -962,7 +988,7 @@ function evHTML(it,compact){
   if(it.k==='taxi'){
     const f=it.f, c=col(f.who), pick=it.kind==='pick', lbl=taxiLbl(it);
     if(compact) return `<div class="mpill taxi-pill" style="--c:${c}">${lbl}</div>`;
-    return `<button class="ev taxi-ev" style="--c:${c}" data-fl="${f.id}"><small>${esc(tName(person(f.who)))} · ${pick?`signs on ${fmtTime(it.t2,'Pacific/Auckland')}`:`lands ${fmtTime(it.t2,'Pacific/Auckland')}, customs + ride`}</small>${lbl}</button>`;
+    return `<button class="ev taxi-ev" style="--c:${c}" data-fl="${f.id}"><small>${esc(tName(person(f.who)))} · ${taxiSub(it)}</small>${lbl}</button>`;
   }
   if(it.k==='arr'){
     const f=it.f, b=AIRPORTS[f.to], e=fE(f), home=HOME.includes(f.to);
@@ -987,13 +1013,23 @@ function renderCal(){
     return;
   }
   if(S.view==='week'){
-    const m=addDays(monday(new Date()),weekOff*7); let h='<div class="week">';
-    for(let i=0;i<7;i++){
-      const d=addDays(m,i), key=dk(d), isT=key===todayKey;
-      h+=`<div class="day ${isT?'today':''} ${i>4?'wkend':''}" data-drop="${key}"><h3>${isT?'Today':fmtD(d,{weekday:'long'})}<b>${d.getDate()} ${fmtD(d,{month:'short'})}</b></h3>
-          <div class="evs">${itemsForDay(key).map(x=>evHTML(x)).join('')}<button class="addday" data-add="${key}">＋ add</button></div></div>`;
-    }
-    cal.innerHTML=h+'</div>'; placeWeekNow();
+    // week on a time grid (like Outlook): each entry is drawn as long as it lasts
+    const FW=60, m=addDays(monday(new Date()),weekOff*7), now=new Date(), nmin=now.getHours()*60+now.getMinutes();
+    const B=Array.from({length:7},(_,i)=>{ const d=addDays(m,i), k=dk(d); return {d,k,i,...dayBlocks(k)}; });
+    const keep=cal.querySelector('.fw-scroll'), same=cal.dataset.week===dk(m), st=keep&&same?keep.scrollTop:null; cal.dataset.week=dk(m);
+    const hasToday=B.some(b=>b.k===todayKey); let first=24*60; B.forEach(b=>b.timed.forEach(t=>first=Math.min(first,t.s)));
+    const hours=Array.from({length:24},(_,h)=>`<div class="tl-h" style="top:${h*FW}px"><span>${h===0?'':((h%12)||12)+(h<12?' am':' pm')}</span></div>`).join('');
+    const cols=B.map(b=>`<div class="fw-col ${b.k===todayKey?'today':''} ${b.i>4?'wkend':''}" data-drop="${b.k}" data-fwcol="${b.k}">${b.timed.map(t=>{ const top=t.s/60*FW, hh=Math.max(24,(t.e-t.s)/60*FW-2);
+        return `<button class="tb ${t.done?'done-ev':''} ${hh<34?'short':''}" ${t.attr} style="top:${top}px;height:${hh}px;left:calc(${t.col} * 100% / ${t.cols});width:calc(100% / ${t.cols} - 3px);background:${t.bg}"><b>${esc(t.title)}</b><small>${esc(t.sub)}</small></button>`; }).join('')}
+        ${b.k===todayKey?`<div class="fw-now" style="top:${nmin/60*FW}px"></div>`:''}</div>`).join('');
+    cal.innerHTML=`<div class="fweek">
+      <div class="fw-days"><span></span>${B.map(b=>`<div class="fw-d ${b.k===todayKey?'today':''} ${b.i>4?'wkend':''}" data-drop="${b.k}"><button class="fw-dn" data-fday="${b.k}"><small>${b.k===todayKey?'Today':fmtD(b.d,{weekday:'long'})}</small><b>${b.d.getDate()} ${fmtD(b.d,{month:'short'})}</b></button><button class="fw-add" data-add="${b.k}" aria-label="Add">＋</button></div>`).join('')}</div>
+      ${B.some(b=>b.all.length)?`<div class="fw-all"><span></span>${B.map(b=>`<div data-drop="${b.k}">${b.all.map(o=>`<button class="fw-a" style="background:${o.bg}" ${o.attr}>${esc(o.title)}</button>`).join('')}</div>`).join('')}</div>`:''}
+      <div class="fw-scroll"><div class="fw-grid" style="height:${24*FW}px">${hours}<div class="fw-cols">${cols}</div>${hasToday?`<div class="fw-nowlbl" style="top:${nmin/60*FW}px"><span>${fmtTime(now,'Pacific/Auckland')}</span></div>`:''}</div></div></div>`;
+    const sc=cal.querySelector('.fw-scroll'); sc.scrollTop=st!=null?st:Math.max(0,((hasToday?nmin-120:Math.min(first,7*60)-30)/60)*FW);
+    cal.querySelectorAll('[data-fday]').forEach(b=>b.onclick=()=>openFridgeDay(b.dataset.fday));
+    cal.querySelectorAll('[data-fwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/FW*4)*15));
+      openAdd({date:c.dataset.fwcol,time:String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0')}); });
   } else {
     const t=new Date(), first=new Date(t.getFullYear(),t.getMonth()+monthOff,1), start=monday(first), mon=first.getMonth();
     let h='<div class="mgrid">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="mhead">${x}</div>`).join('')+'</div><div class="mgrid mbody">';
