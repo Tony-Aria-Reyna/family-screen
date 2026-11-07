@@ -513,6 +513,28 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .fw-nowlbl span{position:absolute;right:2px;top:-9px;font-size:11px;font-weight:800;color:#e5484d;background:var(--bg);padding:0 2px;white-space:nowrap}
 @keyframes slL{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}@keyframes slR{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
 .slideL .ps-scroll,.slideL.fday{animation:slL .22s ease}.slideR .ps-scroll,.slideR.fday{animation:slR .22s ease}
+.cardrow{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;flex:none}.cardrow::-webkit-scrollbar{display:none}
+.cardchip{flex:none;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;min-width:132px;height:62px;border-radius:14px;padding:8px 12px;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.cardchip b{font-size:15px;line-height:1.1}.cardchip small{font-size:11.5px;opacity:.85}
+.cardchip.sm{min-width:120px;height:46px;padding:5px 10px}
+.cardadd{flex:none;background:var(--soft);border:2px dashed #d9d1c4;border-radius:14px;padding:10px;font-size:16px;font-weight:700;color:var(--muted);margin-bottom:8px}
+.wallet{position:fixed;inset:0;z-index:60;background:rgba(18,18,22,.86);display:flex;flex-direction:column;justify-content:center;animation:wlIn .25s ease}
+@keyframes wlIn{from{opacity:0}to{opacity:1}}
+.wl-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}.wl-track::-webkit-scrollbar{display:none}
+.wl-slide{flex:none;width:100%;scroll-snap-align:center;padding:0 18px;box-sizing:border-box;display:flex;justify-content:center}
+.wl-card{width:100%;max-width:520px;border-radius:26px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,.45);animation:wlUp .3s ease}
+@keyframes wlUp{from{transform:translateY(40px) scale(.96)}to{transform:none}}
+.wl-top{padding:22px 22px 26px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end}
+.wl-name{font-size:30px;font-weight:800;line-height:1.1}.wl-owner{font-size:17px;font-weight:600;opacity:.9;margin-top:4px}
+.wl-code{background:#fff;padding:20px 18px 22px;text-align:center}
+.wl-bc svg{width:100%;height:150px;display:block}.wl-bc.qr svg{width:230px;height:230px;margin:0 auto}
+.wl-num{font-size:22px;font-weight:800;letter-spacing:1px;margin-top:10px;color:#111;font-variant-numeric:tabular-nums}
+.wl-dots{display:flex;justify-content:center;gap:8px;margin-top:16px}.wl-dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.35)}.wl-dots i.on{background:#fff}
+.wl-close{align-self:center;margin-top:28px;width:66px;height:66px;border-radius:50%;background:#fff;font-size:26px;font-weight:800;color:#222}
+.cprev{margin:8px 0;background:#fff;border-radius:14px;padding:8px}.cprev:empty{display:none}.cprev .wl-bc svg{height:90px}.cprev .wl-bc.qr svg{width:140px;height:140px}
+.bc-err{color:var(--danger);font-weight:700;padding:16px}
+.cvid{width:100%;max-height:260px;border-radius:14px;background:#000;object-fit:cover}
+.swatch{width:40px;height:40px;border-radius:50%;border:3px solid transparent}.swatch.on{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
 .wk-now{position:relative;height:2px;background:#e5484d;margin:7px 0 7px 8px;border-radius:2px;pointer-events:none;flex:none}
 .wk-now::before{content:'';position:absolute;left:-7px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e5484d}
 .wk-now span{position:absolute;right:0;top:-9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;padding:1px 6px;border-radius:99px}
@@ -1262,10 +1284,120 @@ function moveItem(id,sid){
   const g=S.groceries.find(x=>x.id===id); if(!g||g.shop===sid) return;
   g.shop=sid; g.aisle=shop(sid).aisles?(g.aisle||guessAisle(g.name)):''; S.itemShop[g.name.toLowerCase()]=sid; save(); renderShop(); toast(`Moved to ${shop(sid).name}`);
 }
+/* ================= loyalty cards: a wallet on the shopping list ================= */
+const CARD_PRESETS=[['Everyday Rewards','#f26a10'],['New World Clubcard','#5d52b8'],["PAK'nSAVE",'#f5c400'],['Flybuys','#1576c6'],['AA Smartfuel','#f7c600'],['Airpoints','#222831'],['Bunnings PowerPass','#16683f'],['Mitre 10','#0f7a3c'],['Farmers','#2b2b2b'],['Library card','#2f8f82']];
+const CARD_COLOURS=['#f26a10','#5d52b8','#f5c400','#1576c6','#d23a4b','#16683f','#2f8f82','#222831','#b5487f','#64748b'];
+const inkOn=c=>{ const n=parseInt(c.slice(1),16), r=n>>16, g=n>>8&255, b=n&255; return (r*299+g*587+b*114)/1000>165?'#222':'#fff'; };
+const eanOk=d=>{ const a=d.split('').map(Number), c=a.pop(); let sum=0; a.reverse().forEach((x,i)=>sum+=x*(i%2?1:3)); return (10-sum%10)%10===c; };
+// work out the barcode type from the number when it wasn't scanned
+function guessFmt(num){ const d=num.replace(/\s/g,''); if(/^\d+$/.test(d)){ if(d.length===13&&eanOk(d)) return 'EAN13'; if(d.length===8&&eanOk(d)) return 'EAN8'; if(d.length===12&&eanOk(d)) return 'UPC'; } return 'CODE128'; }
+const FMT_FROM_DETECTOR={ean_13:'EAN13',ean_8:'EAN8',upc_a:'UPC',upc_e:'UPCE',code_128:'CODE128',code_39:'CODE39',code_93:'CODE128',itf:'ITF',codabar:'codabar',qr_code:'QR'};
+const FMT_NAMES={EAN13:'EAN-13',EAN8:'EAN-8',UPC:'UPC-A',UPCE:'UPC-E',CODE128:'Code 128',CODE39:'Code 39',ITF:'ITF',codabar:'Codabar',QR:'QR code'};
+const cardNum=c=>{ const d=c.num.replace(/\s/g,''); if(c.fmt==='EAN13'&&d.length===13) return d[0]+' '+d.slice(1,7)+' '+d.slice(7); return /^\d+$/.test(d)?d.replace(/(\d{4})(?=\d)/g,'$1 '):c.num; };
+function barcodeHTML(c){
+  const v=String(c.num||'').replace(/\s/g,''); if(!v) return '';
+  try{
+    if(c.fmt==='QR'){ const q=qrcode(0,'M'); q.addData(v); q.make(); return q.createSvgTag({cellSize:6,margin:2,scalable:true}); }
+    const el=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    JsBarcode(el,v,{format:c.fmt||'CODE128',displayValue:false,margin:12,height:130,width:3,background:'#ffffff',lineColor:'#000000'});
+    el.setAttribute('preserveAspectRatio','none'); return el.outerHTML;
+  }catch(e){ return `<div class="bc-err">This number doesn't fit a ${FMT_NAMES[c.fmt]||c.fmt} barcode</div>`; }
+}
+function cardRowHTML(){
+  const cs=S.cards||[]; if(!cs.length) return isPhone()?`<button class="cardadd" id="cardAdd">💳 Add your loyalty cards</button>`:'';
+  return `<div class="cardrow">${cs.map((c,i)=>`<button class="cardchip" data-card="${i}" style="background:${c.color};color:${inkOn(c.color)}"><b>${esc(c.name)}</b>${c.owner?`<small>${esc(c.owner)}</small>`:''}</button>`).join('')}</div>`;
+}
+// the wallet: big card with its barcode; swipe sideways for the others; keeps the screen on
+let wakeLock=null;
+function openWallet(i){
+  const cs=S.cards||[]; if(!cs.length) return;
+  const L=$('#layer');
+  L.innerHTML=`<div class="wallet" id="wallet"><div class="wl-track" id="wlTrack">${cs.map(c=>`<div class="wl-slide"><div class="wl-card">
+      <div class="wl-top" style="background:${c.color};color:${inkOn(c.color)}"><div class="wl-name">${esc(c.name)}</div>${c.owner?`<div class="wl-owner">${esc(c.owner)}</div>`:''}</div>
+      <div class="wl-code"><div class="wl-bc ${c.fmt==='QR'?'qr':''}">${barcodeHTML(c)}</div><div class="wl-num">${esc(cardNum(c))}</div></div></div></div>`).join('')}</div>
+    ${cs.length>1?`<div class="wl-dots">${cs.map((c,j)=>`<i data-wd="${j}"></i>`).join('')}</div>`:''}
+    <button class="wl-close" id="wlClose" aria-label="Close">✕</button></div>`;
+  const tr=$('#wlTrack'), dots=[...L.querySelectorAll('[data-wd]')];
+  const mark=()=>{ const k=Math.round(tr.scrollLeft/tr.clientWidth); dots.forEach((d,j)=>d.classList.toggle('on',j===k)); };
+  requestAnimationFrame(()=>{ tr.scrollLeft=(i||0)*tr.clientWidth; mark(); });
+  tr.addEventListener('scroll',mark,{passive:true});
+  dots.forEach(d=>d.onclick=()=>tr.scrollTo({left:+d.dataset.wd*tr.clientWidth,behavior:'smooth'}));
+  $('#wlClose').onclick=()=>closeModal();
+  $('#wallet').addEventListener('click',e=>{ if(e.target.id==='wallet') closeModal(); });
+  try{ navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>wakeLock=w).catch(()=>{}); }catch(e){}
+  const off=()=>{ if(!$('#wallet')){ try{ wakeLock&&wakeLock.release(); }catch(e){} wakeLock=null; mo.disconnect(); } };
+  const mo=new MutationObserver(off); mo.observe(L,{childList:true});
+}
+// Settings → 💳 Loyalty cards
+function openCards(){
+  modal((m,close)=>{
+    const cs=S.cards||[];
+    m.innerHTML=`<h2>💳 Loyalty cards</h2><p class="note">Shown at the top of the shopping list. Tap one in the shop and it pops up with its barcode.</p>
+      ${cs.map((c,i)=>`<div class="prow"><span class="cardchip sm" style="background:${c.color};color:${inkOn(c.color)}"><b>${esc(c.name)}</b>${c.owner?`<small>${esc(c.owner)}</small>`:''}</span><span class="note" style="flex:1">${esc(cardNum(c))}</span><button class="xbtn" data-ced="${i}">Edit</button><button class="xbtn" data-cup="${i}" ${i?'':'disabled'} aria-label="Move up">↑</button></div>`).join('')||'<p class="note">No cards yet.</p>'}
+      <div class="mact"><button class="cancel" id="cX">Done</button><button class="save" id="cAdd">＋ Add a card</button></div>`;
+    m.querySelector('#cX').onclick=close;
+    m.querySelector('#cAdd').onclick=()=>editCard(-1);
+    m.querySelectorAll('[data-ced]').forEach(b=>b.onclick=()=>editCard(+b.dataset.ced));
+    m.querySelectorAll('[data-cup]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.cup, a=[...(S.cards||[])]; [a[i-1],a[i]]=[a[i],a[i-1]]; S.cards=a; save(); renderAll(); openCards(); });
+  });
+}
+function editCard(idx){
+  const old=idx>=0?S.cards[idx]:null, st=old?{...old}:{id:uid(),name:'',num:'',fmt:'',color:CARD_COLOURS[0],owner:''};
+  let stream=null;
+  const stopCam=()=>{ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } };
+  const canScan='BarcodeDetector' in window;
+  modal((m,close0)=>{
+    const close=()=>{ stopCam(); close0(); };
+    m.innerHTML=`<h2>${old?'Edit card':'Add a loyalty card'}</h2>
+      <div class="step">1. The barcode</div>
+      ${canScan?`<div class="opts"><button class="opt" id="cScan">📷 Scan the card</button><label class="opt">🖼️ From a screenshot<input type="file" accept="image/*" id="cShot" hidden></label></div>`:`<p class="note">Scanning works on Android phones. Here, type the number from the card.</p>`}
+      <div id="cCam"></div>
+      <input class="txt" id="cNum" inputmode="text" placeholder="Card number" value="${esc(st.num)}" style="margin-top:8px">
+      <div class="row small" style="margin-top:6px;gap:8px;align-items:center">Barcode type <select id="cFmt" style="font-size:16px;padding:6px;border-radius:10px">${['','EAN13','CODE128','QR','EAN8','UPC','CODE39','ITF','codabar'].map(f=>`<option value="${f}" ${(st.fmt||'')===f?'selected':''}>${f?FMT_NAMES[f]:'Work it out'}</option>`).join('')}</select><span class="note" id="cFmtNote"></span></div>
+      <div class="cprev" id="cPrev"></div>
+      <div class="step">2. Which card?</div>
+      <div class="opts" id="cPre">${CARD_PRESETS.map(([n,c])=>`<button class="opt sm" data-pre="${esc(n)}" data-col="${c}"><span class="dot" style="background:${c}"></span>${esc(n)}</button>`).join('')}</div>
+      <input class="txt" id="cName" placeholder="Card name, e.g. New World Clubcard" value="${esc(st.name)}" style="margin-top:8px">
+      <input class="txt" id="cOwner" placeholder="Name on the card (optional), e.g. Reyna Ross" value="${esc(st.owner||'')}" style="margin-top:8px">
+      <div class="step">3. Colour</div><div class="opts" id="cCols">${CARD_COLOURS.map(c=>`<button class="swatch ${st.color===c?'on':''}" data-c="${c}" style="background:${c}" aria-label="Colour"></button>`).join('')}</div>
+      <div class="mact">${old?'<button class="cancel" id="cDel" style="margin-right:auto;color:var(--danger)">Delete</button>':''}<button class="cancel" id="cCancel">Cancel</button><button class="save" id="cSave">Save card</button></div>`;
+    const num=m.querySelector('#cNum'), fmtSel=m.querySelector('#cFmt');
+    const fmtOf=()=>st.fmt||guessFmt(st.num);
+    const prev=()=>{ const f=fmtOf(); m.querySelector('#cFmtNote').textContent=st.num?`→ ${FMT_NAMES[f]||f}`:'';
+      m.querySelector('#cPrev').innerHTML=st.num?`<div class="wl-bc ${f==='QR'?'qr':''}">${barcodeHTML({num:st.num,fmt:f})}</div>`:''; };
+    num.oninput=()=>{ st.num=num.value.trim(); prev(); };
+    fmtSel.onchange=()=>{ st.fmt=fmtSel.value; prev(); };
+    const found=(raw,fmt)=>{ st.num=raw; st.fmt=FMT_FROM_DETECTOR[fmt]||''; num.value=raw; fmtSel.value=st.fmt; prev(); toast('Got it: '+(FMT_NAMES[st.fmt]||'barcode')); };
+    const unsupported=f=>toast(`That's a ${f.replace(/_/g,' ')} code, which can't be shown here. Type the number instead.`);
+    if(canScan){
+      const det=new BarcodeDetector();
+      m.querySelector('#cScan').onclick=async()=>{
+        const box=m.querySelector('#cCam'); stopCam();
+        try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); }catch(e){ toast('Camera not available'); return; }
+        box.innerHTML='<video class="cvid" playsinline muted></video><p class="note">Hold the barcode in the frame…</p>'; const v=box.querySelector('video'); v.srcObject=stream; await v.play().catch(()=>{});
+        const tick=async()=>{ if(!stream) return; try{ const r=await det.detect(v); const ok=r.find(x=>FMT_FROM_DETECTOR[x.format]); if(ok){ found(ok.rawValue,ok.format); stopCam(); box.innerHTML=''; return; } if(r[0]){ unsupported(r[0].format); } }catch(e){} setTimeout(tick,250); };
+        tick(); };
+      m.querySelector('#cShot').onchange=async e=>{ const f=e.target.files[0]; if(!f) return;
+        try{ const bmp=await createImageBitmap(f); const r=await det.detect(bmp); const ok=r.find(x=>FMT_FROM_DETECTOR[x.format]);
+          if(ok) found(ok.rawValue,ok.format); else if(r[0]) unsupported(r[0].format); else toast('No barcode found in that picture. Try a clearer screenshot, or type the number.'); }catch(err){ toast('Could not read that picture'); } };
+    }
+    m.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{ st.name=b.dataset.pre; st.color=b.dataset.col; m.querySelector('#cName').value=st.name; m.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x.dataset.c===st.color)); });
+    m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ st.color=b.dataset.c; m.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x===b)); });
+    m.querySelector('#cCancel').onclick=()=>{ close(); openCards(); };
+    if(old) m.querySelector('#cDel').onclick=()=>{ if(!confirm('Delete this card?')) return; S.cards=S.cards.filter((_,i)=>i!==idx); save(); renderAll(); close(); openCards(); };
+    m.querySelector('#cSave').onclick=()=>{
+      st.name=m.querySelector('#cName').value.trim(); st.owner=m.querySelector('#cOwner').value.trim();
+      if(!st.num){ toast('Scan the card or type its number'); return; } if(!st.name){ toast('Give the card a name'); return; }
+      const card={id:st.id,name:st.name,num:st.num,fmt:fmtOf(),color:st.color,owner:st.owner};
+      const a=[...(S.cards||[])]; if(old) a[idx]=card; else a.push(card); S.cards=a; save(); renderAll(); close(); openCards(); };
+    prev();
+  });
+}
 function renderShop(){ keepInput('sIn',renderShop_); }
 function renderShop_(){
   const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
   let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Minimise the shopping list" aria-label="Minimise">»</button></div>
+  ${cardRowHTML()}
   <form class="addrow" id="sForm"><input id="sIn" placeholder="Add an item…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
   <div class="shops"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
   <div class="list">`;
@@ -1301,6 +1433,7 @@ function renderShop_(){
         p.appendChild(tr); },
       onEnd:()=>{ const tr=document.getElementById('tray'); if(tr) tr.remove(); }});
   });
+  p.querySelectorAll('[data-card]').forEach(b=>b.onclick=()=>openWallet(+b.dataset.card)); const ca=p.querySelector('#cardAdd'); if(ca) ca.onclick=()=>requirePin(openCards);
   $('#gClear').onclick=()=>{ S.groceries=S.groceries.filter(x=>!x.done); save(); renderShop(); };
 }
 
@@ -2099,7 +2232,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -2150,6 +2283,7 @@ function openSettings(){
     m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
+    m.querySelector('#goCards').onclick=()=>{ close(); openCards(); };
     if(!LOCAL){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
@@ -2491,7 +2625,12 @@ function initSplits(){
   document.addEventListener('click',e=>{ const b=e.target.closest('[data-hidep]'); if(!b) return; LAY['hide'+b.dataset.hidep]=true; saveLay(); applyLayout(); toast('Minimised. Tap the strip on the right to open it again'); });
   addEventListener('resize',applyLayout); applyLayout();
 }
-function renderAll(){ if(!S.people.length) return; if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
+// app shortcuts (long-press the app icon): ?open=cards|shop|add|where
+let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open'); if(v){ const q=new URLSearchParams(location.search); q.delete('open'); history.replaceState(history.state,'',location.pathname+(q.toString()?'?'+q:'')); } return v; }catch(e){ return null; } })();
+function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
+  setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
+    else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
+function renderAll(){ if(!S.people.length) return; if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
