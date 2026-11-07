@@ -2387,7 +2387,8 @@ function gate(kind,extra){
 async function enterHome(){
   gate('loading');
   try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
-  catch(e){ gate('error','Could not reach the family database ('+(e.code||e.message)+'). Check the internet connection.'); }
+  catch(e){ const pd=e&&e.code==='permission-denied';
+    gate('error',(pd?'The family database said no.':'Could not reach the family database. Check the internet connection.')+' Signed in as '+(SYNC.me()||'?')+'. Details: '+(e.code||'')+' · '+String(e.message||e).slice(0,220)); }
 }
 let pendingRender=false, rTimer=null;
 function syncChanged(what,err){
