@@ -5967,7 +5967,7 @@ function applySource(src,parsed){
 const HELPER_CODE=key=>`// Family Screen calendar helper. Fetches calendar links for the family screen.
 const KEY = '${key}';
 function doGet(e) {
-  if (!e || !e.parameter || e.parameter.key !== KEY) return ContentService.createTextOutput('not allowed');
+  if (!e || !e.parameter || e.parameter.key !== KEY) return ContentService.createTextOutput('not allowed · helper key ends ' + KEY.slice(-4));
   const url = String(e.parameter.url || '').replace(/^webcal:/i, 'https:');
   if (!/^https:\\/\\//i.test(url)) return ContentService.createTextOutput('bad link');
   const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
@@ -5978,7 +5978,7 @@ async function fetchLink(src){
   const h=S.linkHelper; if(!h||!h.url) throw new Error('helper');
   const u=h.url+'?key='+encodeURIComponent(h.key)+'&url='+encodeURIComponent(src.url)+'&t='+Date.now();
   const r=await fetch(u,{redirect:'follow'}); const t=await r.text();
-  if(!/BEGIN:VCALENDAR/.test(t)) throw new Error(t==='not allowed'?'helper key mismatch':t==='bad link'?'that link is not a calendar link':'the link did not return a calendar');
+  if(!/BEGIN:VCALENDAR/.test(t)) throw new Error(/^not allowed/.test(t)?'helper key mismatch':t==='bad link'?'that link is not a calendar link':'the link did not return a calendar');
   return t;
 }
 async function refreshLinks(force){
@@ -5995,7 +5995,9 @@ async function refreshLinks(force){
 }
 setInterval(()=>refreshLinks(false),10*60e3);
 function openHelperSetup(after){
-  const key=(S.linkHelper&&S.linkHelper.key)||(uid()+uid()+uid());
+  // the key is made once and saved straight away, so the code shown never changes between visits
+  if(!S.linkHelper||!S.linkHelper.key){ S.linkHelper={url:(S.linkHelper&&S.linkHelper.url)||'',key:uid()+uid()+uid()}; save(); }
+  const key=S.linkHelper.key;
   modal((m,close)=>{
     m.innerHTML=`<h2>🔗 Set up live calendar links (one-off)</h2>
     <p class="note">Calendar links can't be read straight from the family screen, so a tiny helper runs free in your own Google account and fetches them. You do this once; it then works for every link.</p>
@@ -6005,6 +6007,8 @@ function openHelperSetup(after){
       <li>Click <b>Deploy → New deployment</b>. Click ⚙️ beside “Select type” and choose <b>Web app</b>.</li>
       <li>Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. Click <b>Deploy</b>, then <b>Authorise access</b> and allow it (choose Advanced → Go to project if Google warns you; it's your own script).</li>
       <li>Copy the <b>Web app URL</b> (it ends in <b>/exec</b>) and paste it below.</li></ol>
+    <p class="note"><b>Changed the code after deploying?</b> The web app keeps running the old code until you publish it again: <b>Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy</b>. The web address stays the same.</p>
+    <p class="note">This screen's helper key ends <b>${esc(key.slice(-4))}</b>; the code you paste must contain the same key.</p>
     <details class="how"><summary>Show the helper code</summary><pre style="white-space:pre-wrap;font-size:13px;user-select:text;-webkit-user-select:text">${esc(HELPER_CODE(key))}</pre></details>
     <div class="row"><button class="opt" id="hCopy">📋 Copy helper code</button></div>
     <div class="step">Web app URL</div><input class="txt" id="hUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc((S.linkHelper&&S.linkHelper.url)||'')}">
@@ -6016,11 +6020,17 @@ function openHelperSetup(after){
       const v=m.querySelector('#hUrl').value.trim();
       if(!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(v)){ toast('Paste the Web app URL ending in /exec'); return; }
       S.linkHelper={url:v,key}; save();
-      try{ const r=await fetch(v+'?key='+encodeURIComponent(key)+'&url=x'); const t=await r.text(); if(t!=='bad link') throw new Error(t==='not allowed'?'The helper code and key don’t match: copy the code again':'The helper didn’t answer'); toast('Helper is working ✓'); close(); if(after) after(); }
-      catch(e){ toast(e.message||'Could not reach the helper'); }
+      try{ const r=await fetch(v+'?key='+encodeURIComponent(key)+'&url=x'); const t=(await r.text()).trim();
+        if(t!=='bad link'){
+          const ends=(t.match(/helper key ends (\w{4})/)||[])[1];
+          if(/^not allowed/.test(t)) throw new Error(ends&&ends!==key.slice(-4)?`The helper has a different key (ends ${ends}, this screen expects ${key.slice(-4)}). Copy the code below again, paste it over the old code, save, then Deploy → Manage deployments → ✏️ → New version.`:`The helper is still running older code. In Apps Script: Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy, then test again.`);
+          throw new Error(/<html/i.test(t)?'The helper asked for a sign-in. In the deployment, set “Who has access” to Anyone.':'The helper didn’t answer. Check the web app URL ends in /exec.'); }
+        toast('Helper is working ✓'); close(); if(after) after(); }
+      catch(e){ helperMsg(m,e.message||'Could not reach the helper'); }
     };
   });
 }
+function helperMsg(m,t){ let b=m.querySelector('#hErr'); if(!b){ b=document.createElement('p'); b.id='hErr'; b.className='note'; b.style.cssText='color:var(--danger);font-weight:700;font-size:16px'; m.querySelector('.mact').before(b); } b.textContent='⚠️ '+t; }
 function openAddLink(who){
   if(!S.linkHelper||!S.linkHelper.url){ openHelperSetup(()=>openAddLink(who)); return; }
   modal((m,close)=>{
@@ -6731,7 +6741,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mw5p9b1m';
+const FS_VERSION='fs-mw9wahfx';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
