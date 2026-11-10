@@ -29,6 +29,12 @@ service cloud.firestore {
       match /{col}/{id} {
         allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals'];
       }
+      // Secrets (the Gemini key): family members can write them, nobody can read them through the app.
+      // Only the family's own Google helper reads them, with the account owner's access.
+      match /secrets/{id} {
+        allow read: if false;
+        allow create, update, delete: if isMember(hid);
+      }
       // Gift ideas: only the family members ticked in Settings (giftViewers) can read or change them
       match /gifts/{id} {
         allow read, write: if isMember(hid) && email() in get(/databases/$(database)/documents/households/$(hid)).data.get('giftViewers', []);

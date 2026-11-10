@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 7;
+const HELPER_VERSION = 8;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -29,6 +29,7 @@ function tick() {
   const sent = props.getProperties();
   const now = new Date();
   const flightNote = { key: !!props.getProperty('AERODATABOX_KEY'), used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: '' };
+  const rules = syncRules(props, now);
   for (const h of listDocs('households')) {
     let err = '';
     try {
@@ -43,12 +44,45 @@ function tick() {
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
-    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
+    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, rules: rules, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
   }
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
   Object.keys(sent).forEach(k => { if (+sent[k] > 1 && +sent[k] < cutoff) props.deleteProperty(k); });
 }
+
+/* ---------- database rules: kept in step with the app automatically ----------
+   The app's site publishes firestore.rules next to the app. Every 15 minutes this reads it, and if it has changed
+   since last time it publishes it to Firebase (the same as pasting it into the console and pressing Publish).
+   Firebase checks the rules first: a file with a mistake is refused and the rules already in place stay. */
+function syncRules(props, now) {
+  const last = JSON.parse(props.getProperty('RULES_STATE') || '{}');
+  if (last.checked && now.getTime() - last.checked < 14 * 60e3) return last.report || null;
+  const report = { checked: now.getTime(), ok: true, at: last.report && last.report.at || 0, error: '' };
+  try {
+    const r = UrlFetchApp.fetch(APP_URL.replace(/[^/]*$/, '') + 'firestore.rules?t=' + now.getTime(), { muteHttpExceptions: true, followRedirects: true });
+    if (r.getResponseCode() !== 200) throw new Error('Could not read the rules file from the app site (' + r.getResponseCode() + ')');
+    const text = r.getContentText();
+    if (!/service\s+cloud\.firestore/.test(text) || !/match \/households\/\{hid\}/.test(text)) throw new Error('The rules file on the app site does not look right, so it was not published');
+    const hash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text));
+    if (hash !== last.hash) {
+      const api = 'https://firebaserules.googleapis.com/v1/projects/' + PROJECT_ID;
+      const c = UrlFetchApp.fetch(api + '/rulesets', { method: 'post', contentType: 'application/json', headers: headers(), muteHttpExceptions: true,
+        payload: JSON.stringify({ source: { files: [{ name: 'firestore.rules', content: text }] } }) });
+      if (c.getResponseCode() !== 200) throw new Error('Firebase refused the new rules: ' + c.getContentText().slice(0, 200));
+      const rel = 'projects/' + PROJECT_ID + '/releases/cloud.firestore';
+      const u = UrlFetchApp.fetch('https://firebaserules.googleapis.com/v1/' + rel, { method: 'patch', contentType: 'application/json', headers: headers(), muteHttpExceptions: true,
+        payload: JSON.stringify({ release: { name: rel, rulesetName: JSON.parse(c.getContentText()).name } }) });
+      if (u.getResponseCode() !== 200) throw new Error('Could not switch to the new rules: ' + u.getContentText().slice(0, 200));
+      last.hash = hash; report.at = now.getTime();
+    }
+  } catch (e) { report.ok = false; report.error = String(e && e.message || e).slice(0, 240); }
+  last.checked = now.getTime(); last.report = report;
+  props.setProperty('RULES_STATE', JSON.stringify(last));
+  return report;
+}
+// run by hand from the script editor to publish the rules straight away
+function publishRulesNow() { const p = PropertiesService.getScriptProperties(); p.deleteProperty('RULES_STATE'); Logger.log(JSON.stringify(syncRules(p, new Date()))); }
 
 /* ---------- what to send (pure logic, no network) ---------- */
 function planNotifications(h, all, now, already) {

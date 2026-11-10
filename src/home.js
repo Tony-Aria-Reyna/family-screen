@@ -243,7 +243,7 @@ async function aiAsk(payload){
   let t; try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:h.key,action:'ai'},payload)),redirect:'follow'}); t=await r.text(); }
   catch(e){ throw new Error('Could not reach your Google helper. Check the internet and try again.'); }
   let j; try{ j=JSON.parse(t); }catch(e){ aiSetup(true); throw new Error('quiet'); }
-  if(j.error==='nokey'){ aiSetup(true); throw new Error('quiet'); }
+  if(j.error==='nokey'){ aiSetup(); throw new Error('quiet'); }
   if(j.error) throw new Error(/not allowed/.test(j.error)?'The helper key doesn’t match. Copy the helper code again (⚙️ → Connect calendars).':'Gemini said: '+String(j.error).slice(0,160));
   const s=String(j.text||'').replace(/^```(?:json)?\s*|\s*```$/g,''); try{ return JSON.parse(s); }catch(e){ throw new Error('Gemini sent back something I couldn’t read. Try again.'); }
 }
@@ -297,21 +297,29 @@ function showIdeas(rs,plan){
   }; draw(); });
 }
 function aiSetup(update){
-  const h=S.linkHelper;
-  modal((m,close)=>{ m.innerHTML=`<h2>✨ Turn on meal ideas (one-off)</h2>
-    <p class="note">Ideas and recipe reading use your own Gemini key. It's kept in your Google helper, never in the app or on GitHub.</p>
-    ${!h||!h.url?`<p style="font-size:18px">First set up the calendar helper (it's the same helper): ⚙️ → 🔗 Connect calendars.</p><div class="mact"><button class="cancel" id="c">Close</button><button class="save" id="go">Set it up</button></div>`:`
-    <ol style="font-size:17px;line-height:1.6">
-      <li>Get a key at <b>aistudio.google.com</b> → Get API key (or use the one you already have).</li>
-      <li>Open your <b>calendar helper</b> project at script.google.com. Tap <b>Copy helper code</b> below and paste it over the old code. 💾 Save.</li>
-      <li>⚙️ <b>Project Settings</b> → Script properties → <b>Add script property</b>: name <code>GEMINI_KEY</code>, value: your key. Save.</li>
-      <li><b>Deploy → Manage deployments</b> → ✏️ → Version: <b>New version</b> → Deploy.</li></ol>
-    ${update?'<p class="note">Your helper is older than this feature, or has no key yet, so it needs these steps.</p>':''}
-    <div class="mact"><button class="cancel" id="c">Close</button><button class="save" id="cp">Copy helper code</button></div>`}`;
+  const h=S.linkHelper, tail=S.aiKeyTail;
+  modal((m,close)=>{ const draw=(msg)=>{
+    m.innerHTML=`<h2>✨ AI: your Gemini key</h2>
+    <p class="note">Meal ideas, reading recipes from photos and links, and reading bills use your own Gemini key. Paste it here once. It goes straight to your own Google helper and a locked spot in the family database that the app can write to but never read back, so it isn't on GitHub or the website, and nobody can see it later, not even here.</p>
+    ${tail?`<p style="font-size:18px">✅ A key is saved (ends ••••${esc(tail)}${S.aiKeyAt?', '+fmtD(new Date(S.aiKeyAt),{day:'numeric',month:'short'}):''}). Paste a new one to replace it.</p>`:''}
+    <div class="step">Gemini API key <span style="font-weight:500">(from aistudio.google.com → Get API key)</span></div>
+    <input class="txt" id="k" type="password" autocomplete="off" placeholder="Paste the key">
+    ${msg?`<p class="note" style="color:#b45309;font-weight:700">${esc(msg)}</p>`:''}
+    ${!h||!h.url?`<p class="note">Meal ideas also need the calendar helper (⚙️ → 🔗 Connect calendars). Set that up and paste the key here again.</p>`:update?`<p class="note">Your calendar helper is older than this feature. Copy its new code (button below), paste it over the old code at script.google.com, then Deploy → Manage deployments → ✏️ → New version, and save the key again.</p>`:''}
+    <div class="mact">${h&&h.url?'<button class="cancel" id="cp">Copy calendar helper code</button>':''}<button class="cancel" id="c">Close</button><button class="save" id="s">Save key</button></div>`;
     m.querySelector('#c').onclick=close;
-    const go=m.querySelector('#go'); if(go) go.onclick=()=>{ close(); openHelperSetup(); };
     const cp=m.querySelector('#cp'); if(cp) cp.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Helper code copied')); }catch(e){ toast('Copy failed'); } };
-  });
+    m.querySelector('#s').onclick=async()=>{ const k=m.querySelector('#k').value.trim();
+      if(!/^[A-Za-z0-9_\-]{20,200}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
+      const sb=m.querySelector('#s'); sb.disabled=true; sb.textContent='Saving…'; let helperOk=false, note='';
+      if(!LOCAL){ try{ await SYNC.saveSecret({gemini:k,at:Date.now(),by:SYNC.me()}); }catch(e){ note='The database rules need updating before the key can be saved there (the helper does this automatically once it’s on version 8). '; } }
+      if(h&&h.url){ try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'setkey',gemini:k}),redirect:'follow'}); const j=JSON.parse(await r.text()); if(j.ok) helperOk=true; else note+=(j.error||'')+' '; }
+        catch(e){ note+='The calendar helper needs its new code before it can take the key. '; } }
+      S.aiKeyTail=k.slice(-4); S.aiKeyAt=Date.now(); save();
+      if(helperOk||(!h||!h.url)){ close(); toast(helperOk?'✨ Key saved. Meal ideas are ready.':'Key saved'); if(note) setTimeout(()=>toast(note.trim()),2700); }
+      else draw('Saved for the family helper, but the calendar helper didn’t take it: '+note.trim()+' Update the calendar helper (copy its code below) and save again.');
+    };
+  }; draw(); });
 }
 
 /* ================= car and house renewals ================= */

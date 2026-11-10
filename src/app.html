@@ -2177,7 +2177,10 @@ function doPost(e) {
   const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
   let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
   if (b.key !== KEY) return out({ error: 'not allowed · helper key ends ' + KEY.slice(-4) });
-  const props = PropertiesService.getScriptProperties(), gk = props.getProperty('GEMINI_KEY');
+  const props = PropertiesService.getScriptProperties();
+  if (b.action === 'setkey') { if (!/^[A-Za-z0-9_\\-]{20,200}$/.test(b.gemini || '')) return out({ error: 'That does not look like a Gemini key' }); props.setProperty('GEMINI_KEY', b.gemini); props.deleteProperty('GEMINI_MODEL'); return out({ ok: true }); }
+  if (b.action === 'ping') return out({ ok: true, helper: 2, hasKey: !!props.getProperty('GEMINI_KEY') });
+  const gk = props.getProperty('GEMINI_KEY');
   if (!gk) return out({ error: 'nokey' });
   const parts = [{ text: String(b.prompt || '').slice(0, 60000) }];
   if (b.url && /^https:\\/\\//i.test(b.url)) {
@@ -2398,7 +2401,8 @@ function openNotify(){
     </div>
     <div class="srccard"><h4>🤖 The reminder helper ${running?'<span class="pill-ok">✓ running · last check '+fmtTime(new Date(nt.lastRun),'Pacific/Auckland')+'</span>':'<span class="pill-wait">not set up yet</span>'}${running&&needUpd?' <span class="pill-wait">⬆️ update available</span>':''}</h4>
       ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}
-      ${running&&needUpd?`<p class="note">A newer helper is available (fewer flight checks, and keeps the last radar fix for the globe). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
+      ${nt&&nt.rules?(nt.rules.ok?`<p class="note">🛡️ Database rules kept up to date automatically${nt.rules.at?' · last published '+fmtD(new Date(nt.rules.at),{day:'numeric',month:'short'})+' '+fmtTime(new Date(nt.rules.at),'Pacific/Auckland'):''}</p>`:`<p class="note" style="color:var(--danger)">🛡️ Database rules: ${esc(nt.rules.error||'')}</p>`):''}
+      ${running&&needUpd?`<p class="note">A newer helper is available (it now also keeps the database rules up to date by itself, and sends renewal and private reminders). On a computer: copy the helper code below, open your <b>Family Screen Helper</b> at script.google.com, click <b>Code.gs</b>, press <b>Ctrl + A</b>, paste, and save with <b>Ctrl + S</b>. No need to run setup again. This turns green again within 5 minutes.</p>
         <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button></div>`:''}
       ${running&&!needUpd?'<p class="note">It checks the family calendar every 5 minutes and sends the reminders. Nothing else to do.</p>':''}
       ${running?`<details class="how"><summary>Show the helper code and settings file</summary><div class="row" style="margin:8px 0"><button class="xbtn" data-copy="code">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div><pre class="codebox">${esc(fileText('code'))}</pre></details>`:`
@@ -2553,7 +2557,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button><button class="opt" id="goRenew">📌 Car &amp; house renewals</button><button class="opt" id="goGifts">🎁 Gift ideas</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button><button class="opt" id="goRenew">📌 Car &amp; house renewals</button><button class="opt" id="goGifts">🎁 Gift ideas</button><button class="opt" id="goAI">✨ AI (Gemini key)</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -2611,6 +2615,7 @@ function openSettings(){
     m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
     m.querySelector('#goRenew').onclick=()=>{ close(); openRenewals(); };
     m.querySelector('#goGifts').onclick=()=>{ close(); openGifts(); };
+    m.querySelector('#goAI').onclick=()=>{ close(); requirePin(()=>aiSetup()); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
     m.querySelector('#goCards').onclick=()=>{ close(); openCards(); };
@@ -2723,8 +2728,8 @@ async function enterHome(){
 let pendingRender=false, rTimer=null;
 let privWarned=false, rulesWarned=false;
 function syncChanged(what,err){
-  if(what==='rulesold'){ if(!rulesWarned){ rulesWarned=true; toast('Meals and renewals can’t sync yet: the database rules need updating (see the setup note)'); } return; }
-  if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: the database rules need updating (Settings → Notifications)'); } return; }
+  if(what==='rulesold'){ if(!rulesWarned){ rulesWarned=true; toast('Meals and renewals can’t sync yet: update the reminder helper (⚙️ → 🔔 Notifications) and it fixes the database rules by itself'); } return; }
+  if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: update the reminder helper (⚙️ → 🔔 Notifications) and it fixes the database rules by itself'); } return; }
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
 }
