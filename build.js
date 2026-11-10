@@ -25,3 +25,14 @@ for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'privac
 fs.mkdirSync(path.join(out, 'lib'), { recursive: true });
 for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) fs.copyFileSync(path.join(__dirname, 'node_modules/pdfjs-dist/build', f), path.join(out, 'lib', f));
 console.log('built', version, (html.length / 1024).toFixed(0) + ' KB');
+
+// Safety net: refuse to finish if any script in the built page has a syntax error (a typo would blank the app)
+{
+  const vm = require('vm');
+  for (const f of [path.join(out, 'index.html')]) {
+    const html = fs.readFileSync(f, 'utf8'); let n = 0;
+    for (const m of html.matchAll(/<script(?![^>]*\bsrc=)(?![^>]*type="module")[^>]*>([\s\S]*?)<\/script>/g)) {
+      n++; try { new vm.Script(m[1], { filename: f + ' script ' + n }); } catch (e) { console.error('BUILD STOPPED: syntax error in script ' + n + ': ' + e.message); fs.rmSync(f); process.exit(1); }
+    }
+  }
+}
