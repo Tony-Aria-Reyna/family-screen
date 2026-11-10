@@ -6499,7 +6499,7 @@ function aiSetup(update){
     m.querySelector('#c').onclick=close;
     const cp=m.querySelector('#cp'); if(cp) cp.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Helper code copied')); }catch(e){ toast('Copy failed'); } };
     m.querySelector('#s').onclick=async()=>{ const k=m.querySelector('#k').value.trim();
-      if(!/^[A-Za-z0-9_\-]{20,200}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
+      if(!/^[A-Za-z0-9_.\-]{20,300}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
       const sb=m.querySelector('#s'); sb.disabled=true; sb.textContent='Saving…'; let helperOk=false, note='';
       if(!LOCAL){ try{ await SYNC.saveSecret({gemini:k,at:Date.now(),by:SYNC.me()}); }catch(e){ note='The database rules need updating before the key can be saved there (the helper does this automatically once it’s on version 8). '; } }
       if(h&&h.url){ try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'setkey',gemini:k}),redirect:'follow'}); const j=JSON.parse(await r.text()); if(j.ok) helperOk=true; else note+=(j.error||'')+' '; }
@@ -6807,7 +6807,7 @@ function doPost(e) {
   let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
   if (b.key !== KEY) return out({ error: 'not allowed · helper key ends ' + KEY.slice(-4) });
   const props = PropertiesService.getScriptProperties();
-  if (b.action === 'setkey') { if (!/^[A-Za-z0-9_\\-]{20,200}$/.test(b.gemini || '')) return out({ error: 'That does not look like a Gemini key' }); props.setProperty('GEMINI_KEY', b.gemini); props.deleteProperty('GEMINI_MODEL'); return out({ ok: true }); }
+  if (b.action === 'setkey') { if (!/^[A-Za-z0-9_.\\-]{20,300}$/.test(b.gemini || '')) return out({ error: 'That does not look like a Gemini key' }); props.setProperty('GEMINI_KEY', b.gemini); props.deleteProperty('GEMINI_MODEL'); return out({ ok: true }); }
   if (b.action === 'ping') return out({ ok: true, helper: 2, hasKey: !!props.getProperty('GEMINI_KEY') });
   const gk = props.getProperty('GEMINI_KEY');
   if (!gk) return out({ error: 'nokey' });
@@ -7651,7 +7651,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwafmz25';
+const FS_VERSION='fs-mwafrlr5';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

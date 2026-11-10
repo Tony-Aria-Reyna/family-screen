@@ -310,7 +310,7 @@ function aiSetup(update){
     m.querySelector('#c').onclick=close;
     const cp=m.querySelector('#cp'); if(cp) cp.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Helper code copied')); }catch(e){ toast('Copy failed'); } };
     m.querySelector('#s').onclick=async()=>{ const k=m.querySelector('#k').value.trim();
-      if(!/^[A-Za-z0-9_\-]{20,200}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
+      if(!/^[A-Za-z0-9_.\-]{20,300}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
       const sb=m.querySelector('#s'); sb.disabled=true; sb.textContent='Saving…'; let helperOk=false, note='';
       if(!LOCAL){ try{ await SYNC.saveSecret({gemini:k,at:Date.now(),by:SYNC.me()}); }catch(e){ note='The database rules need updating before the key can be saved there (the helper does this automatically once it’s on version 8). '; } }
       if(h&&h.url){ try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'setkey',gemini:k}),redirect:'follow'}); const j=JSON.parse(await r.text()); if(j.ok) helperOk=true; else note+=(j.error||'')+' '; }

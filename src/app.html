@@ -2187,7 +2187,7 @@ function doPost(e) {
   let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
   if (b.key !== KEY) return out({ error: 'not allowed · helper key ends ' + KEY.slice(-4) });
   const props = PropertiesService.getScriptProperties();
-  if (b.action === 'setkey') { if (!/^[A-Za-z0-9_\\-]{20,200}$/.test(b.gemini || '')) return out({ error: 'That does not look like a Gemini key' }); props.setProperty('GEMINI_KEY', b.gemini); props.deleteProperty('GEMINI_MODEL'); return out({ ok: true }); }
+  if (b.action === 'setkey') { if (!/^[A-Za-z0-9_.\\-]{20,300}$/.test(b.gemini || '')) return out({ error: 'That does not look like a Gemini key' }); props.setProperty('GEMINI_KEY', b.gemini); props.deleteProperty('GEMINI_MODEL'); return out({ ok: true }); }
   if (b.action === 'ping') return out({ ok: true, helper: 2, hasKey: !!props.getProperty('GEMINI_KEY') });
   const gk = props.getProperty('GEMINI_KEY');
   if (!gk) return out({ error: 'nokey' });
