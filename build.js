@@ -15,7 +15,7 @@ function helperCode() {
   for (const m of app.matchAll(/^\s*([A-Z]{3}):\['([^']*)','([A-Za-z_\/]+)'/gm)) tz[m[1]] = [m[3], m[2]];
   return fs.readFileSync('notifier/Code.gs', 'utf8').replace('{/*@TZ@*/}', () => JSON.stringify(tz).replace(/\],/g, '],\n  '));
 }
-html = html.replace('/*@LIBS@*/', () => libs).replace('/*@SYNC@*/', () => sync).replace('/*@ROSTER@*/', () => fs.readFileSync('src/roster-parse.js', 'utf8')).replace('/*@NOTIFIER@*/null', () => JSON.stringify({ code: helperCode(), manifest: fs.readFileSync('notifier/appsscript.json', 'utf8') })).replace('/*@WORLD@*/', () => world).replace('/*@CONFIG@*/null', () => config);
+html = html.replace('/*@LIBS@*/', () => libs).replace('/*@SYNC@*/', () => sync).replace('/*@HOME@*/', () => fs.readFileSync('src/home.js', 'utf8').replace('/*@RECIPES@*/[]', () => JSON.stringify(JSON.parse(fs.readFileSync('src/recipes.json', 'utf8'))))).replace('/*@ROSTER@*/', () => fs.readFileSync('src/roster-parse.js', 'utf8')).replace('/*@NOTIFIER@*/null', () => JSON.stringify({ code: helperCode(), manifest: fs.readFileSync('notifier/appsscript.json', 'utf8') })).replace('/*@WORLD@*/', () => world).replace('/*@CONFIG@*/null', () => config);
 const version = 'fs-' + Date.now().toString(36);
 html = html.replace('/*@VERSION@*/', version);
 fs.writeFileSync(path.join(out, 'index.html'), html);

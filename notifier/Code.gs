@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 6;
+const HELPER_VERSION = 7;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -32,7 +32,8 @@ function tick() {
   for (const h of listDocs('households')) {
     let err = '';
     try {
-      const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights') };
+      const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights'), renewals: [] };
+      try { data.renewals = listDocs('households/' + h._id + '/renewals'); } catch (e) {}
       // private entries: each member's own corner. Reminders for these go only to that member's own phones.
       for (const who of (h.members || [])) for (const c of ['events', 'todos']) {
         try { listDocs('households/' + h._id + '/private/' + encodeURIComponent(who) + '/' + c).forEach(x => { x._owner = who; data[c].push(x); }); } catch (e) {}
@@ -59,7 +60,7 @@ function planNotifications(h, all, now, already) {
   for (const hash of Object.keys(devices)) {
     const dev = devices[hash]; if (!dev || !dev.token) continue;
     const mine = x => !x._owner || (dev.email && x._owner === String(dev.email).toLowerCase());
-    data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights };
+    data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights, renewals: all.renewals || [] };
     const lead = (dev.lead || 30) * 60e3;
     // 1) reminders before timed entries (today and early tomorrow)
     if (dev.remind !== false) for (const e of data.events) {
@@ -92,6 +93,18 @@ function planNotifications(h, all, now, already) {
         if (items.length && dev.private) out.push({ device: hash, key, tag: 'morning' + todayK, title: '☀️ Family Screen', body: 'You have ' + items.length + (items.length === 1 ? ' thing' : ' things') + ' on today.' });
         else if (items.length) out.push({ device: hash, key, tag: 'morning' + todayK, title: '☀️ Today: ' + items.length + (items.length === 1 ? ' thing' : ' things'), body: items.slice(0, 6).join('\n') + (items.length > 6 ? '\n+' + (items.length - 6) + ' more' : '') });
       }
+    }
+    // renewals (WOF, rego, insurance…): a month before, a week before and on the day, at 9am
+    if (dev.remind !== false && now.getHours() === 9 && now.getMinutes() < 15) for (const r of data.renewals) {
+      if (!r.due) continue;
+      const days = Math.round((at(r.due, '12:00') - at(todayK, '12:00')) / 864e5);
+      const stage = days === 30 ? '30' : days === 7 ? '7' : days === 0 ? '0' : days === -3 ? 'late' : '';
+      if (!stage) continue;
+      const key = 'rn|' + hash + '|' + r.id + '|' + r.due + '|' + stage;
+      if (already(key)) continue;
+      const what = (r.emoji || '📌') + ' ' + r.what + (r.item ? ' · ' + r.item : '');
+      const when = days === 0 ? 'is due today' : days < 0 ? 'was due ' + (-days) + ' days ago' : 'is due in ' + days + ' days';
+      out.push({ device: hash, key, tag: 'rn' + r.id, title: dev.private ? '📌 Family Screen' : what, body: dev.private ? 'A renewal ' + when + '.' : 'Renewal ' + when + (r.cost ? ' · $' + r.cost : '') + (r.ref ? ' · ' + r.ref : '') });
     }
     // 3) booked jobs whose time has passed: did it get done?
     if (dev.jobs !== false) for (const t of data.todos) {

@@ -268,6 +268,59 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .space .starsbg{position:absolute;inset:0;pointer-events:none}
 .space .starsbg i{position:absolute;border-radius:50%;background:#fff}
 .space .stage{position:relative;display:grid;place-items:center;min-height:0}
+.mealbtn span{letter-spacing:.04em}
+#mealLayer:empty{display:none}
+.meals{position:fixed;inset:0;z-index:40;background:var(--bg,#f6f1e7);display:flex;flex-direction:column;overflow:hidden}
+.mhead{display:flex;align-items:center;gap:14px;padding:14px 20px;flex-wrap:wrap}.mhead h2{margin:0;font-size:28px}
+.mnav{display:flex;align-items:center;gap:8px;font-size:18px}.mnav button{width:42px;height:42px;border-radius:12px;background:#fff;font-size:24px;font-weight:800;border:1px solid var(--line)}
+.macts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}.macts button{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 14px;font:inherit;font-size:17px;font-weight:700}.macts button:disabled{opacity:.45}
+.mclose{width:46px;height:46px;border-radius:14px;background:#fff;border:1px solid var(--line);font-size:20px;font-weight:800}
+.mweek{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:10px;padding:0 20px 20px;overflow:auto}
+.mday{background:var(--card,#fff);border-radius:18px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.mday.today{outline:3px solid #f59e0b}.mday.past{opacity:.6}
+.mdl{display:flex;flex-direction:column;gap:2px}.mdl b{font-size:20px}.mdl span{color:var(--muted);font-size:14px}
+.mhome{display:flex;align-items:center;gap:3px;background:none;padding:2px 0;font:inherit;text-align:left}.mhome i{width:12px;height:12px;border-radius:50%;display:inline-block}.mhome small{margin-left:4px;color:var(--muted);font-size:13px}
+.mslots{display:flex;flex-direction:column;gap:8px;flex:1}.msmall{display:flex;flex-direction:column;gap:6px}
+.mtile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;background:#fff7e6;border-radius:14px;padding:8px 10px;font:inherit;border:1px solid #f1e3c4;min-width:0}
+.mtile.big{min-height:110px;justify-content:center}.mtile .me{font-size:26px}.mtile.big .me{font-size:34px}.mtile .mn{font-weight:800;font-size:16px;line-height:1.2;overflow-wrap:anywhere}.mtile small{color:var(--muted);font-size:12px}
+.mtile.add{background:none;border:2px dashed var(--line);color:var(--muted);font-weight:700;align-items:center;justify-content:center;font-size:14px;padding:6px}.mtile.add.big{font-size:17px}
+.mtile.shopped{background:#eaf7ee;border-color:#cfe9d6}
+.mrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:0 0 8px;font:inherit}
+.mrow .me{font-size:30px}.mrt{display:flex;flex-direction:column;min-width:0}.mrt b{font-size:18px}.mrt small{color:var(--muted);font-size:14px}
+.mrow.ing .box{width:28px;height:28px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;flex:none}.mrow.ing.on .box{background:#a6e3c8;border-color:#7cc9a6}
+.mrow.gift.given{opacity:.55}
+.mtabs{margin-bottom:8px}
+.idea{margin-bottom:10px}.idea .mrow{margin:0}.ideab{display:flex;gap:6px;flex-wrap:wrap;padding:6px 4px 0}
+.rhead{display:flex;gap:14px;align-items:flex-start}.rem{font-size:52px;line-height:1}.rhead h2{margin:0}
+.rmeta{display:flex;gap:6px;flex-wrap:wrap;font-size:14px;color:var(--muted);align-items:center}.rmeta span{background:var(--soft,#f1ece2);border-radius:999px;padding:2px 10px}
+.rfav{font-size:34px;background:none;width:52px;height:52px}
+.rcols{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:24px;margin-top:6px}
+.ring{list-style:none;padding:0;margin:0;font-size:18px;line-height:1.5}.ring li.pantry{color:var(--muted)}
+.rsteps{font-size:18px;line-height:1.5;padding-left:24px;margin:0}.rsteps li{margin-bottom:8px}.rsteps small{color:#b45309;font-weight:700}
+.serves{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:16px;margin-left:8px}.serves button{width:34px;height:34px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:20px;font-weight:800}
+.rform{display:flex;flex-direction:column;gap:10px}.rform label{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:15px}.rform .row{gap:12px;flex-wrap:wrap}.rform textarea{font:inherit;font-size:16px;resize:vertical}
+.rnrow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-left:6px solid #cbd5e1;border-radius:12px;padding:10px 12px;margin:0 0 8px;font:inherit}
+.rnrow span{font-weight:700}.rnrow small{color:var(--muted);white-space:nowrap}.rnrow.near{border-left-color:#facc15}.rnrow.soon{border-left-color:#f59e0b}.rnrow.over{border-left-color:#ef4444;background:#fff1f1}
+#todoPanel .rnrow{margin:0 10px 6px;width:calc(100% - 20px)}
+#cookmode{position:fixed;inset:0;z-index:70;background:#fffaf0;display:flex;flex-direction:column;padding:16px 22px calc(16px + env(safe-area-inset-bottom))}
+.chead{display:flex;align-items:center;gap:12px;font-size:20px}.chead b{flex:1}.ctms{display:flex;gap:6px;flex-wrap:wrap}.ctm{background:#fde68a;border-radius:999px;padding:4px 12px;font-weight:800;font-size:16px}.ctm.done{background:#fecaca;animation:blink 1s infinite}@keyframes blink{50%{opacity:.4}}
+.cstep{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:980px;margin:0 auto;width:100%;overflow:auto}
+.cnum{font-size:20px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:.05em}.ctext{font-size:clamp(24px,3.6vw,40px);line-height:1.35;font-weight:600;margin:10px 0 18px}
+.ctimer{align-self:flex-start;background:#fde68a;border-radius:16px;padding:14px 20px;font-size:20px;font-weight:800}
+.cing{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}.cing button{display:flex;align-items:center;gap:10px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;font-size:18px}
+.cing .box{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none;font-weight:800}.cing button.on{opacity:.55}.cing button.on .box{background:#a6e3c8;border-color:#7cc9a6}
+.cdots{display:flex;justify-content:center;gap:6px;margin:10px 0}.cdots i{width:9px;height:9px;border-radius:50%;background:#e5d9c3}.cdots i.on{background:#b45309;width:22px;border-radius:9px}
+.cnav{display:flex;gap:12px}.cnav button{flex:1;padding:18px;border-radius:18px;font-size:22px;font-weight:800;background:#fff;border:1px solid var(--line)}.cnav button.go{background:#a6e3c8;border-color:#7cc9a6;flex:2}.cnav button:disabled{opacity:.4}
+.aibusy{position:fixed;inset:0;z-index:80;background:rgba(43,47,58,.45);display:grid;place-items:center}.aibusy>div{background:#fff;border-radius:22px;padding:26px 34px;text-align:center;font-size:19px;font-weight:700}
+.spin{width:44px;height:44px;margin:0 auto 10px;border-radius:50%;border:5px solid #f1e3c4;border-top-color:#f59e0b;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:900px){
+  .meals{bottom:calc(64px + env(safe-area-inset-bottom))}
+  .mhead{padding:12px 12px 8px;gap:8px}.mhead h2{font-size:24px}.mclose{display:none}.macts{margin-left:0;width:100%}.macts button{flex:1;padding:9px 6px;font-size:15px}
+  .mweek{grid-template-columns:1fr;padding:0 12px 16px;gap:8px}
+  .mday{flex-direction:row;align-items:stretch;gap:10px}.mdl{width:74px;flex:none}.mslots{flex-direction:row;gap:6px}.mtile.big{flex:1.6;min-height:84px}.msmall{flex:1}
+  .rcols{grid-template-columns:1fr}
+  #cookmode{padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+}
 .gmode{position:absolute;left:16px;bottom:16px;z-index:4;display:flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:16px;padding:4px;gap:4px}
 .gmode button{color:#fff;font:inherit;font-size:17px;font-weight:700;padding:9px 14px;border-radius:12px;background:none}
 .gmode button.on{background:#fff;color:var(--ink)}
@@ -403,7 +456,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   .right{display:block;padding:10px}
   body[data-tab="cal"] .right{display:none}
   body[data-tab="todo"] #shopPanel,body[data-tab="shop"] #todoPanel{display:none}
-  body[data-tab="where"] .right{display:none}
+  body[data-tab="where"] .right,body[data-tab="meals"] .right{display:none}
   .right .panel{min-height:calc(100vh - 170px)}
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
   .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:22px;padding:4px;border-radius:12px}
@@ -590,6 +643,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
       <button class="cc" id="homeClock" aria-label="Open the globe"></button>
       <div id="awayBox" style="display:contents"></div>
       <button class="globebtn" id="globeBtn" aria-label="Where is everyone">🌏<span id="globeLbl">WHERE?</span></button>
+      <button class="globebtn mealbtn" id="mealBtn" aria-label="Meals">🍽️<span>MEALS</span></button>
       <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
       <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
     </div>
@@ -605,10 +659,11 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   <div class="dock" id="dock"></div>
 </div>
 <button class="pc-fab" id="pcFab"></button>
-<nav class="tabbar"><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button></nav>
+<nav class="tabbar"><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="meals">🍽️<span>Meals</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button></nav>
 <div id="gate" hidden></div>
 <div id="layer"></div>
 <div id="spaceLayer"></div>
+<div id="mealLayer"></div>
 
 <script>
 /* ===== Family Screen always runs on Auckland time, whatever time zone this phone is set to =====
@@ -796,6 +851,7 @@ function migrate(s){
 }
 function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
 let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
+['recipes','meals','renewals','gifts'].forEach(k=>S[k]=S[k]||[]);
 (()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
 let weekOff=0, monthOff=0;
 
@@ -1045,7 +1101,7 @@ function timelineHTML(key){
   };
 }
 function wireTimeline(box,key){
-  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ if(b.dataset.ev.startsWith('rn-')) editRenewal((S.renewals||[]).find(x=>'rn-'+x.id===b.dataset.ev)); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
   box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>{ if(isPhone()) setTab('where'); else openGlobe(); });
   const tl=box.querySelector('.tl');
@@ -1087,6 +1143,7 @@ const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p
 function itemsForDay(key){
   const out=[];
   for(const e of S.events) if(vis(e)&&shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+  for(const r of S.renewals||[]) if(r.due===key) out.push({k:'ev',sort:'00:00',e:{id:'rn-'+r.id,title:renewTitle(r)+' due',whos:[],date:key,time:''},key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const flyers=new Set();
   for(const f of S.flights){ if(!shown([f.who])) continue; const s=fS(f), e=fE(f);
@@ -1182,7 +1239,7 @@ function renderCal(){
   if(isPhone()&&$('#pcal')) renderPCal();
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
   cal.querySelectorAll('.day h3').forEach(h=>h.onclick=()=>openFridgeDay(h.parentElement.dataset.drop));
-  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev) return; if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ if(b.dataset.ev.startsWith('rn-')) editRenewal((S.renewals||[]).find(x=>'rn-'+x.id===b.dataset.ev)); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
   cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
 }
@@ -1260,6 +1317,7 @@ function renderTodo_(){
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
   let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Minimise the to-do list" aria-label="Minimise">»</button></div>
   ${chips}<form class="addrow" id="tForm"><input id="tIn" placeholder="${fw?'Add a job for '+esc(nm(fw))+'…':'Add a job…'}" autocomplete="off" enterkeyhint="done">${privCan()?`<button type="button" class="tlock ${tPriv?'on':''}" id="tLock" aria-label="Private" title="Private: only I can see it">${tPriv?'🔒':'🔓'}</button>`:''}<button aria-label="Add">＋</button></form>${tPriv?'<div class="tprivnote">🔒 New jobs are private: only you will see them</div>':''}<div class="list">`;
+  h+=renewSect();
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
       <div class="acts"><button class="ok" data-done="${t.id}">✓ Done</button><button data-move="${t.id}">📅 Move it</button><button data-unbook="${t.id}">↩ Back on the list</button></div></div>`; }).join('');
@@ -1270,6 +1328,7 @@ function renderTodo_(){
   if(!L.length) h+=`<p class="note" style="padding:12px">${fw?esc(nm(fw))+' has no jobs. Nice.':'No jobs. Nice.'}</p>`;
   p.innerHTML=h+'</div>';
   $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; const nt={id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:fw||(tPriv&&mePerson())||'',done:false,at:Date.now()}; const mp=mePerson(); if(mp) nt.from=mp; if(tPriv&&privCan()) nt.priv=true; S.todos.unshift(nt); save(); renderTodo(); $('#tIn').focus(); };
+  p.querySelectorAll('[data-rn]').forEach(b=>b.onclick=()=>editRenewal((S.renewals||[]).find(x=>x.id===b.dataset.rn)));
   p.querySelectorAll('[data-tick]').forEach(b=>b.onclick=()=>{ const x=S.todos.find(t=>t.id===b.dataset.tick); markDone(x,!x.done); });
   p.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ markDone(S.todos.find(t=>t.id===b.dataset.done),true); toast('Nice one ✓'); });
   p.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{ const t=S.todos.find(x=>x.id===b.dataset.move); openAdd(todoEv(t),()=>renderTodo(),'Move this job to a new day'); });
@@ -2036,6 +2095,8 @@ function openGlobe(){
   $('#gClose').onclick=()=>{ closeGlobe(); if(isPhone()) setTab('cal'); };
 }
 
+/*@HOME@*/
+
 /* ================= calendar files (.ics) ================= */
 function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
 function parseICS(text,who,isRoster,sid){
@@ -2110,6 +2171,34 @@ function doGet(e) {
   if (!/^https:\\/\\//i.test(url)) return ContentService.createTextOutput('bad link');
   const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
   return ContentService.createTextOutput(r.getContentText()).setMimeType(ContentService.MimeType.TEXT);
+}
+// Meal ideas and recipe reading (Gemini). The key lives in Script properties as GEMINI_KEY, never in the app.
+function doPost(e) {
+  const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+  let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
+  if (b.key !== KEY) return out({ error: 'not allowed · helper key ends ' + KEY.slice(-4) });
+  const props = PropertiesService.getScriptProperties(), gk = props.getProperty('GEMINI_KEY');
+  if (!gk) return out({ error: 'nokey' });
+  const parts = [{ text: String(b.prompt || '').slice(0, 60000) }];
+  if (b.url && /^https:\\/\\//i.test(b.url)) {
+    const page = UrlFetchApp.fetch(b.url, { muteHttpExceptions: true, followRedirects: true }).getContentText();
+    const ld = (page.match(/<script[^>]*ld\\+json[^>]*>([\\s\\S]*?)<\\/script>/gi) || []).join('\\n').slice(0, 30000);
+    const text = page.replace(/<script[\\s\\S]*?<\\/script>|<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').slice(0, 30000);
+    parts.push({ text: 'WEB PAGE (' + b.url + '):\\n' + ld + '\\n' + text });
+  }
+  if (b.file && b.file.data) parts.push({ inline_data: { mime_type: b.file.mime || 'image/jpeg', data: b.file.data } });
+  const call = model => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': gk }, muteHttpExceptions: true,
+    payload: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json' } }) });
+  let model = props.getProperty('GEMINI_MODEL') || 'gemini-3.6-flash', r = call(model);
+  if (r.getResponseCode() === 404) {   // model retired: pick the newest Flash model this key can use
+    const list = JSON.parse(UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': gk }, muteHttpExceptions: true }).getContentText()).models || [];
+    const ok = list.filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0 && /gemini-[\\d.]+-flash$/.test(m.name)).map(m => m.name.replace('models/', '')).sort((a, b) => parseFloat(b.split('-')[1]) - parseFloat(a.split('-')[1]));
+    if (ok.length) { model = ok[0]; props.setProperty('GEMINI_MODEL', model); r = call(model); }
+  }
+  const j = JSON.parse(r.getContentText() || '{}');
+  if (r.getResponseCode() !== 200) return out({ error: (j.error && j.error.message) || ('Gemini ' + r.getResponseCode()) });
+  const t = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+  return out({ ok: true, model, text: t.map(p => p.text || '').join('') });
 }`;
 let refreshing=false;
 async function fetchLink(src){
@@ -2464,7 +2553,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button><button class="opt" id="goRenew">📌 Car &amp; house renewals</button><button class="opt" id="goGifts">🎁 Gift ideas</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -2520,6 +2609,8 @@ function openSettings(){
     m.querySelectorAll('[data-srm]').forEach(b=>b.onclick=()=>{ const id=b.dataset.srm; S.shops=S.shops.filter(s=>s.id!==id); const fb=S.shops[S.shops.length-1].id; S.groceries.forEach(g=>{ if(g.shop===id) g.shop=fb; }); if(S.shopTab===id) S.shopTab='all'; re(); draw(); });
     m.querySelector('#sadd').onclick=()=>{ S.shops.push({id:uid(),name:'New shop',color:PASTELS[S.shops.length%8]}); re(); draw(); };
     m.querySelector('#goInstall').onclick=()=>{ close(); showInstall(); };
+    m.querySelector('#goRenew').onclick=()=>{ close(); openRenewals(); };
+    m.querySelector('#goGifts').onclick=()=>{ close(); openGifts(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
     m.querySelector('#goCards').onclick=()=>{ close(); openCards(); };
@@ -2585,7 +2676,7 @@ function showInstall(){
 }
 
 /* ================= phone layout: one section at a time ================= */
-function setTab(t,silent){ const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); window.scrollTo(0,0); if(t==='cal') renderPCal(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
+function setTab(t,silent){ const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
 
 /* ================= sign-in gate (synced mode) ================= */
 const GOOGLE_G='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -2630,8 +2721,9 @@ async function enterHome(){
     gate('error',(pd?'The family database said no.':'Could not reach the family database. Check the internet connection.')+' Signed in as '+(SYNC.me()||'?')+'. Details: '+(e.code||'')+' · '+String(e.message||e).slice(0,220)); }
 }
 let pendingRender=false, rTimer=null;
-let privWarned=false;
+let privWarned=false, rulesWarned=false;
 function syncChanged(what,err){
+  if(what==='rulesold'){ if(!rulesWarned){ rulesWarned=true; toast('Meals and renewals can’t sync yet: the database rules need updating (see the setup note)'); } return; }
   if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: the database rules need updating (Settings → Notifications)'); } return; }
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
@@ -2821,6 +2913,8 @@ window.addEventListener('popstate',()=>{
   backArmed=false;
   if(quitAsk){ quitAsk=false; history.back(); return; }
   if($('#layer').innerHTML){ closeModal(); reguard(); return; }
+  if($('#cookmode')){ $('#cookmode').remove(); reguard(); return; }
+  if($('#mealLayer').innerHTML){ closeMeals(); if(isPhone()) setTab('cal',true); reguard(); return; }
   if(document.body.dataset.tab==='where'||$('#spaceLayer').innerHTML){ closeGlobe(); if(isPhone()) setTab('cal',true); reguard(); return; }
   if(isPhone()&&document.body.dataset.tab&&document.body.dataset.tab!=='cal'){ setTab('cal',true); reguard(); return; }
   if(isPhone()&&pView==='week'&&pwSnap!=='low'){ pwSnap='low'; lsSet('fs.pwsnap','low'); renderPCal(); reguard(); return; }
@@ -2872,10 +2966,11 @@ let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
-function renderAll(){ if(!S.people.length) return; setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
+function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
+$('#mealBtn').onclick=openMeals;
 $('#homeClock').onclick=openGlobe;
 document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'cal'; }catch(e){ return 'cal'; } })());

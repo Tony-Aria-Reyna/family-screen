@@ -3,7 +3,7 @@ const K='mockdb'; const load=()=>JSON.parse(localStorage.getItem(K)||'{}'); cons
 let subs=[]; const me=()=>{ try{ return JSON.parse(sessionStorage.getItem('mockuser')).email; }catch(e){ return null; } };
 window.addEventListener('storage',e=>{ if(e.key===K) fire(); });
 function fire(){ subs.forEach(s=>setTimeout(()=>s.run(),0)); }
-const memberOf=(d,path)=>{ if(path.startsWith('invites')) return true; const seg=path.split('/'); if(seg[2]==='private'&&seg[3]!==me()) return false; const hid=path.split('/')[1]; const h=d['households/'+hid]; return h&&h.members&&h.members.includes(me()); };
+const memberOf=(d,path)=>{ if(path.startsWith('invites')) return true; const seg=path.split('/'); if(seg[2]==='private'&&seg[3]!==me()) return false; if(seg[2]==='gifts'){ const hh=d['households/'+seg[1]]; if(!hh||!(hh.giftViewers||[]).includes(me())) return false; } const hid=path.split('/')[1]; const h=d['households/'+hid]; return h&&h.members&&h.members.includes(me()); };
 const deny=cb=>{ const e=new Error('denied'); e.code='permission-denied'; cb&&cb(e); };
 export const initializeFirestore=()=>({}); export const persistentLocalCache=()=>({}); export const persistentMultipleTabManager=()=>({}); export const connectFirestoreEmulator=()=>{};
 export const doc=(db,...p)=>({t:'doc',path:p.join('/'),id:p[p.length-1]}); export const collection=(db,...p)=>({t:'col',path:p.join('/')});

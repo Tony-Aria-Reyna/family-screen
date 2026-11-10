@@ -1,5 +1,5 @@
 // Keeps the Family Screen app itself working with no internet. Family data is cached by Firebase separately.
-const VERSION = 'fs-mwabs5p3';
+const VERSION = 'fs-mwacn8y6';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'earth-day.jpg', 'earth-night.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });

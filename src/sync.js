@@ -8,7 +8,13 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
   onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
-const COLS = ['events', 'flights', 'groceries', 'todos', 'sources'];
+const COLS = ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals'];
+// gift ideas: only the people picked in Settings can read them, so a 'no' here is normal, not an error
+const SOFT = ['gifts'];
+// newer lists: if the database rules haven't been updated yet, they just don't sync (and we say so) rather than locking the app
+const NEWER = ['recipes', 'meals', 'renewals'];
+let rulesOld = false;
+export const needsRules = () => rulesOld;
 
 let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null, devices = {}, notifier = null;
 
@@ -66,7 +72,7 @@ export const removeMember = email => updateDoc(doc(db, 'households', hid), { mem
 
 export function start(householdId, state, changed) {
   stop(); hid = householdId; S = state; onChange = changed;
-  synced = { settings: null, cols: Object.fromEntries(COLS.map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
+  synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
   privOk = true;
   unsub.push(onSnapshot(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
@@ -74,10 +80,11 @@ export function start(householdId, state, changed) {
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id)); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
-    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || [];
+    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
     synced.settings = JSON.stringify(settingsOf(S));
     onChange('settings');
   }, err => onChange('error', err)));
+  SOFT.forEach(listenSoft);
   for (const c of COLS) {
     unsub.push(onSnapshot(collection(db, 'households', hid, c), snap => {
       let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
@@ -85,7 +92,7 @@ export function start(householdId, state, changed) {
       mergeArray(S[c], list);
       const m = synced.cols[c]; m.clear(); S[c].forEach(x => { if (!(PRIV.includes(c) && x.priv)) m.set(x.id, JSON.stringify(clean(x))); });
       onChange(c);
-    }, err => onChange('error', err)));
+    }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { rulesOld = true; console.warn(c + ': database rules need updating'); onChange('rulesold'); } else onChange('error', err); }));
   }
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
   if (me()) for (const c of PRIV) unsub.push(onSnapshot(collection(db, 'households', hid, 'private', me(), c), snap => {
@@ -96,10 +103,22 @@ export function start(householdId, state, changed) {
   }, err => { privOk = false; console.warn('private entries unavailable', err && err.code); onChange('privoff'); }));
 }
 const PRIV = ['events', 'todos'];
-let privOk = true;
+let privOk = true; const softOk = {}, softUnsub = {};
+function listenSoft(c) {
+  if (softUnsub[c]) { try { softUnsub[c](); } catch (e) {} }
+  S[c] = S[c] || []; softOk[c] = false;
+  softUnsub[c] = onSnapshot(collection(db, 'households', hid, c), snap => {
+    softOk[c] = true; mergeArray(S[c], snap.docs.map(x => Object.assign({ id: x.id }, x.data())));
+    const m = synced.cols[c]; m.clear(); S[c].forEach(x => m.set(x.id, JSON.stringify(clean(x)))); onChange(c);
+  }, () => { softOk[c] = false; mergeArray(S[c], []); synced.cols[c].clear(); onChange(c); });
+  unsub.push(softUnsub[c]);
+}
+// call after changing who can see gift ideas (the database only re-checks when we ask again)
+export function retrySoft() { if (hid) SOFT.forEach(listenSoft); }
+export const canSee = c => !!softOk[c];
 export const privateOk = () => privOk;
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; }
-const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [] });
+const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [] });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
 // Write whatever changed since the last sync. Called after every edit; cheap when nothing changed.
@@ -120,16 +139,20 @@ export function push() {
     for (const id of [...pm.keys()]) if (!pseen.has(id)) { pops.push(['delete', doc(db, 'households', hid, 'private', me(), c, id)]); pm.delete(id); }
   }
   if (pops.length) { const b = writeBatch(db); pops.forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : b.delete(ref)); b.commit().catch(e => { privOk = false; onChange('privoff', e); }); }
-  for (const c of COLS) {
+  const nops = [];
+  for (const c of COLS.concat(SOFT.filter(c => softOk[c]))) {
+    if (NEWER.includes(c) && rulesOld) continue;
+    const ops0 = ops, ops1 = NEWER.includes(c) || SOFT.includes(c) ? nops : ops0;
     const m = synced.cols[c], seen = new Set();
-    for (const x of S[c]) {
+    for (const x of (S[c] || [])) {
       if (!x.id) continue; if (PRIV.includes(c) && x.priv) continue; seen.add(x.id);
       const body = clean(x); delete body.id;
       const j = JSON.stringify(clean(x));
-      if (m.get(x.id) !== j) { ops.push(['set', doc(db, 'households', hid, c, x.id), body]); m.set(x.id, j); }
+      if (m.get(x.id) !== j) { ops1.push(['set', doc(db, 'households', hid, c, x.id), body]); m.set(x.id, j); }
     }
-    for (const id of [...m.keys()]) if (!seen.has(id)) { ops.push(['delete', doc(db, 'households', hid, c, id)]); m.delete(id); }
+    for (const id of [...m.keys()]) if (!seen.has(id)) { ops1.push(['delete', doc(db, 'households', hid, c, id)]); m.delete(id); }
   }
+  if (nops.length) { const b = writeBatch(db); nops.slice(0, 450).forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : b.delete(ref)); b.commit().catch(e => { if (e && e.code === 'permission-denied') { rulesOld = true; onChange('rulesold'); } else console.warn(e); }); }
   for (let i = 0; i < ops.length; i += 400) {
     const b = writeBatch(db);
     ops.slice(i, i + 400).forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : k === 'update' ? b.update(ref, data) : b.delete(ref));
