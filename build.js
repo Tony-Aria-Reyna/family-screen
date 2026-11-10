@@ -21,7 +21,7 @@ html = html.replace('/*@VERSION@*/', version);
 fs.writeFileSync(path.join(out, 'index.html'), html);
 fs.writeFileSync(path.join(out, 'version.json'), JSON.stringify({ version }));
 fs.writeFileSync(path.join(out, 'sw.js'), fs.readFileSync('src/sw.js', 'utf8').replace('__VERSION__', version));
-for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'privacy.html']) fs.copyFileSync(path.join('src', f), path.join(out, f));
+for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'privacy.html', 'earth-day.jpg', 'earth-night.jpg']) fs.copyFileSync(path.join('src', f), path.join(out, f));
 fs.mkdirSync(path.join(out, 'lib'), { recursive: true });
 for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) fs.copyFileSync(path.join(__dirname, 'node_modules/pdfjs-dist/build', f), path.join(out, 'lib', f));
 console.log('built', version, (html.length / 1024).toFixed(0) + ' KB');
