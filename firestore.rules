@@ -29,6 +29,10 @@ service cloud.firestore {
       match /{col}/{id} {
         allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources'];
       }
+      // Private entries: only the person they belong to can read or change them (not even other family members)
+      match /private/{who}/{col}/{id} {
+        allow read, write: if isMember(hid) && email() == who;
+      }
     }
   }
 }

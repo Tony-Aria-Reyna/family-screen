@@ -151,6 +151,14 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .item .nm{flex:1;min-width:0}
 .item .sub{font-size:13px;color:var(--muted);text-align:right}
 .item .who{font-size:13px;color:var(--muted);display:block}
+.tchips{display:flex;gap:6px;overflow-x:auto;padding:2px 10px 6px;scrollbar-width:none}
+.tchip{flex:none;border:2px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font:inherit;font-size:15px;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.tchip b{font-weight:800}.tchip small{color:#15803d;font-size:12px;font-weight:700}
+.tchip.on{border-color:var(--ink);background:#fff7d6}
+.tchip .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.tlock{background:#f1f5f9!important;color:inherit!important;font-size:20px!important}
+.tlock.on{background:#ffe5a8!important}
+.tprivnote{font-size:13px;color:#92400e;padding:0 12px 4px}
 .item .cal{background:var(--soft);border-radius:12px;padding:7px 10px;font-size:15px;flex:none}
 .foot{padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:10px}
 .foot button{background:var(--soft);border-radius:12px;padding:9px 14px;font-size:15px}
@@ -983,7 +991,7 @@ function dayBlocks(key){
   const its=itemsForDay(key), all=[], timed=[], dayStart=kd(key); dayStart.setHours(0,0,0,0);
   const mins=d=>Math.round((d-dayStart)/6e4);
   for(const it of its){
-    if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=e.todoId?(e.done?'✅ ':'☐ '):'';
+    if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=(e.priv?LOCK:'')+(e.todoId?(e.done?'✅ ':'☐ '):'');
       if(!e.time){ all.push({bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁':'',names].filter(Boolean).join(' '),addr:e.addr,attr:`data-ev="${e.id}" data-occ="${key}"`}); continue; }
       const [h,m]=e.time.split(':').map(Number), s=h*60+m;
       timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e)+(AWAY_TZ&&e.time?' NZ':'')+evHere(e,key),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
@@ -1052,10 +1060,15 @@ setInterval(()=>{ const d=new Date(), y=(d.getHours()*60+d.getMinutes())/60*60; 
 setInterval(()=>{ document.querySelectorAll('.tl-now').forEach(n=>{ const d=new Date(); n.style.top=((d.getHours()*60+d.getMinutes())/60*HOUR)+'px'; n.querySelector('span').textContent=fmtTime(d,'Pacific/Auckland'); }); },30000);
 
 /* ================= calendar ================= */
+// Private entries live in my own corner of the database. Each device decides whether to show mine (phones yes, the fridge no).
+const showPriv=()=>lsGet('fs.showPriv',isPhone());
+const vis=x=>!x.priv||showPriv();
+const LOCK='🔒 ';
+const privCan=()=>!LOCAL&&!!(SYNC.me&&SYNC.me());
 const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p.show; });
 function itemsForDay(key){
   const out=[];
-  for(const e of S.events) if(shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+  for(const e of S.events) if(vis(e)&&shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const flyers=new Set();
   for(const f of S.flights){ if(!shown([f.who])) continue; const s=fS(f), e=fE(f);
@@ -1085,8 +1098,8 @@ const taxiSub=it=>(it.kind==='pick'?`travelling to sign-on ${fmtTime(it.t2,'Paci
 function evHTML(it,compact){
   if(it.k==='ev'){
     const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + ');
-    if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
-    const tk=e.todoId?(e.done?'✅ ':'☐ '):'', ck=e.todoId&&!e.done&&evPast(e)?' check':'';
+    if(compact) return `<div class="mpill" style="background:${evBg(e.whos)}">${e.priv?LOCK:''}${e.todoId?(e.done?'✅':'☐')+' ':''}${e.time?t12(e.time)+' ':''}${esc(e.title)}</div>`;
+    const tk=(e.priv?LOCK:'')+(e.todoId?(e.done?'✅ ':'☐ '):''), ck=e.todoId&&!e.done&&evPast(e)?' check':'';
     return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${tRange(e)}${AWAY_TZ&&e.time?' NZ':''}${evHere(e,it.key)}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}${e.addr?`<small class="addr" data-nav="${esc(e.addr)}">📍 ${esc(e.addr)}</small>`:''}</button>`;
   }
   if(it.k==='away'){
@@ -1207,23 +1220,28 @@ function evPast(e,now){
 const needsCheck=t=>{ const e=todoEv(t); return !!e&&!t.done&&evPast(e); };
 function whenTxt(e){ const d=new Date(e.date+'T12:00'), k=e.date, today=dk(new Date()), tom=dk(addDays(new Date(),1));
   return (k===today?'Today':k===tom?'Tomorrow':fmtD(d,{weekday:'short',day:'numeric',month:'short'}))+(e.time?' · '+t12(e.time):''); }
-function markDone(t,v){ t.done=v; const e=todoEv(t); if(e) e.done=v; save(); renderTodo(); renderCal(); }
+function markDone(t,v){ t.done=v; if(v) t.doneAt=Date.now(); else delete t.doneAt; const e=todoEv(t); if(e) e.done=v; save(); renderTodo(); renderCal(); }
 function unbook(t){ const e=todoEv(t); if(e) S.events=S.events.filter(x=>x.id!==e.id); t.eventId=null; save(); renderTodo(); renderCal(); }
 function keepInput(id,fn){ const el=document.getElementById(id), v=el?el.value:'', f=el&&document.activeElement===el; fn(); const n=document.getElementById(id); if(n&&v){ n.value=v; } if(n&&f) n.focus(); }
 function renderTodo(){ keepInput('tIn',renderTodo_); }
 function renderTodo_(){
   const p=$('#todoPanel'), now=new Date();
-  const check=S.todos.filter(t=>needsCheck(t));
-  const open=S.todos.filter(t=>!t.done&&!todoEv(t));
-  const booked=S.todos.filter(t=>!t.done&&todoEv(t)&&!needsCheck(t)).sort((a,b)=>(todoEv(a).date+(todoEv(a).time||'')).localeCompare(todoEv(b).date+(todoEv(b).time||'')));
-  const done=S.todos.filter(t=>t.done);
-  const whoTag=x=>person(x.who)?`<span class="who"><span class="dot" style="width:11px;height:11px;vertical-align:-1px;background:${col(x.who)}"></span> ${esc(nm(x.who))}</span>`:'';
+  const ALL=S.todos.filter(vis), fw=todoWho(), inF=t=>!fw||t.who===fw, L=ALL.filter(inF), wk=Date.now()-7*864e5;
+  const check=L.filter(t=>needsCheck(t));
+  const open=L.filter(t=>!t.done&&!todoEv(t));
+  const booked=L.filter(t=>!t.done&&todoEv(t)&&!needsCheck(t)).sort((a,b)=>(todoEv(a).date+(todoEv(a).time||'')).localeCompare(todoEv(b).date+(todoEv(b).time||'')));
+  const done=L.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+  const whoTag=x=>{ const fr=x.from&&x.from!==x.who&&person(x.from)?` · from ${esc(nm(x.from))}`:'';
+    return person(x.who)&&!fw?`<span class="who"><span class="dot" style="width:11px;height:11px;vertical-align:-1px;background:${col(x.who)}"></span> ${esc(nm(x.who))}${fr}</span>`:fr?`<span class="who">${fr.slice(3)}</span>`:''; };
+  const chip=(id,label,dot)=>{ const mine=ALL.filter(t=>!id||t.who===id), n=mine.filter(t=>!t.done).length, d=mine.filter(t=>t.done&&(t.doneAt||0)>wk).length;
+    return `<button class="tchip ${fw===id?'on':''}" data-tw="${id}">${dot?`<span class="dot" style="background:${dot}"></span>`:''}${esc(label)} <b>${n}</b>${d?`<small>✓${d} this week</small>`:''}</button>`; };
+  const chips=S.people.length>1?`<div class="tchips">${chip('','Everyone')}${S.people.map(q=>chip(q.id,q.name,q.color)).join('')}</div>`:'';
   const row=(x,extra)=>`<div class="item ${x.done?'done':''}" data-lift data-t="${x.id}">
      <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
-     <span class="nm">${esc(x.title)}${extra||''}${whoTag(x)}</span>
+     <span class="nm">${x.priv?LOCK:''}${esc(x.title)}${extra||''}${whoTag(x)}</span>
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
   let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Minimise the to-do list" aria-label="Minimise">»</button></div>
-  <form class="addrow" id="tForm"><input id="tIn" placeholder="Add a job…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form><div class="list">`;
+  ${chips}<form class="addrow" id="tForm"><input id="tIn" placeholder="${fw?'Add a job for '+esc(nm(fw))+'…':'Add a job…'}" autocomplete="off" enterkeyhint="done">${privCan()?`<button type="button" class="tlock ${tPriv?'on':''}" id="tLock" aria-label="Private" title="Private: only I can see it">${tPriv?'🔒':'🔓'}</button>`:''}<button aria-label="Add">＋</button></form>${tPriv?'<div class="tprivnote">🔒 New jobs are private: only you will see them</div>':''}<div class="list">`;
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
       <div class="acts"><button class="ok" data-done="${t.id}">✓ Done</button><button data-move="${t.id}">📅 Move it</button><button data-unbook="${t.id}">↩ Back on the list</button></div></div>`; }).join('');
@@ -1231,9 +1249,9 @@ function renderTodo_(){
   if(open.length) h+=(check.length||booked.length?'<div class="sect">To do</div>':'')+open.map(x=>row(x)).join('');
   if(booked.length) h+='<div class="sect">📅 Booked in</div>'+booked.map(x=>row(x,`<span class="when">📅 ${whenTxt(todoEv(x))}</span>`)).join('');
   if(done.length) h+='<div class="sect">Done</div>'+done.map(x=>row(x)).join('');
-  if(!S.todos.length) h+='<p class="note" style="padding:12px">No jobs. Nice.</p>';
+  if(!L.length) h+=`<p class="note" style="padding:12px">${fw?esc(nm(fw))+' has no jobs. Nice.':'No jobs. Nice.'}</p>`;
   p.innerHTML=h+'</div>';
-  $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; S.todos.unshift({id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:'',done:false}); save(); renderTodo(); $('#tIn').focus(); };
+  $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; const nt={id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:fw||(tPriv&&mePerson())||'',done:false,at:Date.now()}; const mp=mePerson(); if(mp) nt.from=mp; if(tPriv&&privCan()) nt.priv=true; S.todos.unshift(nt); save(); renderTodo(); $('#tIn').focus(); };
   p.querySelectorAll('[data-tick]').forEach(b=>b.onclick=()=>{ const x=S.todos.find(t=>t.id===b.dataset.tick); markDone(x,!x.done); });
   p.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ markDone(S.todos.find(t=>t.id===b.dataset.done),true); toast('Nice one ✓'); });
   p.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{ const t=S.todos.find(x=>x.id===b.dataset.move); openAdd(todoEv(t),()=>renderTodo(),'Move this job to a new day'); });
@@ -1244,25 +1262,46 @@ function renderTodo_(){
     el.onclick=e=>{ if(e.target.closest('[data-nolift]')) return; openTodo(t); };
     if(!t.done) liftable(el,{label:()=>'📅 '+t.title,targets:'[data-drop]',drop:tgt=>scheduleTodo(t,tgt.dataset.drop)});
   });
-  $('#tClear').onclick=()=>{ S.todos=S.todos.filter(x=>!x.done); save(); renderTodo(); };
+  $('#tClear').onclick=()=>{ S.todos=S.todos.filter(x=>!(x.done&&vis(x)&&inF(x))); save(); renderTodo(); };
+  p.querySelectorAll('[data-tw]').forEach(b=>b.onclick=()=>{ lsSet('fs.todoWho',b.dataset.tw); renderTodo(); });
+  const tl=$('#tLock'); if(tl) tl.onclick=()=>{ tPriv=!tPriv; lsSet('fs.tPriv',tPriv); renderTodo(); $('#tIn').focus(); };
+}
+// whose jobs this device is looking at ('' = everyone), and who "I" am on this device
+const todoWho=()=>{ const w=lsGet('fs.todoWho',''); return w&&person(w)?w:''; };
+let tPriv=lsGet('fs.tPriv',false);
+// Each person can be linked to their Google account, so whatever you do while signed in is recorded as you.
+function mePerson(){ const e=!LOCAL&&SYNC.me&&SYNC.me(), p=e&&S.people.find(q=>q.email===e); return p?p.id:''; }
+function linkMe(id){ const e=SYNC.me(); if(!e) return; S.people.forEach(q=>{ if(q.email===e) delete q.email; }); const q=person(id); if(q) q.email=e; save(); renderAll(); }
+function askWhoAmI(){
+  if(LOCAL||!SYNC.me||!SYNC.me()||mePerson()||!S.people.length||lsGet('fs.askedMe','')===SYNC.me()) return;
+  lsSet('fs.askedMe',SYNC.me());
+  modal((m,close)=>{ m.innerHTML=`<h2>👋 Which one is you?</h2><p class="note">You're signed in as <b>${esc(SYNC.me())}</b>. Linking it to your name means jobs you hand out show who they came from, and private entries know they're yours.</p>
+    <div class="opts">${S.people.filter(q=>!q.email).map(q=>`<button class="opt" data-mep="${q.id}"><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`).join('')}</div>
+    <div class="mact"><button class="cancel" id="cBtn">Not now</button></div>`;
+    m.querySelectorAll('[data-mep]').forEach(b=>b.onclick=()=>{ linkMe(b.dataset.mep); close(); toast('Linked to '+nm(b.dataset.mep)); });
+    m.querySelector('#cBtn').onclick=close; });
 }
 function scheduleTodo(t,date){
   const e=todoEv(t);
   if(e){ e.date=date; openAdd(e,()=>renderTodo(),'Move this job to a new day'); return; }
-  openAdd({whos:t.who?[t.who]:[],title:t.title,date,todoId:t.id},ev=>{ t.eventId=ev.id; save(); renderTodo(); });
+  openAdd({whos:t.who?[t.who]:[],title:t.title,date,todoId:t.id,priv:t.priv},ev=>{ t.eventId=ev.id; save(); renderTodo(); });
 }
 function openTodo(t){
-  const st={title:t.title,who:t.who||''};
+  const st={title:t.title,who:t.who||'',priv:!!t.priv};
   modal((m,close)=>{ const draw=()=>{
     m.innerHTML=`<h2>Job</h2><div class="step">What needs doing?</div><input class="txt" id="jIn" value="${esc(st.title)}">
     <div class="step">Whose job is it?</div>
     <div class="opts"><button class="opt ${!st.who?'on':''}" data-who="">Anyone</button>${S.people.map(p=>`<button class="opt ${st.who===p.id?'on':''}" data-who="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
+    ${privCan()?`<div class="opts" style="margin-top:10px"><button class="opt ${st.priv?'on':''}" id="privBtn"><span class="tick">${st.priv?'✓':''}</span>🔒 Private: only I can see it</button></div>`:''}
+    ${t.from&&person(t.from)?`<p class="note">Added by ${esc(nm(t.from))}${t.at?' · '+fmtD(new Date(t.at),{day:'numeric',month:'short'}):''}</p>`:''}
     <div class="mact"><button class="del" id="dBtn">Delete</button><button class="cancel" id="sch">📅 Put on calendar</button><button class="save" id="sBtn">Save</button></div>`;
     const ti=m.querySelector('#jIn'); ti.oninput=()=>st.title=ti.value;
-    m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ st.who=b.dataset.who; draw(); });
+    m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ st.title=ti.value; st.who=b.dataset.who; draw(); });
+    const pb=m.querySelector('#privBtn'); if(pb) pb.onclick=()=>{ st.title=ti.value; st.priv=!st.priv; draw(); };
+    const keep=()=>{ t.title=st.title.trim()||t.title; t.who=st.who; if(st.priv) t.priv=true; else delete t.priv; const e=todoEv(t); if(e){ if(t.priv) e.priv=true; else delete e.priv; } };
     m.querySelector('#dBtn').onclick=()=>{ const e=todoEv(t); if(e) S.events=S.events.filter(x=>x.id!==e.id); S.todos=S.todos.filter(x=>x.id!==t.id); save(); close(); renderTodo(); renderCal(); };
-    m.querySelector('#sBtn').onclick=()=>{ t.title=st.title.trim()||t.title; t.who=st.who; save(); close(); renderTodo(); };
-    m.querySelector('#sch').onclick=()=>{ t.title=st.title.trim()||t.title; t.who=st.who; save(); close(); scheduleTodo(t,dk(new Date())); };
+    m.querySelector('#sBtn').onclick=()=>{ keep(); save(); close(); renderTodo(); renderCal(); };
+    m.querySelector('#sch').onclick=()=>{ keep(); save(); close(); scheduleTodo(t,dk(new Date())); };
   }; draw(); });
 }
 
@@ -1529,7 +1568,7 @@ function addrSearch(input,list,onSet){
 }
 function openAdd(existing,onSaved,heading,opt){
   const isNew=!existing||!existing.id;
-  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing&&existing.id?(existing.time||''):(existing?.time||defaultTime()),dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null};
+  const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing&&existing.id?(existing.time||''):(existing?.time||defaultTime()),dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null,priv:!!(existing&&existing.priv)};
   const canRepeat=!(opt&&opt.noRepeat)&&!(existing&&existing.todoId);
   // Overseas phones can enter times in their own zone: vs holds the local date/time, st stays NZ (what gets saved)
   st.zone='nz'; const vs={dur:st.dur,typing:false};
@@ -1551,6 +1590,7 @@ function openAdd(existing,onSaved,heading,opt){
     <div class="step">2. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
     <div class="step">3. Which day?</div><div class="opts" id="dayBox"></div>
     ${canRepeat?'<div class="step">Does it repeat?</div><div id="rptBox"></div>':''}
+    ${privCan()?'<div class="opts" style="margin-top:10px"><button class="opt" id="privBtn"></button></div>':''}
     </div><div>
     <div class="step">4. What time, and how long?</div>${AWAY_TZ?`<div class="opts" id="zoneBox" style="margin-bottom:6px"><button class="opt sm" data-zone="nz">🇳🇿 NZ time</button><button class="opt sm" data-zone="here">📍 ${esc(HERE)} time</button></div><div class="nzwarn" id="zoneEq"></div>`:''}<div id="timeBox"></div>
     </div></div>
@@ -1572,6 +1612,8 @@ function openAdd(existing,onSaved,heading,opt){
       if(z==='here'){ const h=nzToHere(st.date,st.time); vs.date=h.date; vs.time=h.time; vs.dur=st.dur; vs.typing=false; } else syncNz();
       st.zone=z; buildDays(); ensure(); drawDays(); drawZone(); timePicker(m.querySelector('#timeBox'),cur()); eq(); });
     drawZone();
+    const pb=m.querySelector('#privBtn'), drawPriv=()=>{ if(!pb) return; pb.classList.toggle('on',st.priv); pb.innerHTML=`<span class="tick">${st.priv?'✓':''}</span>🔒 Private: only I can see it`; };
+    if(pb) pb.onclick=()=>{ st.priv=!st.priv; drawPriv(); }; drawPriv();
     const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); requirePin(()=>pickRosterPdf()); };
     drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),cur()); if(typeof eq==='function') eq(); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
     const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
@@ -1584,6 +1626,7 @@ function openAdd(existing,onSaved,heading,opt){
       if(!st.whos.length){ toast('Tap who it is for'); return; }
       if(!st.title.trim()){ toast('Type what it is'); ti.focus(); return; }
       const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),addr:st.addr.trim(),date:st.date,time:st.time,dur:st.time?st.dur||60:0};
+      if(st.priv) rec.priv=true; else if(existing) delete existing.priv;
       if(canRepeat){ if(st.rpt){ if(st.rpt.until&&st.rpt.until<st.date){ toast('The end date is before the start'); return; } rec.rpt=st.rpt; } else if(existing) delete existing.rpt; }
       let ev; if(isNew){ ev=Object.assign({id:uid()},rec); if(existing&&existing.todoId) ev.todoId=existing.todoId; S.events.push(ev); } else { ev=Object.assign(existing,rec); const tj=todoOf(ev); if(tj) tj.title=ev.title; }
       save(); close(); renderCal(); renderTodo(); toast(isNew?'Added to the calendar':'Saved'); if(onSaved) onSaved(ev);
@@ -2255,6 +2298,11 @@ function openSettings(){
       <p class="note">Stops the kids changing settings, loading rosters or changing Mummy's city. The calendar and lists stay open for everyone.</p>
       <div class="row">${S.pinHash?'<button class="xbtn" id="pinChange">Change PIN</button><button class="xbtn" id="pinOff">Turn off</button>':'<button class="xbtn" id="pinSet" style="background:#ffe5a8;font-weight:800">Set a PIN</button>'}
       ${S.pinHash?`<label class="small"><input type="checkbox" id="pinTrust" ${pinTrusted()?'checked':''}> Don't ask on this device (a parent's phone)</label>`:''}</div></div>
+    ${privCan()?`<div class="srccard" style="margin:12px 0"><h4>🔒 Private entries on this device</h4>
+      <p class="note">Anyone can tick “Private” on a calendar entry or a job. It's saved where only their own Google account can open it, so it never shows on anyone else's phone. The fridge hides private entries even when it's signed in as you.</p>
+      <label class="small"><input type="checkbox" id="privShow" ${showPriv()?'checked':''}> Show my private entries on this device</label>
+      <div class="row" style="margin-top:8px;align-items:center"><span class="small">Signed in as ${esc(SYNC.me())}, which is</span>${S.people.map(q=>`<button class="opt sm ${mePerson()===q.id?'on':''}" data-mep="${q.id}"><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`).join('')}</div>
+      <p class="note">Your Google account is linked to your name, so jobs you hand to someone else show “from ${esc(mePerson()?nm(mePerson()):'you')}”. ${S.people.filter(q=>q.email).map(q=>esc(q.name)+': '+esc(q.email)).join(' · ')}</p></div>`:''}
     <div class="step">People: type each name and tap a colour</div>
     ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
       ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
@@ -2277,6 +2325,8 @@ function openSettings(){
     m.querySelector('#goSync').onclick=()=>{ close(); openSync(); };
     const ps=m.querySelector('#pinSet')||m.querySelector('#pinChange'); if(ps) ps.onclick=()=>{ close(); setPinFlow(()=>openSettings()); };
     const po=m.querySelector('#pinOff'); if(po) po.onclick=()=>{ S.pinHash=''; save(); draw(); toast('Settings PIN turned off'); };
+    const pvs=m.querySelector('#privShow'); if(pvs) pvs.onchange=()=>{ lsSet('fs.showPriv',pvs.checked); renderAll(); toast(pvs.checked?'Your private entries show here':'Your private entries are hidden here'); };
+    m.querySelectorAll('.srccard [data-mep]').forEach(b=>b.onclick=()=>{ linkMe(b.dataset.mep); m.querySelectorAll('.srccard [data-mep]').forEach(x=>x.classList.toggle('on',x===b)); });
     const pt=m.querySelector('#pinTrust'); if(pt) pt.onchange=()=>{ lsSet('fs.pinTrust',pt.checked); toast(pt.checked?'This device won’t ask for the PIN':'This device will ask for the PIN'); };
     m.querySelectorAll('[data-pn]').forEach(i=>i.onchange=()=>{ person(i.dataset.pn).name=i.value.trim()||'—'; re(); });
     m.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{ person(b.dataset.pc).color=b.dataset.c; re(); draw(); });
@@ -2401,7 +2451,9 @@ async function enterHome(){
     gate('error',(pd?'The family database said no.':'Could not reach the family database. Check the internet connection.')+' Signed in as '+(SYNC.me()||'?')+'. Details: '+(e.code||'')+' · '+String(e.message||e).slice(0,220)); }
 }
 let pendingRender=false, rTimer=null;
+let privWarned=false;
 function syncChanged(what,err){
+  if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: the database rules need updating (Settings → Notifications)'); } return; }
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
 }
@@ -2555,7 +2607,7 @@ function renderPCal(){
 }
 function setPMode(m){ pMode=m; lsSet('fs.pmode2',m); renderPCal(); }
 function dayLines(key){ return itemsForDay(key).map(it=>{
-  if(it.k==='ev') return {c:evBg(it.e.whos),t:(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
+  if(it.k==='ev') return {c:evBg(it.e.whos),t:(it.e.priv?LOCK:'')+(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
   if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; return {c:col(it.who),t:a?'💼 '+a[0]:'✈️'}; }
   if(it.k==='arr') return {c:col(it.f.who),t:'🛬 '+fmtTime(fE(it.f),'Pacific/Auckland')};
   if(it.k==='taxi') return {c:col(it.f.who),t:'🚕 '+fmtTime(it.t,'Pacific/Auckland')};
@@ -2641,7 +2693,7 @@ let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
-function renderAll(){ if(!S.people.length) return; if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
+function renderAll(){ if(!S.people.length) return; setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?`Where's ${tName(tp)}?`:'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;

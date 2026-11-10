@@ -66,7 +66,8 @@ export const removeMember = email => updateDoc(doc(db, 'households', hid), { mem
 
 export function start(householdId, state, changed) {
   stop(); hid = householdId; S = state; onChange = changed;
-  synced = { settings: null, cols: Object.fromEntries(COLS.map(c => [c, new Map()])) };
+  synced = { settings: null, cols: Object.fromEntries(COLS.map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
+  privOk = true;
   unsub.push(onSnapshot(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
     const d = snap.data(); members = d.members || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
@@ -79,13 +80,24 @@ export function start(householdId, state, changed) {
   }, err => onChange('error', err)));
   for (const c of COLS) {
     unsub.push(onSnapshot(collection(db, 'households', hid, c), snap => {
-      const list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
+      let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
+      if (PRIV.includes(c)) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
       mergeArray(S[c], list);
-      const m = synced.cols[c]; m.clear(); S[c].forEach(x => m.set(x.id, JSON.stringify(clean(x))));
+      const m = synced.cols[c]; m.clear(); S[c].forEach(x => { if (!(PRIV.includes(c) && x.priv)) m.set(x.id, JSON.stringify(clean(x))); });
       onChange(c);
     }, err => onChange('error', err)));
   }
+  // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
+  if (me()) for (const c of PRIV) unsub.push(onSnapshot(collection(db, 'households', hid, 'private', me(), c), snap => {
+    const mine = snap.docs.map(x => Object.assign({ id: x.id }, x.data(), { priv: true }));
+    mergeArray(S[c], S[c].filter(e => !e.priv).concat(mine));
+    synced.priv[c].clear(); mine.forEach(x => synced.priv[c].set(x.id, JSON.stringify(clean(x))));
+    privOk = true; onChange(c);
+  }, err => { privOk = false; console.warn('private entries unavailable', err && err.code); onChange('privoff'); }));
 }
+const PRIV = ['events', 'todos'];
+let privOk = true;
+export const privateOk = () => privOk;
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; }
 const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [] });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
@@ -96,10 +108,22 @@ export function push() {
   const ops = [];
   const st = JSON.stringify(settingsOf(S));
   if (st !== synced.settings) { ops.push(['update', doc(db, 'households', hid), JSON.parse(st)]); synced.settings = st; }
+  // my private entries go to their own place (a separate batch, so a problem there never blocks the rest)
+  const pops = [];
+  if (me()) for (const c of PRIV) {
+    const pm = synced.priv[c], pseen = new Set();
+    for (const x of S[c]) {
+      if (!x.id || !x.priv) continue; pseen.add(x.id);
+      const body = clean(x); delete body.id; const j = JSON.stringify(clean(x));
+      if (pm.get(x.id) !== j) { pops.push(['set', doc(db, 'households', hid, 'private', me(), c, x.id), body]); pm.set(x.id, j); }
+    }
+    for (const id of [...pm.keys()]) if (!pseen.has(id)) { pops.push(['delete', doc(db, 'households', hid, 'private', me(), c, id)]); pm.delete(id); }
+  }
+  if (pops.length) { const b = writeBatch(db); pops.forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : b.delete(ref)); b.commit().catch(e => { privOk = false; onChange('privoff', e); }); }
   for (const c of COLS) {
     const m = synced.cols[c], seen = new Set();
     for (const x of S[c]) {
-      if (!x.id) continue; seen.add(x.id);
+      if (!x.id) continue; if (PRIV.includes(c) && x.priv) continue; seen.add(x.id);
       const body = clean(x); delete body.id;
       const j = JSON.stringify(clean(x));
       if (m.get(x.id) !== j) { ops.push(['set', doc(db, 'households', hid, c, x.id), body]); m.set(x.id, j); }
@@ -137,11 +161,13 @@ export async function exportHousehold() {
   const out = { exported: new Date().toISOString() };
   const h = await getDoc(doc(db, 'households', hid)); const hd = Object.assign({}, h.data()); delete hd.devices; delete hd.linkHelper; out.family = hd;
   for (const c of COLS) { const r = await getDocs(collection(db, 'households', hid, c)); out[c] = r.docs.map(d => Object.assign({ id: d.id }, d.data())); }
+  for (const c of ['events', 'todos']) try { const r = await getDocs(collection(db, 'households', hid, 'private', me(), c)); out['myPrivate_' + c] = r.docs.map(d => Object.assign({ id: d.id }, d.data())); } catch (e) {}
   return out;
 }
 export async function deleteHousehold() {
   const id = hid;
   for (const c of COLS) { const r = await getDocs(collection(db, 'households', id, c)); for (let i = 0; i < r.docs.length; i += 400) { const b = writeBatch(db); r.docs.slice(i, i + 400).forEach(d => b.delete(d.ref || doc(db, 'households', id, c, d.id))); await b.commit(); } }
+  for (const c of ['events', 'todos']) try { const r = await getDocs(collection(db, 'households', id, 'private', me(), c)); const b = writeBatch(db); r.docs.forEach(d => b.delete(d.ref)); await b.commit(); } catch (e) {}
   stop(); await deleteDoc(doc(db, 'households', id));
 }
 

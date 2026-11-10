@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 5;
+const HELPER_VERSION = 6;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -33,6 +33,10 @@ function tick() {
     let err = '';
     try {
       const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights') };
+      // private entries: each member's own corner. Reminders for these go only to that member's own phones.
+      for (const who of (h.members || [])) for (const c of ['events', 'todos']) {
+        try { listDocs('households/' + h._id + '/private/' + encodeURIComponent(who) + '/' + c).forEach(x => { x._owner = who; data[c].push(x); }); } catch (e) {}
+      }
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
@@ -46,13 +50,16 @@ function tick() {
 }
 
 /* ---------- what to send (pure logic, no network) ---------- */
-function planNotifications(h, data, now, already) {
+function planNotifications(h, all, now, already) {
+  let data = all;
   const out = [], devices = h.devices || {}, people = h.people || [];
   const nameOf = id => ((people.find(p => p.id === id) || {}).name) || '';
   const todayK = keyOf(now), tomorrowK = keyOf(addDays(now, 1));
   const follows = (dev, whos) => !dev.people || !dev.people.length || !whos || !whos.length || whos.indexOf('all') >= 0 || whos.some(w => dev.people.indexOf(w) >= 0);
   for (const hash of Object.keys(devices)) {
     const dev = devices[hash]; if (!dev || !dev.token) continue;
+    const mine = x => !x._owner || (dev.email && x._owner === String(dev.email).toLowerCase());
+    data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights };
     const lead = (dev.lead || 30) * 60e3;
     // 1) reminders before timed entries (today and early tomorrow)
     if (dev.remind !== false) for (const e of data.events) {
