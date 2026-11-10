@@ -275,7 +275,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .tvedit{background:#ffe5a8;border-radius:12px;padding:8px 14px;font-weight:800;font-size:16px}.tvhint{font-size:13px;color:var(--muted);margin-top:6px}
 .tvlist{max-height:min(62vh,600px);overflow:auto;margin-top:10px;overscroll-behavior:contain}
 .tvhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.tvhead h2{margin:0}.tvhead .save{padding:10px 22px}
-.tvp.tvall{border-color:var(--ink)}.tvp.tvall.on{background:#ffe5a8}
+.tvp.tvall{border-color:var(--ink)}.tvp.tvstar{border-color:#e0b100}
+.tvwho{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-2px 0 10px;font-size:14px;color:var(--muted)}.tvwho span{margin-right:4px}.tvwish{font-size:15px;font-weight:700;margin:-2px 0 8px}.tvp.tvall.on{background:#ffe5a8}
 @media (max-width:900px){
   .scrim.tvscrim{display:block;inset:0 0 auto 0;padding:0}
   .modal.tvsheet{display:flex;flex-direction:column;height:100dvh;max-height:none;border-radius:0;padding:14px 14px calc(10px + env(safe-area-inset-bottom))}
@@ -1747,7 +1748,9 @@ function deadReckon(f,from,to,now){
 }
 /* ================= places we've been (one pin per country, a colour per person) ================= */
 let globeTravel=false;
-const travellers=()=>S.people.filter(p=>p.id!=='all');
+const travellers=()=>S.people.filter(p=>p.id!=='all'&&!(S.tvOff||[]).includes(p.id));   // people who are on the travel map (can be switched off)
+const wished=key=>(S.wish||[]).includes(key);
+function setWish(key,on){ const w=(S.wish||[]).filter(k=>k!==key); if(on) w.push(key); S.wish=w; save(); }
 // tiny places the world map is too coarse to draw: [name, lon, lat]
 const SMALL_PLACES=[['Singapore',103.82,1.35],['Hong Kong',114.17,22.32],['Macau',113.54,22.2],['Cook Islands',-159.78,-21.24],['Samoa',-172.1,-13.76],['American Samoa',-170.7,-14.28],['Tonga',-175.2,-21.18],['Niue',-169.87,-19.05],
   ['French Polynesia',-149.43,-17.65],['Tuvalu',179.2,-8.52],['Kiribati',173,1.42],['Palau',134.58,7.51],['Guam',144.79,13.44],['Northern Mariana Islands',145.75,15.18],['Marshall Islands',171.18,7.13],['Micronesia',158.22,6.92],['Nauru',166.93,-0.52],
@@ -1769,7 +1772,7 @@ function places(){
     .sort((a,b)=>a.name.localeCompare(b.name));
   return PLACES;
 }
-const visitedBy=key=>((S.visited||{})[key]||[]).filter(id=>person(id)&&id!=='all');
+const visitedBy=key=>((S.visited||{})[key]||[]).filter(id=>person(id)&&id!=='all'&&!(S.tvOff||[]).includes(id));
 function setVisited(key,ids){ if(!S.visited) S.visited={}; if(ids.length) S.visited[key]=ids; else delete S.visited[key]; save(); }
 const countFor=id=>Object.keys(S.visited||{}).filter(k=>visitedBy(k).includes(id)).length;
 const countAll=()=>Object.keys(S.visited||{}).filter(k=>visitedBy(k).length).length;
@@ -1777,6 +1780,7 @@ function travelCardHTML(){
   const ppl=travellers().map(q=>({q,n:countFor(q.id)})).sort((a,b)=>b.n-a.n);
   return `<div class="gc-k">📍 Places we've been</div><div class="gc-t">${countAll()}<small> ${countAll()===1?'country':'countries'} as a family</small></div>
     <div class="tvppl">${ppl.map(x=>`<span><i style="background:${x.q.color}"></i>${esc(x.q.name)} <b>${x.n}</b></span>`).join('')}</div>
+    ${(S.wish||[]).length?`<div class="tvwish">⭐ ${(S.wish||[]).length} on our dream list</div>`:''}
     <button class="tvedit" id="tvEdit">✏️ Our list</button><div class="tvhint">Tap a country on the globe to pin it</div>`;
 }
 function openCountry(pl,after){
@@ -1784,8 +1788,10 @@ function openCountry(pl,after){
   modal((m,close)=>{ const draw=()=>{
     m.innerHTML=`<h2>📍 ${esc(pl.name)}</h2><div class="step">Who's been there? <span style="font-weight:500">Tap everyone</span></div>
       <div class="opts">${travellers().map(q=>{ const on=st.includes(q.id); return `<button class="opt ${on?'on':''}" data-tv="${q.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`; }).join('')}</div>
+      <div class="step">Dream list</div><div class="opts"><button class="opt ${wished(pl.key)?'on':''}" id="tvW"><span class="tick">${wished(pl.key)?'✓':''}</span>⭐ We want to go here</button></div>
       <div class="mact"><button class="save" id="ok">Done</button></div>`;
     m.querySelectorAll('[data-tv]').forEach(b=>b.onclick=()=>{ const id=b.dataset.tv, i=st.indexOf(id); if(i>=0) st.splice(i,1); else st.push(id); setVisited(pl.key,[...st]); draw(); });
+    m.querySelector('#tvW').onclick=()=>{ setWish(pl.key,!wished(pl.key)); draw(); };
     m.querySelector('#ok').onclick=()=>{ close(); if(after) after(); };
   }; draw(); });
 }
@@ -1793,24 +1799,30 @@ function openTravels(after){
   let q='';
   modal((m,close)=>{
     m.classList.add('wide','tvsheet');
-    m.innerHTML=`<div class="tvhead"><h2>📍 Places we've been</h2><button class="save" id="ok">Done</button></div><input class="txt" id="tvQ" placeholder="Search for a country" autocomplete="off" enterkeyhint="search"><div class="tvlist" id="tvL"></div>`;
-    const L=m.querySelector('#tvL'), ppl=travellers(), done=()=>{ close(); if(after) after(); };
+    m.innerHTML=`<div class="tvhead"><h2>📍 Places we've been</h2><button class="save" id="ok">Done</button></div><div class="tvwho" id="tvWho"></div><input class="txt" id="tvQ" placeholder="Search for a country" autocomplete="off" enterkeyhint="search"><div class="tvlist" id="tvL"></div>`;
+    const L=m.querySelector('#tvL'); let ppl=travellers(); const done=()=>{ close(); if(after) after(); };
+    // who's on the map: switching someone off hides them here and on the globe (their ticks are kept)
+    const drawWho=()=>{ const w=m.querySelector('#tvWho'), off=S.tvOff||[];
+      w.innerHTML='<span>On the map:</span>'+S.people.filter(x=>x.id!=='all').map(x=>{ const on=!off.includes(x.id); return `<button class="tvp ${on?'on':''}" data-who="${x.id}" style="--c:${x.color}">${on?'✓ ':''}${esc(x.name)}</button>`; }).join('');
+      w.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ const id=b.dataset.who, o=S.tvOff||[]; if(!o.includes(id)&&S.people.filter(x=>x.id!=='all'&&!o.includes(x.id)).length<=1){ toast('Keep at least one person on the map'); return; }
+        S.tvOff=o.includes(id)?o.filter(x=>x!==id):[...o,id]; save(); ppl=travellers(); drawWho(); draw(); }); };
     // phones: fill the screen above the keyboard so the list never hides behind it
     const vv=window.visualViewport, fit=()=>{ if(!m.isConnected){ vv&&vv.removeEventListener('resize',fit); return; } if(isPhone()&&vv){ m.style.height=vv.height+'px'; m.parentElement.style.top=vv.offsetTop+'px'; } };
     if(isPhone()){ m.parentElement.classList.add('tvscrim'); if(vv){ vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit); } fit(); }
     const btns=key=>{ const on=visitedBy(key), all=ppl.length>1&&ppl.every(x=>on.includes(x.id));
-      return (ppl.length>1?`<button class="tvp tvall ${all?'on':''}" data-k="${esc(key)}" data-p="*" style="--c:#2b2f3a">${all?'✓ ':''}All of us</button>`:'')+ppl.map(x=>{ const o=on.includes(x.id); return `<button class="tvp ${o?'on':''}" data-k="${esc(key)}" data-p="${x.id}" style="--c:${x.color}">${o?'✓ ':''}${esc(x.name)}</button>`; }).join(''); };
+      return `<button class="tvp tvstar ${wished(key)?'on':''}" data-k="${esc(key)}" data-p="⭐" style="--c:#ffd45c" title="Dream list">⭐${wished(key)?' Dream':''}</button>`+(ppl.length>1?`<button class="tvp tvall ${all?'on':''}" data-k="${esc(key)}" data-p="*" style="--c:#2b2f3a">${all?'✓ ':''}All of us</button>`:'')+ppl.map(x=>{ const o=on.includes(x.id); return `<button class="tvp ${o?'on':''}" data-k="${esc(key)}" data-p="${x.id}" style="--c:${x.color}">${o?'✓ ':''}${esc(x.name)}</button>`; }).join(''); };
     // ticking only changes that row; the list re-sorts when you search again or reopen it
     const tick=b=>{ const key=b.dataset.k, cur=visitedBy(key), id=b.dataset.p;
+      if(id==='⭐'){ setWish(key,!wished(key)); const c=b.closest('.tvc'); c.innerHTML=btns(key); c.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>tick(x)); return; }
       const next=id==='*'?(ppl.every(x=>cur.includes(x.id))?[]:ppl.map(x=>x.id)):cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];
       setVisited(key,next); const c=b.closest('.tvc'); c.innerHTML=btns(key); c.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>tick(x)); };
     const draw=()=>{ const k=q.trim().toLowerCase(), rank=p=>p.name.toLowerCase().startsWith(k)?0:p.name.toLowerCase().includes(k)?1:2;
       const all=places().filter(p=>!k||p.name.toLowerCase().includes(k)||p.alt.includes(k)).sort((a,b)=>k?rank(a)-rank(b)||a.name.localeCompare(b.name):0);
-      const been=all.filter(p=>visitedBy(p.key).length), rest=all.filter(p=>!visitedBy(p.key).length);
+      const dream=all.filter(p=>wished(p.key)&&!visitedBy(p.key).length), been=all.filter(p=>visitedBy(p.key).length), rest=all.filter(p=>!visitedBy(p.key).length&&!wished(p.key));
       const row=p=>`<div class="tvrow"><span class="tvn">${esc(p.name)}</span><span class="tvc">${btns(p.key)}</span></div>`;
-      L.innerHTML=(been.length?`<div class="sect">Been there (${been.length})</div>`+been.map(row).join(''):'')+(rest.length?`<div class="sect">${k?'Other matches':'Everywhere else'}</div>`+rest.slice(0,k?60:400).map(row).join(''):'')+(!all.length?'<p class="note">No country by that name.</p>':'');
+      L.innerHTML=(dream.length?`<div class="sect">⭐ Dream list (${dream.length})</div>`+dream.map(row).join(''):'')+(been.length?`<div class="sect">Been there (${been.length})</div>`+been.map(row).join(''):'')+(rest.length?`<div class="sect">${k?'Other matches':'Everywhere else'}</div>`+rest.slice(0,k?60:400).map(row).join(''):'')+(!all.length?'<p class="note">No country by that name.</p>':'');
       L.scrollTop=0; L.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>tick(b)); };
-    const qi=m.querySelector('#tvQ'); qi.oninput=()=>{ q=qi.value; draw(); }; qi.onkeydown=e=>{ if(e.key==='Enter') qi.blur(); }; draw();
+    const qi=m.querySelector('#tvQ'); qi.oninput=()=>{ q=qi.value; draw(); }; qi.onkeydown=e=>{ if(e.key==='Enter') qi.blur(); }; drawWho(); draw();
     m.querySelector('#ok').onclick=done;
   });
 }
@@ -1968,6 +1980,12 @@ function openGlobe(){
       const n=ids.length, w=n*15+7, x=p[0]-w/2, y=p[1]-34;
       pins+=`<g class="tvpin"><path d="M${p[0]-6},${y+21} L${p[0]},${p[1]} L${p[0]+6},${y+21}Z" fill="#fff"/><rect x="${x}" y="${y}" width="${w}" height="24" rx="12" fill="#fff" filter="url(#pshadow)"/>${ids.map((id,i)=>`<circle cx="${x+11+i*15}" cy="${y+12}" r="6.5" fill="${col(id)}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`).join('')}</g>`;
       if(typeof zoomNow==='function'&&zoomNow()>=2.2){ const lw=pl.name.length*7.2+14; pins+=`<g transform="translate(${p[0]-lw/2},${p[1]+4})"><rect class="lbl-bg" width="${lw}" height="20" rx="10"/><text x="${lw/2}" y="14" text-anchor="middle" font-size="12" font-weight="700" fill="#2b2f3a">${esc(pl.name)}</text></g>`; }
+    }
+    for(const pl of places()){ if(!wished(pl.key)) continue;
+      if(pl.f){ const d=path(pl.f); if(d) h+=`<path d="${d}" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="4 3"/>`; }
+      const p=proj(pl.ll); if(!p||!visible(pl.ll)) continue; const off=visitedBy(pl.key).length?16:0, x=p[0]+off;
+      pins+=`<g class="tvpin"><circle cx="${x}" cy="${p[1]-8}" r="13" fill="#2b2f3a" stroke="#ffd45c" stroke-width="2" filter="url(#pshadow)"/><text x="${x}" y="${p[1]-3}" text-anchor="middle" font-size="14">⭐</text></g>`;
+      if(!visitedBy(pl.key).length&&typeof zoomNow==='function'&&zoomNow()>=2.2){ const lw=pl.name.length*7.2+14; pins+=`<g transform="translate(${p[0]-lw/2},${p[1]+8})"><rect class="lbl-bg" width="${lw}" height="20" rx="10"/><text x="${lw/2}" y="14" text-anchor="middle" font-size="12" font-weight="700" fill="#2b2f3a">${esc(pl.name)}</text></g>`; }
     }
     const hp=proj(homeLL); if(hp&&visible(homeLL)) pins+=`<circle cx="${hp[0]}" cy="${hp[1]}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2.5"/>`;
     return h+pins;
