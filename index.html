@@ -5068,7 +5068,7 @@ function renderClock(){
 /* ================= people bar + calendar navigation ================= */
 function renderBar(){
   $('#bar').innerHTML=S.people.map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('');
-  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ const p=person(b.dataset.p); p.show=!p.show; savePrefs(); renderBar(); renderCal(); });
+  $('#bar').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ const p=person(b.dataset.p); p.show=!p.show; savePrefs(); renderBar(); renderCal(); });
   renderCalHead();
 }
 let fDay=dk(new Date());
@@ -5079,7 +5079,7 @@ function renderCalHead(){
   else { const t=new Date(); label=fmtD(new Date(t.getFullYear(),t.getMonth()+monthOff,1),{month:'long',year:'numeric'}); }
   $('#calhead').innerHTML=`<span class="lbl">${label}</span><button class="arrow" id="prev" aria-label="Previous">‹</button><button class="pill" id="todayBtn">Today</button><button class="arrow" id="next" aria-label="Next">›</button>
     <div class="seg"><button data-v="day" class="${v==='day'?'on':''}">Day</button><button data-v="week" class="${v==='week'?'on':''}">Week</button><button data-v="month" class="${v==='month'?'on':''}">Month</button></div>`;
-  document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; save(); renderCalHead(); renderCal(); });
+  $('#calhead').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; save(); renderCalHead(); renderCal(); });
   const step=n=>{ if(v==='week') weekOff+=n; else if(v==='day') fDay=dk(addDays(kd(fDay),n)); else monthOff+=n; renderCalHead(); renderCal(); };
   $('#prev').onclick=()=>step(-1); $('#next').onclick=()=>step(1);
   $('#todayBtn').onclick=()=>{ weekOff=0; monthOff=0; fDay=dk(new Date()); renderCalHead(); renderCal(); };
@@ -7472,7 +7472,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwacn8y6';
+const FS_VERSION='fs-mwaexsm5';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
