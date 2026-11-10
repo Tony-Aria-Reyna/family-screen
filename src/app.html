@@ -156,6 +156,10 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .tchip b{font-weight:800}.tchip small{color:#15803d;font-size:12px;font-weight:700}
 .tchip.on{border-color:var(--ink);background:#fff7d6}
 .tchip .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.twho{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:2px 10px 8px}.twho span{font-weight:800;font-size:14px;color:#92400e;margin-right:2px}
+.twho button{display:flex;align-items:center;gap:5px;border:2px solid var(--c,#cbd5e1);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:15px;font-weight:700}.twho button i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.twho.ask{animation:askpulse .6s 2}@keyframes askpulse{50%{background:#fff3c4;border-radius:12px}}
+.tbulk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 12px 8px;font-size:14px;color:var(--muted)}.tbulk button{background:#ffe5a8;border-radius:12px;padding:7px 12px;font:inherit;font-weight:800;font-size:14px}
 .tlock{background:#f1f5f9!important;color:inherit!important;font-size:20px!important}
 .tlock.on{background:#ffe5a8!important}
 .tprivnote{font-size:13px;color:#92400e;padding:0 12px 4px}
@@ -1307,22 +1311,26 @@ function keepInput(id,fn){ const el=document.getElementById(id), v=el?el.value:'
 function renderTodo(){ keepInput('tIn',renderTodo_); }
 function renderTodo_(){
   const p=$('#todoPanel'), now=new Date();
-  const ALL=S.todos.filter(vis), fw=todoWho(), inF=t=>!fw||t.who===fw, L=ALL.filter(inF), wk=Date.now()-7*864e5;
+  const ALL=S.todos.filter(vis), fw=todoWho(), unas=t=>!person(t.who)||t.who==='all', inF=t=>fw==='_none'?unas(t):!fw||t.who===fw, L=ALL.filter(inF), wk=Date.now()-7*864e5;
   const check=L.filter(t=>needsCheck(t));
   const open=L.filter(t=>!t.done&&!todoEv(t));
   const booked=L.filter(t=>!t.done&&todoEv(t)&&!needsCheck(t)).sort((a,b)=>(todoEv(a).date+(todoEv(a).time||'')).localeCompare(todoEv(b).date+(todoEv(b).time||'')));
   const done=L.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
   const whoTag=x=>{ const fr=x.from&&x.from!==x.who&&person(x.from)?` · from ${esc(nm(x.from))}`:'';
     return person(x.who)&&!fw?`<span class="who"><span class="dot" style="width:11px;height:11px;vertical-align:-1px;background:${col(x.who)}"></span> ${esc(nm(x.who))}${fr}</span>`:fr?`<span class="who">${fr.slice(3)}</span>`:''; };
-  const chip=(id,label,dot)=>{ const mine=ALL.filter(t=>!id||t.who===id), n=mine.filter(t=>!t.done).length, d=mine.filter(t=>t.done&&(t.doneAt||0)>wk).length;
+  const chip=(id,label,dot)=>{ const mine=ALL.filter(t=>id==='_none'?unas(t):!id||t.who===id), n=mine.filter(t=>!t.done).length, d=mine.filter(t=>t.done&&(t.doneAt||0)>wk).length;
     return `<button class="tchip ${fw===id?'on':''}" data-tw="${id}">${dot?`<span class="dot" style="background:${dot}"></span>`:''}${esc(label)} <b>${n}</b>${d?`<small>✓${d} this week</small>`:''}</button>`; };
-  const chips=S.people.length>1?`<div class="tchips">${chip('','Everyone')}${S.people.filter(q=>q.id!=='all').map(q=>chip(q.id,q.name,q.color)).join('')}</div>`:'';
+  const nUn=ALL.filter(t=>!t.done&&unas(t)).length, me=mePerson();
+  const chips=S.people.length>1?`<div class="tchips">${me?chip(me,'Mine',col(me)):''}${chip('','Everyone')}${S.people.filter(q=>q.id!=='all'&&q.id!==me).map(q=>chip(q.id,q.name,q.color)).join('')}${nUn||fw==='_none'?chip('_none','❓ Not assigned'):''}</div>`:'';
+  const ask=fw===''||fw==='_none';
+  const whoRow=ask&&S.people.length>1?`<div class="twho" id="tWho" hidden><span>Who's it for?</span>${S.people.filter(q=>q.id!=='all').map(q=>`<button type="button" data-nw="${q.id}" style="--c:${q.color}"><i></i>${esc(q.name)}</button>`).join('')}<button type="button" data-nw="">Anyone</button>${privCan()&&me?'<button type="button" data-nw="__priv">🔒 Just me, private</button>':''}</div>`:'';
+  const bulk=fw==='_none'&&me&&nUn?`<div class="tbulk"><span>${nUn} job${nUn>1?'s':''} with no name.</span><button id="tMine">👤 Make them all mine</button></div>`:'';
   const row=(x,extra)=>`<div class="item ${x.done?'done':''}" data-lift data-t="${x.id}">
      <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
      <span class="nm">${x.priv?LOCK:''}${esc(x.title)}${extra||''}${whoTag(x)}</span>
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
   let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Minimise the to-do list" aria-label="Minimise">»</button></div>
-  ${chips}<form class="addrow" id="tForm"><input id="tIn" placeholder="${fw?'Add a job for '+esc(nm(fw))+'…':'Add a job…'}" autocomplete="off" enterkeyhint="done">${privCan()?`<button type="button" class="tlock ${tPriv?'on':''}" id="tLock" aria-label="Private" title="Private: only I can see it">${tPriv?'🔒':'🔓'}</button>`:''}<button aria-label="Add">＋</button></form>${tPriv?'<div class="tprivnote">🔒 New jobs are private: only you will see them</div>':''}<div class="list">`;
+  ${chips}<form class="addrow" id="tForm"><input id="tIn" placeholder="${fw&&fw!=='_none'?'Add a job for '+esc(nm(fw))+'…':'Add a job…'}" autocomplete="off" enterkeyhint="done">${privCan()?`<button type="button" class="tlock ${tPriv?'on':''}" id="tLock" aria-label="Private" title="Private: only I can see it">${tPriv?'🔒':'🔓'}</button>`:''}<button aria-label="Add">＋</button></form>${tPriv?'<div class="tprivnote">🔒 New jobs are private: only you will see them</div>':whoRow}${bulk}<div class="list">`;
   h+=billsSect()+renewSect();
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
@@ -1333,7 +1341,16 @@ function renderTodo_(){
   if(done.length) h+='<div class="sect">Done</div>'+done.map(x=>row(x)).join('');
   if(!L.length) h+=`<p class="note" style="padding:12px">${fw?esc(nm(fw))+' has no jobs. Nice.':'No jobs. Nice.'}</p>`;
   p.innerHTML=h+'</div>';
-  $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; const nt={id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:fw||(tPriv&&mePerson())||'',done:false,at:Date.now()}; const mp=mePerson(); if(mp) nt.from=mp; if(tPriv&&privCan()) nt.priv=true; S.todos.unshift(nt); save(); renderTodo(); $('#tIn').focus(); };
+  // adding a job: in a person's view it's theirs straight away; in "Everyone" you tap who it's for before it's saved
+  const addJob=(who,priv)=>{ const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; $('#tIn').value=''; const nt={id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:who||'',done:false,at:Date.now()}; const mp=mePerson(); if(mp) nt.from=mp; if(priv&&privCan()) nt.priv=true; S.todos.unshift(nt); save(); renderTodo(); $('#tIn').focus(); if(who&&fw&&fw!==who) toast('Added to '+nm(who)+'’s jobs'); };
+  const tw=$('#tWho'), tIn=$('#tIn');
+  if(tw){ tIn.oninput=()=>{ tw.hidden=!tIn.value.trim(); tw.classList.remove('ask'); }; tw.querySelectorAll('[data-nw]').forEach(b=>b.onclick=()=>{ const w=b.dataset.nw; if(w==='__priv') addJob(mePerson(),true); else addJob(w,false); }); }
+  $('#tForm').onsubmit=e=>{ e.preventDefault(); if(!tIn.value.trim()) return;
+    if(tPriv) return addJob(mePerson()||'',true);
+    if(fw&&fw!=='_none') return addJob(fw,false);
+    if(tw){ tw.hidden=false; tw.classList.remove('ask'); void tw.offsetWidth; tw.classList.add('ask'); return; }
+    addJob('',false); };
+  const tm=$('#tMine'); if(tm) tm.onclick=()=>{ const me2=mePerson(); const n=S.todos.filter(t=>!t.done&&unas(t)).length; if(!confirm('Put all '+n+' jobs with no name in your list?')) return; S.todos.forEach(t=>{ if(!t.done&&unas(t)) t.who=me2; }); save(); lsSet('fs.todoWho',me2); renderTodo(); toast(n+' jobs are now in your list'); };
   p.querySelectorAll('[data-rn]').forEach(b=>b.onclick=()=>editRenewal((S.renewals||[]).find(x=>x.id===b.dataset.rn)));
   p.querySelectorAll('[data-bills]').forEach(b=>b.onclick=()=>openBills(b.dataset.bills));
   p.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>openBill((S.bills||[]).find(x=>x.id===b.dataset.bill)));
@@ -1352,7 +1369,8 @@ function renderTodo_(){
   const tl=$('#tLock'); if(tl) tl.onclick=()=>{ tPriv=!tPriv; lsSet('fs.tPriv',tPriv); renderTodo(); $('#tIn').focus(); };
 }
 // whose jobs this device is looking at ('' = everyone), and who "I" am on this device
-const todoWho=()=>{ const w=lsGet('fs.todoWho',''); return w&&person(w)?w:''; };
+// each device remembers whose jobs it shows; phones start on their owner's own jobs, the fridge on everyone's
+const todoWho=()=>{ const w=lsGet('fs.todoWho',null); if(w===null) return isPhone()&&mePerson()?mePerson():''; if(w==='_none') return '_none'; return w&&person(w)?w:''; };
 let tPriv=lsGet('fs.tPriv',false);
 // Each person can be linked to their Google account, so whatever you do while signed in is recorded as you.
 function mePerson(){ const e=!LOCAL&&SYNC.me&&SYNC.me(), p=e&&S.people.find(q=>q.email===e); return p?p.id:''; }
