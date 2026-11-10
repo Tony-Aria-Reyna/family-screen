@@ -268,6 +268,16 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .space .starsbg{position:absolute;inset:0;pointer-events:none}
 .space .starsbg i{position:absolute;border-radius:50%;background:#fff}
 .space .stage{position:relative;display:grid;place-items:center;min-height:0}
+.gmode{position:absolute;left:16px;bottom:16px;z-index:4;display:flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:16px;padding:4px;gap:4px}
+.gmode button{color:#fff;font:inherit;font-size:17px;font-weight:700;padding:9px 14px;border-radius:12px;background:none}
+.gmode button.on{background:#fff;color:var(--ink)}
+.tvppl{display:flex;flex-wrap:wrap;gap:6px 12px;margin:6px 0 8px;font-size:16px}.tvppl i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.tvedit{background:#ffe5a8;border-radius:12px;padding:8px 14px;font-weight:800;font-size:16px}.tvhint{font-size:13px;color:var(--muted);margin-top:6px}
+.tvlist{max-height:min(58vh,560px);overflow:auto;margin-top:10px}
+.tvrow{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tvn{flex:1 1 160px;font-size:18px;font-weight:600}.tvc{display:flex;gap:6px;flex-wrap:wrap}
+.tvp{border:2px solid var(--c);border-radius:999px;padding:5px 10px;font:inherit;font-size:14px;font-weight:700;background:#fff}
+.tvp.on{background:var(--c)}
 .zoombtns{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:3}
 .zoombtns button{width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.16);color:#fff;font-size:24px;font-weight:700;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.25)}
 .zoombtns button:disabled{opacity:.35}
@@ -1235,7 +1245,7 @@ function renderTodo_(){
     return person(x.who)&&!fw?`<span class="who"><span class="dot" style="width:11px;height:11px;vertical-align:-1px;background:${col(x.who)}"></span> ${esc(nm(x.who))}${fr}</span>`:fr?`<span class="who">${fr.slice(3)}</span>`:''; };
   const chip=(id,label,dot)=>{ const mine=ALL.filter(t=>!id||t.who===id), n=mine.filter(t=>!t.done).length, d=mine.filter(t=>t.done&&(t.doneAt||0)>wk).length;
     return `<button class="tchip ${fw===id?'on':''}" data-tw="${id}">${dot?`<span class="dot" style="background:${dot}"></span>`:''}${esc(label)} <b>${n}</b>${d?`<small>✓${d} this week</small>`:''}</button>`; };
-  const chips=S.people.length>1?`<div class="tchips">${chip('','Everyone')}${S.people.map(q=>chip(q.id,q.name,q.color)).join('')}</div>`:'';
+  const chips=S.people.length>1?`<div class="tchips">${chip('','Everyone')}${S.people.filter(q=>q.id!=='all').map(q=>chip(q.id,q.name,q.color)).join('')}</div>`:'';
   const row=(x,extra)=>`<div class="item ${x.done?'done':''}" data-lift data-t="${x.id}">
      <button class="box" data-nolift data-tick="${x.id}">${x.done?'✓':''}</button>
      <span class="nm">${x.priv?LOCK:''}${esc(x.title)}${extra||''}${whoTag(x)}</span>
@@ -1728,6 +1738,65 @@ function deadReckon(f,from,to,now){
   const ip=d3.geoInterpolate(fix,to), ll=ip(g), tot=d3.geoDistance(from,to);
   return {ll,ahead:ip(Math.min(1,g+.01)),at:p.at,fix,frac:tot?Math.min(1,d3.geoDistance(from,ll)/tot):0};
 }
+/* ================= places we've been (one pin per country, a colour per person) ================= */
+let globeTravel=false;
+const travellers=()=>S.people.filter(p=>p.id!=='all');
+// tiny places the world map is too coarse to draw: [name, lon, lat]
+const SMALL_PLACES=[['Singapore',103.82,1.35],['Hong Kong',114.17,22.32],['Macau',113.54,22.2],['Cook Islands',-159.78,-21.24],['Samoa',-172.1,-13.76],['American Samoa',-170.7,-14.28],['Tonga',-175.2,-21.18],['Niue',-169.87,-19.05],
+  ['French Polynesia',-149.43,-17.65],['Tuvalu',179.2,-8.52],['Kiribati',173,1.42],['Palau',134.58,7.51],['Guam',144.79,13.44],['Northern Mariana Islands',145.75,15.18],['Marshall Islands',171.18,7.13],['Micronesia',158.22,6.92],['Nauru',166.93,-0.52],
+  ['Norfolk Island',167.95,-29.04],['Maldives',73.5,4.18],['Mauritius',57.55,-20.35],['Seychelles',55.45,-4.68],['Bahrain',50.56,26.07],['Malta',14.42,35.9],['Monaco',7.42,43.74],['Andorra',1.52,42.51],['Liechtenstein',9.55,47.16],
+  ['San Marino',12.46,43.94],['Vatican City',12.45,41.9],['Barbados',-59.54,13.19],['Saint Lucia',-60.98,13.91],['Antigua and Barbuda',-61.8,17.07],['Grenada',-61.68,12.12],['Aruba',-69.97,12.52],['Cabo Verde',-23.6,15.1],['Comoros',43.33,-11.65]];
+const PLACE_NAMES={'United States of America':'United States','Bosnia and Herz.':'Bosnia and Herzegovina','Central African Rep.':'Central African Republic','Dem. Rep. Congo':'DR Congo','Dominican Rep.':'Dominican Republic',
+  'Eq. Guinea':'Equatorial Guinea','S. Sudan':'South Sudan','Solomon Is.':'Solomon Islands','Falkland Is.':'Falkland Islands','Fr. S. Antarctic Lands':'French Southern Lands','N. Cyprus':'Northern Cyprus','W. Sahara':'Western Sahara','eSwatini':'Eswatini','Macedonia':'North Macedonia'};
+const PLACE_ALIASES={'Cook Islands':'rarotonga aitutaki','French Polynesia':'tahiti bora bora papeete','United States of America':'usa america hawaii honolulu los angeles san francisco new york houston chicago',
+  'United Kingdom':'uk england scotland wales britain london','Netherlands':'holland amsterdam','Czechia':'czech republic','Turkey':'turkiye','South Korea':'korea seoul','Myanmar':'burma','China':'shanghai beijing','Japan':'tokyo osaka narita',
+  'Australia':'sydney melbourne brisbane perth','Canada':'vancouver','Taiwan':'taipei','Vietnam':'viet nam','United Arab Emirates':'uae dubai','Fiji':'nadi','Samoa':'apia','Tonga':'nukualofa','Indonesia':'bali','Northern Mariana Islands':'saipan','New Caledonia':'noumea'};
+let PLACES=null;
+function places(){
+  if(PLACES) return PLACES;
+  const fs=topojson.feature(WORLD,WORLD.objects.countries).features;
+  PLACES=fs.map(f=>{ // pin goes on the biggest piece of land (so France's pin is in France, not French Guiana)
+    let g=f.geometry; if(g.type==='MultiPolygon'){ let best=null, ba=-1; for(const c of g.coordinates){ const pg={type:'Polygon',coordinates:c}, a=d3.geoArea(pg); if(a>ba){ ba=a; best=pg; } } g=best; }
+    return {name:PLACE_NAMES[f.properties.name]||f.properties.name, key:f.properties.name, ll:d3.geoCentroid(g), f, alt:PLACE_ALIASES[f.properties.name]||''}; })
+    .concat(SMALL_PLACES.map(([n,lo,la])=>({name:n,key:n,ll:[lo,la],f:null,alt:PLACE_ALIASES[n]||''})))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  return PLACES;
+}
+const visitedBy=key=>((S.visited||{})[key]||[]).filter(id=>person(id)&&id!=='all');
+function setVisited(key,ids){ if(!S.visited) S.visited={}; if(ids.length) S.visited[key]=ids; else delete S.visited[key]; save(); }
+const countFor=id=>Object.keys(S.visited||{}).filter(k=>visitedBy(k).includes(id)).length;
+const countAll=()=>Object.keys(S.visited||{}).filter(k=>visitedBy(k).length).length;
+function travelCardHTML(){
+  const ppl=travellers().map(q=>({q,n:countFor(q.id)})).sort((a,b)=>b.n-a.n);
+  return `<div class="gc-k">📍 Places we've been</div><div class="gc-t">${countAll()}<small> ${countAll()===1?'country':'countries'} as a family</small></div>
+    <div class="tvppl">${ppl.map(x=>`<span><i style="background:${x.q.color}"></i>${esc(x.q.name)} <b>${x.n}</b></span>`).join('')}</div>
+    <button class="tvedit" id="tvEdit">✏️ Our list</button><div class="tvhint">Tap a country on the globe to pin it</div>`;
+}
+function openCountry(pl,after){
+  const st=visitedBy(pl.key);
+  modal((m,close)=>{ const draw=()=>{
+    m.innerHTML=`<h2>📍 ${esc(pl.name)}</h2><div class="step">Who's been there? <span style="font-weight:500">Tap everyone</span></div>
+      <div class="opts">${travellers().map(q=>{ const on=st.includes(q.id); return `<button class="opt ${on?'on':''}" data-tv="${q.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`; }).join('')}</div>
+      <div class="mact"><button class="save" id="ok">Done</button></div>`;
+    m.querySelectorAll('[data-tv]').forEach(b=>b.onclick=()=>{ const id=b.dataset.tv, i=st.indexOf(id); if(i>=0) st.splice(i,1); else st.push(id); setVisited(pl.key,[...st]); draw(); });
+    m.querySelector('#ok').onclick=()=>{ close(); if(after) after(); };
+  }; draw(); });
+}
+function openTravels(after){
+  let q='';
+  modal((m,close)=>{
+    m.classList.add('wide');
+    m.innerHTML=`<h2>📍 Places we've been</h2><input class="txt" id="tvQ" placeholder="Search for a country" autocomplete="off"><div class="tvlist" id="tvL"></div><div class="mact"><button class="save" id="ok">Done</button></div>`;
+    const L=m.querySelector('#tvL'), ppl=travellers();
+    const draw=()=>{ const k=q.trim().toLowerCase(), all=places().filter(p=>!k||p.name.toLowerCase().includes(k)||p.alt.includes(k));
+      const been=all.filter(p=>visitedBy(p.key).length), rest=all.filter(p=>!visitedBy(p.key).length);
+      const row=p=>`<div class="tvrow"><span class="tvn">${esc(p.name)}</span><span class="tvc">${ppl.map(x=>{ const on=visitedBy(p.key).includes(x.id); return `<button class="tvp ${on?'on':''}" data-k="${esc(p.key)}" data-p="${x.id}" style="--c:${x.color}" title="${esc(x.name)}">${on?'✓ ':''}${esc(x.name)}</button>`; }).join('')}</span></div>`;
+      L.innerHTML=(been.length?`<div class="sect">Been there (${been.length})</div>`+been.map(row).join(''):'')+(rest.length?`<div class="sect">${k?'Other matches':'Everywhere else'}</div>`+rest.slice(0,k?60:400).map(row).join(''):'')+(!all.length?'<p class="note">No country by that name.</p>':'');
+      L.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ const key=b.dataset.k, cur=visitedBy(key), id=b.dataset.p; setVisited(key,cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]); draw(); }); };
+    const qi=m.querySelector('#tvQ'); qi.oninput=()=>{ q=qi.value; draw(); }; draw();
+    m.querySelector('#ok').onclick=()=>{ close(); if(after) after(); };
+  });
+}
 function openGlobe(){
   if(isPhone()&&document.body.dataset.tab!=='where'){ setTab('where'); return; }
   const L=$('#spaceLayer');
@@ -1788,10 +1857,11 @@ function openGlobe(){
   const homeT=hm(now,'Pacific/Auckland');
   const hc=tp?homeCancelled(tp,now):null;
   const etaCard=hc?`<div class="icard" style="background:#ffe1e1"><div class="c">🏠 Coming home</div><div class="t" style="font-size:26px">❌ ${esc(hc.flight||'')} cancelled</div><div class="s">The ${fmtD(fS(hc),{weekday:'long'})} flight home is cancelled. Check with ${who} for the new plan, then load the updated roster.</div></div>`:eta?`<div class="icard homecard"><div class="c">🏠 ${who} is home</div><div class="t" style="font-size:30px">${fmtD(eta,{weekday:'long'})} ${fmtTime(eta,'Pacific/Auckland')}</div><div class="s">${fmtD(eta,{day:'numeric',month:'long'})} · in ${relTime(eta,now)}</div></div>`:'';
-  const fc=flightCardHTML();
-  L.innerHTML=`<div class="space"><div class="starsbg">${starHTML}</div>
+  const fc=flightCardHTML(), travel=globeTravel;
+  L.innerHTML=`<div class="space ${travel?'travel':''}"><div class="starsbg">${starHTML}</div>
    <div class="stage" id="stage"></div>
-   ${fc?`<button class="fcard" id="gCard" title="Find ${who}">${fc}</button>`:''}
+   ${travel?`<div class="fcard tvcard">${travelCardHTML()}</div>`:fc?`<button class="fcard" id="gCard" title="Find ${who}">${fc}</button>`:''}
+   <div class="gmode"><button class="${travel?'':'on'}" data-gm="0">✈️ ${tp?who:'Flights'}</button><button class="${travel?'on':''}" data-gm="1">📍 Our travels</button></div>
    <div class="sptop"><button class="spbtn" id="gMore" aria-label="More">⋯</button><button class="spbtn gclose" id="gClose" aria-label="Close">✕</button></div>
   </div>`;
 
@@ -1809,6 +1879,7 @@ function openGlobe(){
   const proj=d3.geoOrthographic().scale(size/2-8).translate([cx,cy]).clipAngle(90);
   const path=d3.geoPath(proj), grat=d3.geoGraticule10();
   const sun=subsolar(now), night=d3.geoCircle().center([sun[0]+180,-sun[1]]).radius(90)();
+  let zoomNow=null;
   let rot=[-(focus[0]+60),-focus[1]*0.6]; const target=[-focus[0],-focus[1]];
   svg.innerHTML=`<defs><radialGradient id="ocean" cx="40%" cy="35%"><stop offset="0" stop-color="#d9f0ff"/><stop offset=".7" stop-color="#9fd3ee"/><stop offset="1" stop-color="#7cb9dc"/></radialGradient>
     <radialGradient id="glow"><stop offset=".9" stop-color="#9fd8ff" stop-opacity="0"/><stop offset=".965" stop-color="#9fd8ff" stop-opacity=".5"/><stop offset="1" stop-color="#9fd8ff" stop-opacity="0"/></radialGradient>
@@ -1847,6 +1918,7 @@ function openGlobe(){
       for(const f of countries.features){ const d=path(f); if(d) h+=`<path d="${d}" fill="${f.properties.name===her?'#ffc9a3':f.properties.name==='New Zealand'?'#ffe5a8':'#c3e8cc'}" stroke="#fff" stroke-width=".6"/>`; }
       h+=`<path d="${path(night)}" fill="#1b1f4a" fill-opacity=".38"/>`;
     }
+    if(travel){ gl.innerHTML=h+travelLayer(); return; }
     if(planeLL){
       h+=`<path d="${path({type:'LineString',coordinates:[planeLL,arcTo]})||''}" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 8" stroke-opacity=".9"/>`;
       if(fixLL){ // flown (up to the last radar fix) solid; carried-on estimate since then lighter
@@ -1870,14 +1942,30 @@ function openGlobe(){
     }
     gl.innerHTML=h;
   }
+  // pins: one per country, a coloured dot for each person who's been
+  function travelLayer(){
+    let h='', pins='';
+    for(const pl of places()){ const ids=visitedBy(pl.key); if(!ids.length) continue;
+      if(pl.f){ const d=path(pl.f); if(d) h+=`<path d="${d}" fill="#ffd45c" fill-opacity=".28" stroke="#ffd45c" stroke-opacity=".9" stroke-width="1.2"/>`; }
+      const p=proj(pl.ll); if(!p||!visible(pl.ll)) continue;
+      const n=ids.length, w=n*15+7, x=p[0]-w/2, y=p[1]-34;
+      pins+=`<g class="tvpin"><path d="M${p[0]-6},${y+21} L${p[0]},${p[1]} L${p[0]+6},${y+21}Z" fill="#fff"/><rect x="${x}" y="${y}" width="${w}" height="24" rx="12" fill="#fff" filter="url(#pshadow)"/>${ids.map((id,i)=>`<circle cx="${x+11+i*15}" cy="${y+12}" r="6.5" fill="${col(id)}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`).join('')}</g>`;
+      if(typeof zoomNow==='function'&&zoomNow()>=2.2){ const lw=pl.name.length*7.2+14; pins+=`<g transform="translate(${p[0]-lw/2},${p[1]+4})"><rect class="lbl-bg" width="${lw}" height="20" rx="10"/><text x="${lw/2}" y="14" text-anchor="middle" font-size="12" font-weight="700" fill="#2b2f3a">${esc(pl.name)}</text></g>`; }
+    }
+    const hp=proj(homeLL); if(hp&&visible(homeLL)) pins+=`<circle cx="${hp[0]}" cy="${hp[1]}" r="6" fill="#f59e0b" stroke="#fff" stroke-width="2.5"/>`;
+    return h+pins;
+  }
+  function placeAt(px,py){ const ll=proj.invert([px,py]); if(!ll||!visible(ll)) return null;
+    let best=null, bd=1e9; for(const pl of places()){ if(pl.f){ if(d3.geoContains(pl.f,ll)) return pl; continue; } const q=proj(pl.ll), d=q?Math.hypot(q[0]-px,q[1]-py):1e9; if(d<bd){ bd=d; best=pl; } }
+    return bd<26?best:null; }
   function spinTo(tgt,ms){
     cancelAnimationFrame(globeTimer); const from=[...rot], t0=performance.now();
     const step=n=>{ const k=Math.min(1,(n-t0)/ms), e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; rot=[from[0]+(tgt[0]-from[0])*e,from[1]+(tgt[1]-from[1])*e]; draw(); if(k<1) globeTimer=requestAnimationFrame(step); };
     globeTimer=requestAnimationFrame(step);
   }
-  draw(); spinTo(target,1800);
+  draw(); spinTo(travel?[-(homeLL[0]-30),-(-15)]:target,1800);
   // zoom: + / − buttons, mouse wheel, pinch with two fingers, double-tap to zoom in
-  const base=size/2-8; let zoom=1;
+  const base=size/2-8; let zoom=1; zoomNow=()=>zoom;
   const glow=svg.querySelector('circle');
   const setZoom=z=>{ zoom=Math.max(1,Math.min(8,z)); proj.scale(base*zoom); glow.setAttribute('r',base*zoom+8); glow.style.opacity=zoom>1.3?0:1; draw(); zb.querySelector('[data-z=out]').disabled=zoom<=1.001; };
   const zb=document.createElement('div'); zb.className='zoombtns';
@@ -1890,10 +1978,18 @@ function openGlobe(){
   svg.style.touchAction='none';
   svg.addEventListener('pointerdown',e=>{ cancelAnimationFrame(globeTimer); svg.setPointerCapture(e.pointerId); pts.set(e.pointerId,[e.clientX,e.clientY]);
     if(pts.size===2){ const [a,b]=[...pts.values()]; pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),z:zoom}; dg=null; }
-    else if(pts.size===1) dg={x:e.clientX,y:e.clientY,r:[...rot]}; });
+    else if(pts.size===1) dg={x:e.clientX,y:e.clientY,r:[...rot]};
+    tap=pts.size===1?{x:e.clientX,y:e.clientY,t:Date.now()}:null; });
   svg.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,[e.clientX,e.clientY]);
     if(pinch&&pts.size>=2){ const [a,b]=[...pts.values()]; setZoom(pinch.z*Math.hypot(a[0]-b[0],a[1]-b[1])/Math.max(10,pinch.d)); return; }
     if(!dg) return; const k=120/proj.scale(); rot=[dg.r[0]+(e.clientX-dg.x)*k*1.2,Math.max(-80,Math.min(80,dg.r[1]-(e.clientY-dg.y)*k*1.2))]; draw(); });
+  let tap=null;
+  svg.addEventListener('pointerup',e=>{ if(!travel||!tap||pts.size>1) return; const moved=Math.hypot(e.clientX-tap.x,e.clientY-tap.y); if(moved>8||Date.now()-tap.t>600) return;
+    const b=svg.getBoundingClientRect(), pl=placeAt(e.clientX-b.left,e.clientY-b.top); tap=null; if(pl) openCountry(pl,()=>{ draw(); refreshTvCard(); }); });
+  const refreshTvCard=()=>{ const c=L.querySelector('.tvcard'); if(c){ c.innerHTML=travelCardHTML(); wireTv(); } };
+  const wireTv=()=>{ const b=L.querySelector('#tvEdit'); if(b) b.onclick=()=>openTravels(()=>{ draw(); refreshTvCard(); }); };
+  wireTv();
+  L.querySelectorAll('[data-gm]').forEach(b=>b.onclick=()=>{ globeTravel=b.dataset.gm==='1'; openGlobe(); });
   const up=e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch=null; if(pts.size===1){ const [p]=[...pts.values()]; dg={x:p[0],y:p[1],r:[...rot]}; } else if(!pts.size) dg=null; };
   svg.addEventListener('pointerup',up); svg.addEventListener('pointercancel',up);
   const gc=$('#gCard'); if(gc) gc.onclick=()=>spinTo(target,1400);
