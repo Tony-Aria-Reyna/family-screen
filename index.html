@@ -273,7 +273,14 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .gmode button.on{background:#fff;color:var(--ink)}
 .tvppl{display:flex;flex-wrap:wrap;gap:6px 12px;margin:6px 0 8px;font-size:16px}.tvppl i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .tvedit{background:#ffe5a8;border-radius:12px;padding:8px 14px;font-weight:800;font-size:16px}.tvhint{font-size:13px;color:var(--muted);margin-top:6px}
-.tvlist{max-height:min(58vh,560px);overflow:auto;margin-top:10px}
+.tvlist{max-height:min(62vh,600px);overflow:auto;margin-top:10px;overscroll-behavior:contain}
+.tvhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.tvhead h2{margin:0}.tvhead .save{padding:10px 22px}
+.tvp.tvall{border-color:var(--ink)}.tvp.tvall.on{background:#ffe5a8}
+@media (max-width:900px){
+  .scrim.tvscrim{display:block;inset:0 0 auto 0;padding:0}
+  .modal.tvsheet{display:flex;flex-direction:column;height:100dvh;max-height:none;border-radius:0;padding:14px 14px calc(10px + env(safe-area-inset-bottom))}
+  .modal.tvsheet .tvlist{flex:1;max-height:none;min-height:0}
+}
 .tvrow{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .tvn{flex:1 1 160px;font-size:18px;font-weight:600}.tvc{display:flex;gap:6px;flex-wrap:wrap}
 .tvp{border:2px solid var(--c);border-radius:999px;padding:5px 10px;font:inherit;font-size:14px;font-weight:700;background:#fff}
@@ -5869,16 +5876,26 @@ function openCountry(pl,after){
 function openTravels(after){
   let q='';
   modal((m,close)=>{
-    m.classList.add('wide');
-    m.innerHTML=`<h2>📍 Places we've been</h2><input class="txt" id="tvQ" placeholder="Search for a country" autocomplete="off"><div class="tvlist" id="tvL"></div><div class="mact"><button class="save" id="ok">Done</button></div>`;
-    const L=m.querySelector('#tvL'), ppl=travellers();
-    const draw=()=>{ const k=q.trim().toLowerCase(), all=places().filter(p=>!k||p.name.toLowerCase().includes(k)||p.alt.includes(k));
+    m.classList.add('wide','tvsheet');
+    m.innerHTML=`<div class="tvhead"><h2>📍 Places we've been</h2><button class="save" id="ok">Done</button></div><input class="txt" id="tvQ" placeholder="Search for a country" autocomplete="off" enterkeyhint="search"><div class="tvlist" id="tvL"></div>`;
+    const L=m.querySelector('#tvL'), ppl=travellers(), done=()=>{ close(); if(after) after(); };
+    // phones: fill the screen above the keyboard so the list never hides behind it
+    const vv=window.visualViewport, fit=()=>{ if(!m.isConnected){ vv&&vv.removeEventListener('resize',fit); return; } if(isPhone()&&vv){ m.style.height=vv.height+'px'; m.parentElement.style.top=vv.offsetTop+'px'; } };
+    if(isPhone()){ m.parentElement.classList.add('tvscrim'); if(vv){ vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit); } fit(); }
+    const btns=key=>{ const on=visitedBy(key), all=ppl.length>1&&ppl.every(x=>on.includes(x.id));
+      return (ppl.length>1?`<button class="tvp tvall ${all?'on':''}" data-k="${esc(key)}" data-p="*" style="--c:#2b2f3a">${all?'✓ ':''}All of us</button>`:'')+ppl.map(x=>{ const o=on.includes(x.id); return `<button class="tvp ${o?'on':''}" data-k="${esc(key)}" data-p="${x.id}" style="--c:${x.color}">${o?'✓ ':''}${esc(x.name)}</button>`; }).join(''); };
+    // ticking only changes that row; the list re-sorts when you search again or reopen it
+    const tick=b=>{ const key=b.dataset.k, cur=visitedBy(key), id=b.dataset.p;
+      const next=id==='*'?(ppl.every(x=>cur.includes(x.id))?[]:ppl.map(x=>x.id)):cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];
+      setVisited(key,next); const c=b.closest('.tvc'); c.innerHTML=btns(key); c.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>tick(x)); };
+    const draw=()=>{ const k=q.trim().toLowerCase(), rank=p=>p.name.toLowerCase().startsWith(k)?0:p.name.toLowerCase().includes(k)?1:2;
+      const all=places().filter(p=>!k||p.name.toLowerCase().includes(k)||p.alt.includes(k)).sort((a,b)=>k?rank(a)-rank(b)||a.name.localeCompare(b.name):0);
       const been=all.filter(p=>visitedBy(p.key).length), rest=all.filter(p=>!visitedBy(p.key).length);
-      const row=p=>`<div class="tvrow"><span class="tvn">${esc(p.name)}</span><span class="tvc">${ppl.map(x=>{ const on=visitedBy(p.key).includes(x.id); return `<button class="tvp ${on?'on':''}" data-k="${esc(p.key)}" data-p="${x.id}" style="--c:${x.color}" title="${esc(x.name)}">${on?'✓ ':''}${esc(x.name)}</button>`; }).join('')}</span></div>`;
+      const row=p=>`<div class="tvrow"><span class="tvn">${esc(p.name)}</span><span class="tvc">${btns(p.key)}</span></div>`;
       L.innerHTML=(been.length?`<div class="sect">Been there (${been.length})</div>`+been.map(row).join(''):'')+(rest.length?`<div class="sect">${k?'Other matches':'Everywhere else'}</div>`+rest.slice(0,k?60:400).map(row).join(''):'')+(!all.length?'<p class="note">No country by that name.</p>':'');
-      L.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ const key=b.dataset.k, cur=visitedBy(key), id=b.dataset.p; setVisited(key,cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]); draw(); }); };
-    const qi=m.querySelector('#tvQ'); qi.oninput=()=>{ q=qi.value; draw(); }; draw();
-    m.querySelector('#ok').onclick=()=>{ close(); if(after) after(); };
+      L.scrollTop=0; L.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>tick(b)); };
+    const qi=m.querySelector('#tvQ'); qi.oninput=()=>{ q=qi.value; draw(); }; qi.onkeydown=e=>{ if(e.key==='Enter') qi.blur(); }; draw();
+    m.querySelector('#ok').onclick=done;
   });
 }
 function openGlobe(){
@@ -6937,7 +6954,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwabgow7';
+const FS_VERSION='fs-mwabqywj';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
