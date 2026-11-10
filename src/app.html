@@ -321,6 +321,11 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   .rcols{grid-template-columns:1fr}
   #cookmode{padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
 }
+.bdot{width:12px;height:12px;border-radius:50%;background:#cbd5e1;margin-left:auto;flex:none}.bdot.near{background:#facc15}.bdot.soon{background:#f59e0b}.bdot.over{background:#ef4444}
+.bchart{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;height:170px;align-items:end;margin:6px 0 10px}.bchart div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:12px}.bchart i{display:block;width:100%;background:#fcd9a3;border-radius:6px 6px 0 0;min-height:2px}.bchart b{font-size:11px;color:var(--muted)}.bchart span{font-weight:700}
+.bcat{display:grid;grid-template-columns:150px 1fr 100px;gap:10px;align-items:center;margin:4px 0;font-size:16px}.bcat i{display:block;height:14px;background:#a6e3c8;border-radius:7px}.bcat b{text-align:right}
+.btab{width:100%;border-collapse:collapse;font-size:15px}.btab td,.btab th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}.btab th{color:var(--muted);font-size:13px}
+.bfold{background:#fffaf0;border:1px solid #f1e3c4;border-radius:14px;padding:10px 12px}.bfold b{font-size:17px}.flist{max-height:260px;overflow:auto;margin-top:8px}
 .gmode{position:absolute;left:16px;bottom:16px;z-index:4;display:flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:16px;padding:4px;gap:4px}
 .gmode button{color:#fff;font:inherit;font-size:17px;font-weight:700;padding:9px 14px;border-radius:12px;background:none}
 .gmode button.on{background:#fff;color:var(--ink)}
@@ -851,7 +856,7 @@ function migrate(s){
 }
 function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
 let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
-['recipes','meals','renewals','gifts'].forEach(k=>S[k]=S[k]||[]);
+['recipes','meals','renewals','gifts','bills'].forEach(k=>S[k]=S[k]||[]);
 (()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
 let weekOff=0, monthOff=0;
 
@@ -1101,7 +1106,7 @@ function timelineHTML(key){
   };
 }
 function wireTimeline(box,key){
-  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ if(b.dataset.ev.startsWith('rn-')) editRenewal((S.renewals||[]).find(x=>'rn-'+x.id===b.dataset.ev)); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
   box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>{ if(isPhone()) setTab('where'); else openGlobe(); });
   const tl=box.querySelector('.tl');
@@ -1143,6 +1148,7 @@ const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p
 function itemsForDay(key){
   const out=[];
   for(const e of S.events) if(vis(e)&&shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+  for(const b of S.bills||[]) if(b.due===key&&['check','due','paid'].includes(b.status)) out.push({k:'ev',sort:'00:00',e:{id:'bl-'+b.id,title:(b.status==='paid'?'✅ ':b.directDebit?'💳 ':'🧾 ')+b.biller+' '+$m(b.amount)+(b.status==='paid'?' paid':b.directDebit?' direct debit':' due'),whos:[],date:key,time:''},key});
   for(const r of S.renewals||[]) if(r.due===key) out.push({k:'ev',sort:'00:00',e:{id:'rn-'+r.id,title:renewTitle(r)+' due',whos:[],date:key,time:''},key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const flyers=new Set();
@@ -1239,7 +1245,7 @@ function renderCal(){
   if(isPhone()&&$('#pcal')) renderPCal();
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
   cal.querySelectorAll('.day h3').forEach(h=>h.onclick=()=>openFridgeDay(h.parentElement.dataset.drop));
-  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ if(b.dataset.ev.startsWith('rn-')) editRenewal((S.renewals||[]).find(x=>'rn-'+x.id===b.dataset.ev)); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
   cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
   cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
 }
@@ -1317,7 +1323,7 @@ function renderTodo_(){
      ${x.done?'':`<button class="cal" data-nolift data-sched="${x.id}" aria-label="Put on calendar">📅</button>`}</div>`;
   let h=`<div class="ph"><h2>✅ To do</h2><span class="n">${open.length+booked.length+check.length}</span><span class="tip">Hold a job and drag it onto a day</span><button class="clr" id="tClear">Clear done</button><button class="hidep" data-hidep="T" title="Minimise the to-do list" aria-label="Minimise">»</button></div>
   ${chips}<form class="addrow" id="tForm"><input id="tIn" placeholder="${fw?'Add a job for '+esc(nm(fw))+'…':'Add a job…'}" autocomplete="off" enterkeyhint="done">${privCan()?`<button type="button" class="tlock ${tPriv?'on':''}" id="tLock" aria-label="Private" title="Private: only I can see it">${tPriv?'🔒':'🔓'}</button>`:''}<button aria-label="Add">＋</button></form>${tPriv?'<div class="tprivnote">🔒 New jobs are private: only you will see them</div>':''}<div class="list">`;
-  h+=renewSect();
+  h+=billsSect()+renewSect();
   if(check.length){
     h+=`<div class="sect warn">⏰ Did these get done?</div>`+check.map(t=>{ const e=todoEv(t); return `<div class="chk"><div class="q">Booked for ${whenTxt(e)}</div><div class="t">${esc(t.title)}</div>
       <div class="acts"><button class="ok" data-done="${t.id}">✓ Done</button><button data-move="${t.id}">📅 Move it</button><button data-unbook="${t.id}">↩ Back on the list</button></div></div>`; }).join('');
@@ -1329,6 +1335,8 @@ function renderTodo_(){
   p.innerHTML=h+'</div>';
   $('#tForm').onsubmit=e=>{ e.preventDefault(); const v=$('#tIn').value.trim(); if(!v) return; $('#tIn').value=''; const nt={id:uid(),title:v.charAt(0).toUpperCase()+v.slice(1),who:fw||(tPriv&&mePerson())||'',done:false,at:Date.now()}; const mp=mePerson(); if(mp) nt.from=mp; if(tPriv&&privCan()) nt.priv=true; S.todos.unshift(nt); save(); renderTodo(); $('#tIn').focus(); };
   p.querySelectorAll('[data-rn]').forEach(b=>b.onclick=()=>editRenewal((S.renewals||[]).find(x=>x.id===b.dataset.rn)));
+  p.querySelectorAll('[data-bills]').forEach(b=>b.onclick=()=>openBills(b.dataset.bills));
+  p.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>openBill((S.bills||[]).find(x=>x.id===b.dataset.bill)));
   p.querySelectorAll('[data-tick]').forEach(b=>b.onclick=()=>{ const x=S.todos.find(t=>t.id===b.dataset.tick); markDone(x,!x.done); });
   p.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ markDone(S.todos.find(t=>t.id===b.dataset.done),true); toast('Nice one ✓'); });
   p.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{ const t=S.todos.find(x=>x.id===b.dataset.move); openAdd(todoEv(t),()=>renderTodo(),'Move this job to a new day'); });
@@ -2096,6 +2104,7 @@ function openGlobe(){
 }
 
 /*@HOME@*/
+function virtualOpen(id){ if(id.startsWith('rn-')) editRenewal((S.renewals||[]).find(x=>'rn-'+x.id===id)); else if(id.startsWith('bl-')) openBill((S.bills||[]).find(x=>'bl-'+x.id===id)); }
 
 /* ================= calendar files (.ics) ================= */
 function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
@@ -2376,6 +2385,38 @@ function flightCard(nt,needUpd){
     ${fl.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(fl.error)}</p>`:''}
     <p class="note">${fl.used||0} of ${fl.budget||280} free checks used this month. Each flight is checked about 5–8 times: before take-off, every few hours in the air, and near landing. In between, the globe moves the plane on at the speed it was making. Turn delay pings on or off for each phone above.</p></div>`;
 }
+// every Google helper in one place: what version it runs, whether it needs updating, and its code
+function openHelpers(){
+  const nt=SYNC.getNotifier&&SYNC.getNotifier(), latestV=NOTIFIER?+((NOTIFIER.code.match(/HELPER_VERSION = (\d+)/)||[])[1]||0):0;
+  const running=nt&&nt.lastRun&&Date.now()-nt.lastRun<20*60e3, needUpd=!nt||(nt.version||0)<latestV;
+  const fileText=f=>NOTIFIER?(f==='code'?NOTIFIER.code.replace('__PROJECT_ID__',CONFIG.projectId).replace('__APP_URL__',location.origin+location.pathname):NOTIFIER.manifest):'';
+  const h=S.linkHelper; let cal=null;
+  modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
+    m.innerHTML=`<div class="tvhead"><h2>🧰 Helpers</h2><button class="save" id="x">Done</button></div>
+    <p class="note">Two small helpers run free in your own Google account (script.google.com). Their latest code always lives here, so there are no documents to keep.</p>
+    <div class="srccard"><h4>🤖 Reminder helper ${running?`<span class="pill-ok">✓ running v${nt.version||'?'}</span>`:'<span class="pill-wait">not running</span>'} ${running&&needUpd?`<span class="pill-wait">⬆️ v${latestV} available</span>`:running?'<span class="pill-ok">up to date</span>':''}</h4>
+      <p class="note">Reminders, flight tracking, renewals, bills by email, and keeping the database rules up to date.</p>
+      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}
+      <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55">
+        <li>On a computer open <b>script.google.com</b> → your <b>Family Screen Helper</b> project.</li>
+        <li><b>Code.gs</b>: tap <b>Copy helper code</b>, click in Code.gs, Ctrl + A, paste, Ctrl + S.</li>
+        <li><b>appsscript.json</b> (⚙️ Project Settings → tick “Show appsscript.json”): tap <b>Copy settings file</b>, paste over it, Ctrl + S.</li>
+        <li>Choose <b>billsCheckNow</b> in the function menu at the top and press ▶ <b>Run</b>. Approve the Gmail, Drive and Sheets permissions (Google words it strongly; it only reads the bills address and files bills).</li>
+        <li>That's it: this card turns green within 5 minutes.</li></ol>
+      <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div></div>
+    <div class="srccard" style="margin-top:12px"><h4>📅 Calendar &amp; AI helper ${!h||!h.url?'<span class="pill-wait">not set up</span>':cal===null?'<span class="pill-wait">checking…</span>':cal.ok?`<span class="pill-ok">✓ up to date${cal.hasKey?' · AI key ✓':''}</span>`:'<span class="pill-wait">⬆️ needs updating</span>'}</h4>
+      <p class="note">Fetches calendar links, and runs meal ideas and recipe reading with your Gemini key.</p>
+      ${!h||!h.url?'<button class="xbtn" id="hs">Set it up</button>':`<ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55"><li>Open your <b>calendar helper</b> project at script.google.com.</li><li>Tap <b>Copy calendar helper code</b>, paste over the old code, Ctrl + S.</li><li><b>Deploy → Manage deployments</b> → ✏️ → Version: <b>New version</b> → Deploy.</li></ol>
+      <div class="row"><button class="xbtn" id="hc" style="background:#ffe5a8;font-weight:800">📋 Copy calendar helper code</button>${cal&&cal.ok&&!cal.hasKey?'<button class="xbtn" id="hk">✨ Add the Gemini key</button>':''}</div>`}</div>`;
+    m.querySelector('#x').onclick=close;
+    m.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ try{ navigator.clipboard.writeText(fileText(b.dataset.copy)).then(()=>toast(b.dataset.copy==='code'?'Helper code copied':'Settings file copied')); }catch(e){ toast('Copy didn’t work on this device. Use a computer.'); } });
+    const hc=m.querySelector('#hc'); if(hc) hc.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Calendar helper code copied')); }catch(e){ toast('Copy failed'); } };
+    const hs=m.querySelector('#hs'); if(hs) hs.onclick=()=>{ close(); openHelperSetup(); };
+    const hk=m.querySelector('#hk'); if(hk) hk.onclick=()=>{ close(); aiSetup(); };
+  }; draw();
+    if(h&&h.url&&!LOCAL) fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'ping'}),redirect:'follow'}).then(r=>r.text()).then(t=>{ try{ const j=JSON.parse(t); cal={ok:!!j.ok&&j.helper>=2,hasKey:!!j.hasKey}; }catch(e){ cal={ok:false}; } if(m.isConnected) draw(); }).catch(()=>{ cal={ok:false}; if(m.isConnected) draw(); });
+  });
+}
 function openNotify(){
   if(LOCAL){ modal((m,close)=>{ m.innerHTML='<h2>🔔 Notifications</h2><p class="note">Notifications work in the real app once you’re signed in, not in the demo.</p><div class="mact"><button class="save" id="ok">OK</button></div>'; m.querySelector('#ok').onclick=close; }); return; }
   modal((m,close)=>{ const draw=()=>{
@@ -2557,7 +2598,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button><button class="opt" id="goRenew">📌 Car &amp; house renewals</button><button class="opt" id="goGifts">🎁 Gift ideas</button><button class="opt" id="goAI">✨ AI (Gemini key)</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goCards">💳 Loyalty cards</button><button class="opt" id="goRenew">📌 Car &amp; house renewals</button><button class="opt" id="goGifts">🎁 Gift ideas</button><button class="opt" id="goAI">✨ AI (Gemini key)</button><button class="opt" id="goBills">🧾 Bills</button><button class="opt" id="goHelpers">🧰 Helpers</button></div>
     ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -2616,6 +2657,8 @@ function openSettings(){
     m.querySelector('#goRenew').onclick=()=>{ close(); openRenewals(); };
     m.querySelector('#goGifts').onclick=()=>{ close(); openGifts(); };
     m.querySelector('#goAI').onclick=()=>{ close(); requirePin(()=>aiSetup()); };
+    m.querySelector('#goBills').onclick=()=>{ close(); openBills(); };
+    m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
     m.querySelector('#goCards').onclick=()=>{ close(); openCards(); };

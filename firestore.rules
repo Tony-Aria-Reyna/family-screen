@@ -27,7 +27,7 @@ service cloud.firestore {
       allow delete: if signedIn() && email() == resource.data.owner;
 
       match /{col}/{id} {
-        allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals'];
+        allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills'];
       }
       // Secrets (the Gemini key): family members can write them, nobody can read them through the app.
       // Only the family's own Google helper reads them, with the account owner's access.

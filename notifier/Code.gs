@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 8;
+const HELPER_VERSION = 9;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -35,11 +35,14 @@ function tick() {
     try {
       const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights'), renewals: [] };
       try { data.renewals = listDocs('households/' + h._id + '/renewals'); } catch (e) {}
+      data.bills = [];
+      try { data.bills = billsTick(h, props, now); } catch (e) { Logger.log('Bills: ' + e); }
       // private entries: each member's own corner. Reminders for these go only to that member's own phones.
       for (const who of (h.members || [])) for (const c of ['events', 'todos']) {
         try { listDocs('households/' + h._id + '/private/' + encodeURIComponent(who) + '/' + c).forEach(x => { x._owner = who; data[c].push(x); }); } catch (e) {}
       }
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
+      billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
@@ -94,7 +97,7 @@ function planNotifications(h, all, now, already) {
   for (const hash of Object.keys(devices)) {
     const dev = devices[hash]; if (!dev || !dev.token) continue;
     const mine = x => !x._owner || (dev.email && x._owner === String(dev.email).toLowerCase());
-    data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights, renewals: all.renewals || [] };
+    data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights, renewals: all.renewals || [], bills: all.bills || [] };
     const lead = (dev.lead || 30) * 60e3;
     // 1) reminders before timed entries (today and early tomorrow)
     if (dev.remind !== false) for (const e of data.events) {
@@ -139,6 +142,18 @@ function planNotifications(h, all, now, already) {
       const what = (r.emoji || '📌') + ' ' + r.what + (r.item ? ' · ' + r.item : '');
       const when = days === 0 ? 'is due today' : days < 0 ? 'was due ' + (-days) + ' days ago' : 'is due in ' + days + ' days';
       out.push({ device: hash, key, tag: 'rn' + r.id, title: dev.private ? '📌 Family Screen' : what, body: dev.private ? 'A renewal ' + when + '.' : 'Renewal ' + when + (r.cost ? ' · $' + r.cost : '') + (r.ref ? ' · ' + r.ref : '') });
+    }
+    // bills: 7 and 2 days before, on the day, then 3 days overdue (9am). Direct debits: one note 2 days before.
+    if (dev.remind !== false && now.getHours() === 9 && now.getMinutes() < 15) for (const b of data.bills) {
+      if (b.status !== 'due' || !b.due) continue;
+      const days = Math.round((at(b.due, '12:00') - at(todayK, '12:00')) / 864e5);
+      const stage = b.directDebit ? (days === 2 ? 'dd' : '') : ([7, 2, 0, -1, -2, -3].indexOf(days) >= 0 ? String(days) : '');
+      if (!stage) continue;
+      const key = 'bl|' + hash + '|' + b._id + '|' + b.due + '|' + stage;
+      if (already(key)) continue;
+      const amt = money(b.amount), day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][at(b.due, '12:00').getDay()];
+      const body = b.directDebit ? amt + ' will be taken by direct debit on ' + day + '.' : days > 0 ? amt + ' is due in ' + days + ' days (' + day + ').' : days === 0 ? amt + ' is due today.' : amt + ' was due ' + (-days) + (days === -1 ? ' day' : ' days') + ' ago. Tap ✅ Paid in the app once it is paid.';
+      out.push({ device: hash, key, tag: 'bill' + b._id, title: dev.private ? '🧾 Family Screen' : (b.directDebit ? '💳 ' : '🧾 ') + b.biller, body: dev.private ? 'A bill needs attention.' : body });
     }
     // 3) booked jobs whose time has passed: did it get done?
     if (dev.jobs !== false) for (const t of data.todos) {
@@ -318,4 +333,154 @@ function send(h, hash, title, body, tag) {
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
 }
+/* ================= Bills by email =================
+   Bills sent (or forwarded) to the family's bills address (a plus address of THIS Gmail account, e.g. you+bills@gmail.com,
+   set in the app: Bills → Setup) are read every 10 minutes. Gemini reads the email and any PDF, the PDF is saved to
+   Google Drive (“Household Bills/_To file”), and the bill appears in the app as “check it”. When you confirm it there,
+   the app says which folder it goes in and this moves and renames the file. A Google Sheet register is kept up to date. */
+const BILL_CATS = ['Power', 'Gas', 'Internet', 'Phone', 'Water', 'Rates', 'Insurance', 'Car', 'Mortgage', 'Rent', 'Subscriptions', 'Medical', 'School', 'Childcare', 'Credit card', 'Other'];
+const money = c => '$' + (Number(c || 0) / 100).toFixed(2);
+const normB = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function getDoc(path) {
+  const r = UrlFetchApp.fetch(BASE + '/' + path, { headers: headers(), muteHttpExceptions: true });
+  if (r.getResponseCode() === 404) return null;
+  if (r.getResponseCode() !== 200) throw new Error('Reading ' + path + ': ' + r.getResponseCode());
+  const d = JSON.parse(r.getContentText()); const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); return o;
+}
+function geminiKey(h) { const s = getDoc('households/' + h._id + '/secrets/ai'); return (s && s.gemini) || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || ''; }
+function gemini(key, parts) {
+  const props = PropertiesService.getScriptProperties();
+  const call = m => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': key }, muteHttpExceptions: true,
+    payload: JSON.stringify({ contents: [{ role: 'user', parts: parts }], generationConfig: { responseMimeType: 'application/json' } }) });
+  let model = props.getProperty('GEMINI_MODEL') || 'gemini-3.6-flash', r = call(model);
+  if (r.getResponseCode() === 404) {   // that model was retired: use the newest Flash this key can use
+    const list = JSON.parse(UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key }, muteHttpExceptions: true }).getContentText()).models || [];
+    const ok = list.filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0 && /gemini-[\d.]+-flash$/.test(m.name)).map(m => m.name.replace('models/', '')).sort((a, b) => parseFloat(b.split('-')[1]) - parseFloat(a.split('-')[1]));
+    if (ok.length) { model = ok[0]; props.setProperty('GEMINI_MODEL', model); r = call(model); }
+  }
+  if (r.getResponseCode() !== 200) { const e = new Error('Gemini ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 160)); e.gemini = true; throw e; }
+  const j = JSON.parse(r.getContentText());
+  return ((((j.candidates || [])[0] || {}).content || {}).parts || []).map(p => p.text || '').join('');
+}
+// Drive folders: paths are relative to the bills folder (“Power/Mercury/2026”); a leading “/” means from the top of My Drive
+function billsRoot(h) { return folderPath(DriveApp.getRootFolder(), String(h.billsRoot || 'Household Bills')); }
+function folderPath(start, path) {
+  let f = start;
+  for (const part of String(path).split('/').map(x => x.trim()).filter(Boolean)) { const it = f.getFoldersByName(part); f = it.hasNext() ? it.next() : f.createFolder(part); }
+  return f;
+}
+function listFolders(f, prefix, depth, out) {
+  if (out.length > 400) return; const it = f.getFolders();
+  while (it.hasNext() && out.length <= 400) { const c = it.next(), n = c.getName(); if (n === '_To file') continue; const p = prefix + n; out.push(p); if (depth > 1) listFolders(c, p + '/', depth - 1, out); }
+}
+function billFileName(b) { return (b.due || b.date || '') + ' ' + String(b.biller || 'Bill').replace(/[\\/:*?"<>|]/g, '') + (b.amount ? ' ' + money(b.amount) : ''); }
+function billsTick(h, props, now, force) {
+  const addr = String(h.billEmail || '').toLowerCase().trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return [];
+  const path = 'households/' + h._id + '/bills', prev = h.billsHelper || {};
+  let bills = listDocs(path), err = '', added = 0; const fresh = [];
+  try {
+    const root = billsRoot(h), today = keyOf(now);
+    // 1) file the ones you've confirmed into the folder you chose (creating folders as needed), and rename them
+    for (const b of bills) {
+      if (!b.fileTo || !b.pdf || !b.pdf.driveId || b.pdf.folder === b.fileTo) continue;
+      const file = DriveApp.getFileById(b.pdf.driveId), dest = String(b.fileTo).charAt(0) === '/' ? folderPath(DriveApp.getRootFolder(), b.fileTo) : folderPath(root, b.fileTo);
+      file.moveTo(dest); const ext = (file.getName().match(/\.[a-z0-9]+$/i) || ['.pdf'])[0]; file.setName(billFileName(b) + ext);
+      b.pdf = { driveId: b.pdf.driveId, link: file.getUrl(), name: file.getName(), folder: b.fileTo };
+      patch(path + '/' + b._id, { pdf: b.pdf, filedAt: now.getTime() }); props.deleteProperty('BILL_FOLDERS_AT');
+    }
+    // 2) direct debits come out on the day: mark them paid the day after
+    for (const b of bills) if (b.status === 'due' && b.directDebit && b.due && b.due < today) { b.status = 'paid'; b.paidAt = at(b.due, '12:00').getTime(); b.paidHow = 'Direct debit'; b.paidBy = 'auto'; patch(path + '/' + b._id, { status: 'paid', paidAt: b.paidAt, paidHow: b.paidHow, paidBy: 'auto' }); }
+    // 3) new emails, every 10 minutes
+    const lastKey = 'BILL_MAIL_' + h._id;
+    if (force || now.getTime() - Number(props.getProperty(lastKey) || 0) > 9.5 * 60e3) {
+      props.setProperty(lastKey, String(now.getTime()));
+      const seen = {}; bills.forEach(b => seen[b._id] = 1);
+      const key = geminiKey(h);
+      const threads = GmailApp.search('to:' + addr + ' newer_than:30d', 0, 20);
+      if (threads.length && !key) throw new Error('No Gemini key yet: add it in the app (⚙️ → ✨ AI)');
+      const inbox = folderPath(root, '_To file'), known = Object.keys(bills.reduce((o, b) => { if (b.biller) o[b.biller] = 1; return o; }, {})).slice(0, 60);
+      const label = GmailApp.getUserLabelByName('Family Screen bills') || GmailApp.createLabel('Family Screen bills');
+      for (const t of threads) {
+        for (const msg of t.getMessages()) {
+          const id = 'email-' + msg.getId(); if (seen[id]) continue;
+          if ((msg.getTo() + ' ' + msg.getCc()).toLowerCase().indexOf(addr) < 0 && t.getMessages().length > 1) continue;
+          const atts = msg.getAttachments({ includeInlineImages: false }).filter(a => /pdf|image\//i.test(a.getContentType()) && a.getSize() < 5e6).slice(0, 3);
+          let text = String(msg.getPlainBody() || '').replace(/\n>.*$/gm, ''); if (text.trim().length < 40) text = String(msg.getBody() || '').replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+          const prompt = 'You read an email sent to a New Zealand household\'s bills address, and any bill attached to it. Return JSON only: ' +
+            '{"is_bill":true,"biller":"company name, short (e.g. Mercury, Watercare, Auckland Council)","category":"one of ' + BILL_CATS.join(', ') + '","amount_cents":0,"due":"YYYY-MM-DD or empty","reference":"customer or account number as printed","period":"billing period, short","direct_debit":false,"min_due_cents":0,"summary":"one short line"}. ' +
+            'Today is ' + today + ' (Pacific/Auckland). amount_cents is the amount to pay by the due date (not a previous balance, a credit or a usage figure), in cents. ' +
+            'direct_debit is true only if it says the amount will be taken automatically by direct debit. If it is a receipt, a payment confirmation, a newsletter or a statement with nothing to pay, is_bill is false. ' +
+            'Never guess: leave a field empty or 0 if it is not shown. Billers we already have: ' + JSON.stringify(known) + ' (use the same name if it is one of these).\n\n' +
+            'From: ' + msg.getFrom() + '\nSubject: ' + msg.getSubject() + '\nDate: ' + msg.getDate() + '\n\n' + text.slice(0, 8000);
+          const parts = [{ text: prompt }].concat(atts.map(a => ({ inline_data: { mime_type: a.getContentType().split(';')[0], data: Utilities.base64Encode(a.getBytes()) } })));
+          let d; try { d = JSON.parse(gemini(key, parts) || '{}'); } catch (e) { if (e.gemini) throw e; d = { is_bill: true, summary: 'Couldn\'t read this one: open the email.' }; }
+          const fromEmail = { from: String(msg.getFrom()).slice(0, 160), subject: String(msg.getSubject() || '').slice(0, 160), at: msg.getDate().getTime(), link: 'https://mail.google.com/mail/u/0/#all/' + msg.getId() };
+          if (d.is_bill === false) { patch(path + '/' + id, { status: 'notbill', at: msg.getDate().getTime(), fromEmail: fromEmail, summary: String(d.summary || '').slice(0, 200) }); seen[id] = 1; continue; }
+          const amount = Math.max(0, Math.round(Number(d.amount_cents) || 0)), dd = /^\d{4}-\d{2}-\d{2}$/.test(d.due || '') ? d.due : '';
+          const okDue = dd && Math.abs((at(dd, '12:00') - now) / 864e5) < 150 ? dd : '';
+          const ref = String(d.reference || '').replace(/\s/g, ''), refM = ref ? '•••• ' + ref.slice(-4) : '';
+          const biller = String(d.biller || msg.getFrom().replace(/<.*>/, '').replace(/"/g, '').trim() || 'Bill').slice(0, 60);
+          const bill = { status: 'check', by: 'email', biller: biller, category: BILL_CATS.indexOf(d.category) >= 0 ? d.category : 'Other', amount: amount, due: okDue, reference: refM, period: String(d.period || '').slice(0, 60),
+            directDebit: !!d.direct_debit, minDue: Math.max(0, Math.round(Number(d.min_due_cents) || 0)), summary: String(d.summary || '').slice(0, 200), at: msg.getDate().getTime(), date: keyOf(msg.getDate()), fromEmail: fromEmail };
+          // the same bill sent again (a reminder): keep a note, don't add it twice
+          const dup = bills.find(b => b.status !== 'notbill' && b.status !== 'dup' && normB(b.biller) === normB(bill.biller) && b.amount === bill.amount && b.due === bill.due && bill.amount);
+          if (dup) { patch(path + '/' + id, { status: 'dup', dupOf: dup._id, at: bill.at, fromEmail: fromEmail }); seen[id] = 1; continue; }
+          // keep a copy in Drive: the attached bill, or the email itself as a PDF
+          const blob = atts.length ? atts[0].copyBlob() : Utilities.newBlob('<h2>' + fromEmail.subject + '</h2><p>' + fromEmail.from + ' · ' + msg.getDate() + '</p>' + msg.getBody(), 'text/html', 'bill.html').getAs('application/pdf');
+          const ext = atts.length ? ((atts[0].getName().match(/\.[a-z0-9]+$/i) || ['.pdf'])[0]) : '.pdf';
+          const file = inbox.createFile(blob).setName(billFileName(bill) + ext);
+          bill.pdf = { driveId: file.getId(), link: file.getUrl(), name: file.getName(), folder: '_To file' };
+          patch(path + '/' + id, bill); bill._id = id; bills.push(bill); fresh.push(bill); seen[id] = 1; added++;
+        }
+        t.addLabel(label);
+      }
+    }
+    // 4) the folder list the app offers (refreshed hourly or after filing)
+    if (!props.getProperty('BILL_FOLDERS_AT') || now.getTime() - Number(props.getProperty('BILL_FOLDERS_AT')) > 60 * 60e3) {
+      const inRoot = [], top = []; listFolders(root, '', 3, inRoot); listFolders(DriveApp.getRootFolder(), '/', 2, top);
+      patch('households/' + h._id, { billFolders: inRoot.concat(top.filter(p => p !== '/' + root.getName() && p.indexOf('/' + root.getName() + '/') !== 0)).slice(0, 500), billsRootName: root.getName() });
+      props.setProperty('BILL_FOLDERS_AT', String(now.getTime()));
+    }
+    // 5) the register in Google Sheets
+    const live = bills.filter(b => ['check', 'due', 'paid'].indexOf(b.status) >= 0).sort((a, b) => String(b.due || b.date).localeCompare(String(a.due || a.date)));
+    const sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(live.map(b => [b._id, b.status, b.biller, b.amount, b.due, b.paidAt, b.paidHow, b.category, b.pdf && b.pdf.link, b.directDebit]))));
+    if (sig !== props.getProperty('BILL_SHEET_SIG_' + h._id)) { const url = writeRegister(h, root, live, props); props.setProperty('BILL_SHEET_SIG_' + h._id, sig); if (url !== h.billSheet) patch('households/' + h._id, { billSheet: url }); }
+  } catch (e) { err = String(e && e.message || e).slice(0, 240); if (/permission|authori[sz]/i.test(err)) err = 'The helper needs permission for Gmail, Drive and Sheets: update appsscript.json and run billsCheckNow once (⚙️ → 🧰 Helpers). ' + err; }
+  patch('households/' + h._id, { billsHelper: { lastRun: now.getTime(), error: err, added: (prev.added || 0) + added, version: HELPER_VERSION } });
+  bills.forEach(b => { if (fresh.indexOf(b) >= 0) b._new = true; });
+  return bills;
+}
+function writeRegister(h, root, live, props) {
+  const idKey = 'BILL_SHEET_' + h._id; let ss = null;
+  try { const id = props.getProperty(idKey); if (id) ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; }
+  if (!ss) { ss = SpreadsheetApp.create('Household Bills Register'); DriveApp.getFileById(ss.getId()).moveTo(root); props.setProperty(idKey, ss.getId()); }
+  const fmtD = k => k ? k.split('-').reverse().join('/') : '';
+  const rows = [['Due', 'Biller', 'Category', 'Period', 'Amount', 'Direct debit', 'Status', 'Paid on', 'Paid how', 'Reference', 'Received', 'File']].concat(live.map(b => [
+    fmtD(b.due), b.biller || '', b.category || '', b.period || '', (b.amount || 0) / 100, b.directDebit ? 'Yes' : '', b.status === 'check' ? 'To check' : b.status === 'due' ? 'To pay' : 'Paid',
+    b.paidAt ? fmtD(keyOf(new Date(b.paidAt))) : '', b.paidHow || '', b.reference || '', b.date ? fmtD(b.date) : '', b.pdf && b.pdf.link ? '=HYPERLINK("' + b.pdf.link + '","Open")' : '']));
+  const sh = ss.getSheets()[0]; sh.setName('Bills'); sh.clear(); sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  sh.getRange(1, 1, 1, rows[0].length).setFontWeight('bold').setBackground('#fff1c9'); sh.setFrozenRows(1); if (rows.length > 1) sh.getRange(2, 5, rows.length - 1, 1).setNumberFormat('$#,##0.00');
+  // by month: what each category cost, from the due dates
+  const months = {}, cats = {};
+  live.filter(b => b.status !== 'check' && b.due).forEach(b => { const m = b.due.slice(0, 7); months[m] = months[m] || {}; months[m][b.category || 'Other'] = (months[m][b.category || 'Other'] || 0) + (b.amount || 0); cats[b.category || 'Other'] = 1; });
+  const cl = Object.keys(cats).sort(), ml = Object.keys(months).sort().reverse();
+  const sum = [['Month'].concat(cl).concat(['Total'])].concat(ml.map(m => [m].concat(cl.map(c => (months[m][c] || 0) / 100)).concat([cl.reduce((t, c) => t + (months[m][c] || 0), 0) / 100])));
+  const s2 = ss.getSheetByName('By month') || ss.insertSheet('By month'); s2.clear(); s2.getRange(1, 1, sum.length, sum[0].length).setValues(sum);
+  s2.getRange(1, 1, 1, sum[0].length).setFontWeight('bold').setBackground('#fff1c9'); s2.setFrozenRows(1); if (sum.length > 1) s2.getRange(2, 2, sum.length - 1, sum[0].length - 1).setNumberFormat('$#,##0.00');
+  return ss.getUrl();
+}
+// a new bill to check: tell everyone's phone once
+function billArrivals(h, bills, msgs, already) {
+  for (const b of bills || []) { if (!b._new) continue;
+    for (const hash of Object.keys(h.devices || {})) { const dev = h.devices[hash]; if (!dev || !dev.token || dev.remind === false) continue;
+      const key = 'bn|' + hash + '|' + b._id; if (already(key)) continue;
+      msgs.push({ device: hash, key, tag: 'bill' + b._id, title: dev.private ? '🧾 Family Screen' : '🧾 New bill to check: ' + b.biller, body: dev.private ? 'A new bill arrived.' : (b.amount ? money(b.amount) : 'Amount unknown') + (b.due ? ' · due ' + b.due.split('-').reverse().slice(0, 2).join('/') : '') + (b.directDebit ? ' · direct debit' : '') }); } }
+}
+// run this once by hand from the script editor: it asks for the Gmail, Drive and Sheets permissions, then checks the bills inbox straight away
+function billsCheckNow() {
+  const props = PropertiesService.getScriptProperties(), now = new Date();
+  for (const h of listDocs('households')) { const out = billsTick(h, props, now, true); Logger.log((h.billEmail || '(no bills address set)') + ': ' + out.length + ' bills. ' + ((getDoc('households/' + h._id).billsHelper || {}).error || 'OK')); }
+}
+
 if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn, checkEvery, parseFlight, flightAlerts, trackFlights };

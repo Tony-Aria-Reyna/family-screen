@@ -411,3 +411,126 @@ function giftViewers(first){
     m.querySelector('#s').onclick=()=>{ S.giftViewers=[...sel]; save(); close(); toast('Saved'); setTimeout(()=>{ SYNC.retrySoft(); setTimeout(giftsMain,900); },1500); };
   }; draw(); });
 }
+
+/* ================= bills (read from the bills email by the family's Google helper) ================= */
+const BILL_CATS=['Power','Gas','Internet','Phone','Water','Rates','Insurance','Car','Mortgage','Rent','Subscriptions','Medical','School','Childcare','Credit card','Other'];
+const BILL_ICON={Power:'⚡',Gas:'🔥',Internet:'🌐',Phone:'📱',Water:'💧',Rates:'🏛️',Insurance:'🛡️',Car:'🚗',Mortgage:'🏠',Rent:'🏠',Subscriptions:'📺',Medical:'🩺',School:'🎒',Childcare:'🧸','Credit card':'💳',Other:'🧾'};
+const PAY_HOW=['Bank transfer','Direct debit','Credit card','Cash','Other'];
+const $m=c=>'$'+(Number(c||0)/100).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+const liveBills=()=>(S.bills||[]).filter(b=>['check','due','paid'].includes(b.status));
+const billDue=b=>b.due?dueTxt(b.due):'no due date';
+const billIcon=b=>b.directDebit?'💳':BILL_ICON[b.category]||'🧾';
+const normF=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+// where a bill should be filed: the folder you used last time for this biller, or Category/Biller/Year
+function suggestFolder(b){
+  const yr=(b.due||b.date||dk(new Date())).slice(0,4);
+  const last=(S.bills||[]).filter(x=>x!==b&&x.fileTo&&normF(x.biller)===normF(b.biller)).sort((a,c)=>(c.at||0)-(a.at||0))[0];
+  if(last){ const p=last.fileTo.replace(/\/(19|20)\d\d$/,''); return /\/(19|20)\d\d$/.test(last.fileTo)?p+'/'+yr:last.fileTo; }
+  const ex=(S.billFolders||[]).find(f=>!f.startsWith('/')&&normF(f.split('/').pop())===normF(b.biller));
+  if(ex) return ex+'/'+yr;
+  return (b.category||'Other')+'/'+String(b.biller||'Bill').replace(/[\/\\]/g,' ').trim()+'/'+yr;
+}
+function newFolders(path){ const parts=path.split('/').filter(Boolean), abs=path.startsWith('/'), have=new Set(S.billFolders||[]), out=[]; let cur=abs?'/':'';
+  parts.forEach((p,i)=>{ cur=(i===0?(abs?'/':''):cur+'/')+p; if(!have.has(cur)) out.push(cur); }); return out; }
+const pathTxt=p=>(p.startsWith('/')?'My Drive › ':(S.billsRootName||S.billsRoot||'Household Bills')+' › ')+p.replace(/^\//,'').split('/').join(' › ');
+function billsSect(){
+  const chk=(S.bills||[]).filter(b=>b.status==='check'), soon=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=7).sort((a,b)=>a.due.localeCompare(b.due));
+  if(!chk.length&&!soon.length) return '';
+  return `<div class="sect warn">🧾 Bills</div>`+(chk.length?`<button class="rnrow soon" data-bills="check"><span>🔎 ${chk.length} new bill${chk.length>1?'s':''} to check</span><small>tap to check</small></button>`:'')+
+    soon.map(b=>`<button class="rnrow ${dueCls(b.due)}" data-bill="${b.id}"><span>${billIcon(b)} ${esc(b.biller)} ${$m(b.amount)}</span><small>${b.directDebit?'direct debit '+(daysTo(b.due)===0?'today':fmtD(kd(b.due),{weekday:'short'})):billDue(b)}</small></button>`).join('');
+}
+let billTab='check';
+function openBills(tab){
+  if(tab) billTab=tab;
+  const all=S.bills||[];
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
+    const chk=all.filter(b=>b.status==='check').sort((a,b)=>(b.at||0)-(a.at||0)), due=all.filter(b=>b.status==='due').sort((a,b)=>(a.due||'9').localeCompare(b.due||'9')), paid=all.filter(b=>b.status==='paid').sort((a,b)=>(b.paidAt||0)-(a.paidAt||0));
+    const row=b=>`<button class="mrow bill" data-bill="${b.id}"><span class="me">${billIcon(b)}</span><span class="mrt"><b>${esc(b.biller)} · ${$m(b.amount)}</b><small>${b.status==='paid'?'paid '+fmtD(new Date(b.paidAt||Date.now()),{day:'numeric',month:'short'})+(b.paidHow?' · '+esc(b.paidHow):''):billDue(b)}${b.directDebit&&b.status!=='paid'?' · direct debit':''}${b.period?' · '+esc(b.period):''}</small></span>${b.status==='due'&&b.due?`<span class="bdot ${dueCls(b.due)}"></span>`:''}</button>`;
+    let body='';
+    if(billTab==='check') body=chk.length?`<p class="note">New bills read from the bills email. Check each one, choose where its PDF is filed, and confirm.</p>`+chk.map(row).join(''):'<p class="note">Nothing to check. New bills sent to the bills email appear here within about 10 minutes.</p>';
+    if(billTab==='due') body=(due.length?due.map(row).join(''):'<p class="note">No bills waiting to be paid.</p>')+`<div class="mact"><button class="cancel" id="hand">＋ Add a paper bill</button></div>`;
+    if(billTab==='paid') body=paid.length?paid.slice(0,80).map(row).join(''):'<p class="note">No paid bills yet.</p>';
+    if(billTab==='report') body=billReport();
+    if(billTab==='setup') body=billSetupHTML();
+    m.innerHTML=`<div class="tvhead"><h2>🧾 Bills</h2><button class="save" id="x">Done</button></div>
+      <div class="opts mtabs">${[['check','🔎 To check',chk.length],['due','📅 To pay',due.length],['paid','✅ Paid',0],['report','📊 Report',0],['setup','⚙️ Setup',0]].map(([v,l,n])=>`<button class="opt sm ${billTab===v?'on':''}" data-bt="${v}">${l}${n?` <b>${n}</b>`:''}</button>`).join('')}</div>
+      <div class="tvlist">${body}</div>`;
+    m.querySelector('#x').onclick=close;
+    m.querySelectorAll('[data-bt]').forEach(b=>b.onclick=()=>{ billTab=b.dataset.bt; draw(); });
+    m.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>{ close(); openBill(all.find(x=>x.id===b.dataset.bill)); });
+    const hd=m.querySelector('#hand'); if(hd) hd.onclick=()=>{ close(); openBill(null); };
+    if(billTab==='report'){ const ys=m.querySelector('#by'); if(ys) ys.onchange=()=>{ billYear=+ys.value; draw(); }; }
+    if(billTab==='setup') wireBillSetup(m,draw);
+  }; draw(); });
+}
+let billYear=new Date().getFullYear();
+function billReport(){
+  const bs=liveBills().filter(b=>b.status!=='check'&&(b.due||b.date||'').startsWith(String(billYear)));
+  const years=[...new Set(liveBills().map(b=>(b.due||b.date||'').slice(0,4)).filter(Boolean).concat([String(new Date().getFullYear())]))].sort().reverse();
+  const byM=Array(12).fill(0), byC={}; let tot=0;
+  bs.forEach(b=>{ const mth=+((b.due||b.date).slice(5,7))-1; byM[mth]+=b.amount||0; byC[b.category||'Other']=(byC[b.category||'Other']||0)+(b.amount||0); tot+=b.amount||0; });
+  const mx=Math.max(1,...byM), cats=Object.entries(byC).sort((a,b)=>b[1]-a[1]);
+  const unpaid=(S.bills||[]).filter(b=>b.status==='due').reduce((t,b)=>t+(b.amount||0),0);
+  return `<div class="row" style="align-items:center;gap:10px;margin-bottom:8px"><select class="txt" id="by" style="width:auto">${years.map(y=>`<option ${+y===billYear?'selected':''}>${y}</option>`).join('')}</select>
+      <b style="font-size:20px">${$m(tot)}</b><span class="note">in ${billYear} (by due date) · ${$m(unpaid)} still to pay</span>
+      ${S.billSheet?`<a class="xbtn" href="${esc(S.billSheet)}" target="_blank" rel="noopener" style="margin-left:auto">📊 Open the Google Sheet register</a>`:''}</div>
+    <div class="step">Each month</div><div class="bchart">${byM.map((v,i)=>`<div><i style="height:${Math.round(v/mx*100)}%"></i><b>${v?'$'+Math.round(v/100):''}</b><span>${['J','F','M','A','M','J','J','A','S','O','N','D'][i]}</span></div>`).join('')}</div>
+    <div class="step">By type</div>${cats.map(([c,v])=>`<div class="bcat"><span>${BILL_ICON[c]||'🧾'} ${esc(c)}</span><i style="width:${Math.round(v/(cats[0][1]||1)*100)}%"></i><b>${$m(v)}</b></div>`).join('')||'<p class="note">No bills this year yet.</p>'}
+    <div class="step">Every bill in ${billYear}</div><table class="btab"><tr><th>Due</th><th>Biller</th><th>Amount</th><th>Status</th><th></th></tr>${bs.sort((a,b)=>(b.due||b.date).localeCompare(a.due||a.date)).map(b=>`<tr><td>${b.due?fmtD(kd(b.due),{day:'numeric',month:'short'}):''}</td><td>${billIcon(b)} ${esc(b.biller)}</td><td>${$m(b.amount)}</td><td>${b.status==='paid'?'✅ Paid':b.directDebit?'💳 Debit':'To pay'}</td><td>${b.pdf&&b.pdf.link?`<a href="${esc(b.pdf.link)}" target="_blank" rel="noopener">📄</a>`:''}</td></tr>`).join('')}</table>`;
+}
+function billSetupHTML(){
+  const hp=S.billsHelper, ok=hp&&hp.lastRun&&Date.now()-hp.lastRun<30*60e3;
+  return `<div class="rform"><label>Bills email address <small>(a “+bills” version of the Gmail that runs your reminder helper, e.g. yourname+bills@gmail.com. Send or forward bills here.)</small><input class="txt" id="be" type="email" value="${esc(S.billEmail||'')}" placeholder="yourname+bills@gmail.com"></label>
+    <label>Google Drive folder for bills <small>(made for you if it doesn't exist)</small><input class="txt" id="br" value="${esc(S.billsRoot||'Household Bills')}"></label>
+    <div><button class="save" id="bs" style="border-radius:14px;padding:12px 20px;font-weight:800">Save</button></div></div>
+    <div class="srccard" style="margin-top:12px"><h4>🤖 Bills helper ${ok?`<span class="pill-ok">✓ checked ${fmtTime(new Date(hp.lastRun),'Pacific/Auckland')}</span>`:'<span class="pill-wait">waiting</span>'}</h4>
+      ${hp&&hp.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(hp.error)}</p>`:''}
+      <p class="note">Bills are read by your reminder helper (version 9 or newer) in your Google account. ⚙️ → 🧰 Helpers has the code and the one-off steps.${S.aiKeyTail?'':' It also needs your Gemini key (⚙️ → ✨ AI).'}</p>
+      <button class="xbtn" id="bh">🧰 Open Helpers</button></div>`;
+}
+function wireBillSetup(m,draw){
+  m.querySelector('#bs').onclick=()=>{ const e=m.querySelector('#be').value.trim().toLowerCase(), r=m.querySelector('#br').value.trim()||'Household Bills';
+    if(e&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('That email address doesn’t look right'); return; }
+    if(e&&!/\+/.test(e)&&!confirm('This address has no “+” part, so the helper will read every email sent to it as a possible bill. Use it anyway?')) return;
+    S.billEmail=e; S.billsRoot=r; save(); toast('Saved. The helper checks every 10 minutes.'); draw(); };
+  m.querySelector('#bh').onclick=()=>{ closeModal(); openHelpers(); };
+}
+// one bill: check it (and choose its folder), mark it paid, or fix the details
+function openBill(b0){
+  const isNew=!b0, b=b0?JSON.parse(JSON.stringify(b0)):{status:'due',by:'hand',biller:'',category:'Other',amount:0,due:dk(addDays(new Date(),14)),directDebit:false,period:'',reference:''};
+  let folder=b.fileTo||(b.pdf&&b.pdf.driveId?suggestFolder(b):''), pickF=false, fq='';
+  modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
+    const chk=b.status==='check', nf=folder?newFolders(folder):[];
+    const fl=(S.billFolders||[]).filter(f=>!fq||f.toLowerCase().includes(fq.toLowerCase())).slice(0,60);
+    m.innerHTML=`<div class="rhead"><span class="rem">${billIcon(b)}</span><div style="flex:1"><h2>${isNew?'＋ A bill':esc(b.biller||'Bill')}</h2>
+      <p class="note" style="margin:2px 0">${chk?'🔎 Read from email: check it and confirm':b.status==='paid'?'✅ Paid '+fmtD(new Date(b.paidAt||Date.now()),{day:'numeric',month:'short',year:'numeric'})+(b.paidHow?' · '+esc(b.paidHow):''):b.status==='due'?(b.directDebit?'💳 Direct debit · ':'')+billDue(b):''}</p>
+      ${b.summary?`<p class="note" style="margin:0">${esc(b.summary)}</p>`:''}</div></div>
+      ${b.fromEmail||b.pdf?`<div class="row" style="gap:8px;margin:6px 0">${b.pdf&&b.pdf.link?`<a class="xbtn" href="${esc(b.pdf.link)}" target="_blank" rel="noopener">📄 Open the bill</a>`:''}${b.fromEmail&&b.fromEmail.link?`<a class="xbtn" href="${esc(b.fromEmail.link)}" target="_blank" rel="noopener">✉️ Open the email</a>`:''}</div>`:''}
+      <div class="rform"><div class="row"><label>Biller<input class="txt" id="bb" value="${esc(b.biller||'')}"></label><label>Amount $<input class="txt" id="ba" inputmode="decimal" value="${b.amount?(b.amount/100).toFixed(2):''}" style="width:140px"></label><label>Due<input class="txt" id="bd" type="date" value="${esc(b.due||'')}"></label></div>
+      <div class="row"><label>Type<select class="txt" id="bc">${BILL_CATS.map(c=>`<option ${b.category===c?'selected':''}>${c}</option>`).join('')}</select></label><label>Period<input class="txt" id="bp" value="${esc(b.period||'')}" placeholder="e.g. October"></label><label>Account<input class="txt" id="bref" value="${esc(b.reference||'')}" placeholder="•••• 1234" style="width:150px"></label></div>
+      <label class="small" style="flex-direction:row;align-items:center;gap:8px;font-weight:600"><input type="checkbox" id="bdd" ${b.directDebit?'checked':''}> 💳 Paid automatically by direct debit (it goes on the calendar on the day it comes out)</label></div>
+      ${b.pdf&&b.pdf.driveId?`<div class="step">📁 File the PDF in</div>
+        <div class="bfold"><b>${esc(pathTxt(folder))}</b>${b.pdf.folder&&b.pdf.folder===folder?' <span class="pill-ok">✓ filed</span>':b.fileTo===folder?' <span class="pill-wait">filing…</span>':''}
+        ${nf.length&&b.pdf.folder!==folder?`<div class="note" style="color:#b45309">🆕 New folder${nf.length>1?'s':''} will be made: ${nf.map(x=>esc(x.split('/').filter(Boolean).pop())).join(' › ')}</div>`:''}
+        <div class="row" style="gap:6px;margin-top:6px"><button class="xbtn" id="fs">↺ Use the suggestion</button><button class="xbtn" id="fp">📂 Choose another folder</button></div>
+        ${pickF?`<input class="txt" id="fq" placeholder="Search folders, or type a new path like Car/Insurance/2026" value="${esc(fq)}" style="margin-top:8px">
+          <div class="flist">${fq&&!fl.includes(fq)?`<button class="mrow" data-f="${esc(fq.replace(/^\s+|\s+$/g,''))}"><span class="me">🆕</span><span class="mrt"><b>${esc(pathTxt(fq))}</b><small>make this new folder</small></span></button>`:''}${fl.map(f=>`<button class="mrow" data-f="${esc(f)}"><span class="me">📁</span><span class="mrt"><b>${esc(pathTxt(f))}</b></span></button>`).join('')||(!fq?'<p class="note">No folders found yet. Type a path to make one.</p>':'')}</div>`:''}</div>`:''}
+      <div class="mact" style="flex-wrap:wrap">${!isNew?'<button class="del" id="bx">'+(chk?'🚫 Not a bill':'Delete')+'</button>':''}<button class="cancel" id="bk">Back</button>
+        ${chk?'<button class="save" id="bok">✅ Confirm</button>':b.status==='due'?'<button class="cancel" id="bsv">Save</button><button class="save" id="bpd">✅ Paid</button>':b.status==='paid'?'<button class="cancel" id="bun">↩ Not paid</button><button class="save" id="bsv">Save</button>':'<button class="save" id="bsv">Save</button>'}</div>`;
+    const grab=()=>{ const v=id=>m.querySelector(id).value; b.biller=v('#bb').trim(); b.amount=Math.round(parseFloat(v('#ba').replace(/[$,\s]/g,''))*100)||0; b.due=v('#bd'); b.category=v('#bc'); b.period=v('#bp').trim(); b.reference=v('#bref').trim(); b.directDebit=m.querySelector('#bdd').checked; };
+    const keep=()=>{ grab(); if(!b.biller){ toast('Who is the bill from?'); return false; } if(!b.amount){ toast('Type the amount'); return false; } if(!b.due){ toast('Pick the due date'); return false; }
+      if(b.pdf&&b.pdf.driveId&&folder) b.fileTo=folder.replace(/\/+$/,'');
+      S.bills=S.bills||[]; if(isNew) S.bills.push(Object.assign({id:'hand-'+uid(),at:Date.now(),date:dk(new Date())},b)); else Object.assign(b0,b); save(); renderAll(); return true; };
+    m.querySelector('#bk').onclick=()=>{ close(); openBills(); };
+    const fs=m.querySelector('#fs'); if(fs) fs.onclick=()=>{ grab(); folder=suggestFolder(b); pickF=false; draw(); };
+    const fp=m.querySelector('#fp'); if(fp) fp.onclick=()=>{ grab(); pickF=!pickF; draw(); };
+    const fqi=m.querySelector('#fq'); if(fqi){ fqi.oninput=()=>{ fq=fqi.value; const p=fqi.selectionStart; grab(); draw(); const n=m.querySelector('#fq'); n.focus(); n.setSelectionRange(p,p); }; }
+    m.querySelectorAll('[data-f]').forEach(x=>x.onclick=()=>{ grab(); folder=x.dataset.f.replace(/\s*\/\s*/g,'/').replace(/\/+$/,''); pickF=false; fq=''; draw(); });
+    const bx=m.querySelector('#bx'); if(bx) bx.onclick=()=>{ if(chk){ b0.status='ignored'; save(); close(); toast('Marked as not a bill'); openBills(); } else if(confirm('Delete this bill?')){ S.bills=S.bills.filter(x=>x!==b0); save(); close(); renderAll(); openBills(); } };
+    const ok=m.querySelector('#bok'); if(ok) ok.onclick=()=>{ b.status='due'; if(!keep()) { b.status='check'; return; } close(); toast(b.directDebit?'Confirmed: the direct debit is on the calendar':'Confirmed: it’s on the calendar and you’ll get reminders'); openBills('check'); };
+    const sv=m.querySelector('#bsv'); if(sv) sv.onclick=()=>{ if(keep()){ close(); toast('Saved'); if(isNew) openBills('due'); } };
+    const un=m.querySelector('#bun'); if(un) un.onclick=()=>{ b0.status='due'; delete b0.paidAt; delete b0.paidHow; delete b0.paidBy; save(); close(); renderAll(); openBills('due'); };
+    const pd=m.querySelector('#bpd'); if(pd) pd.onclick=()=>{ if(!keep()) return; close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>✅ ${esc(b0.biller)} ${$m(b0.amount)} paid</h2><div class="step">How?</div><div class="opts">${PAY_HOW.map(h=>`<button class="opt" data-h="${h}">${h}</button>`).join('')}</div><div class="mact"><button class="cancel" id="c">Cancel</button></div>`;
+      m2.querySelector('#c').onclick=c2; m2.querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>{ b0.status='paid'; b0.paidAt=Date.now(); b0.paidHow=x.dataset.h; b0.paidBy=mePerson()||SYNC.me&&SYNC.me()||''; save(); c2(); renderAll(); toast('Marked paid'); openBills('due'); }); }); };
+  }; draw(); });
+}
