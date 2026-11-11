@@ -237,22 +237,176 @@ async function fileForAI(file){
 // ---- AI (Gemini, through the family's own Google helper so the key never sits in the app)
 const RECIPE_SHAPE=`{"name":"...","meal":"dinner|lunch|breakfast","emoji":"one food emoji","mins":30,"serves":4,"tags":["Mexican","Quick"],"blurb":"one friendly sentence","ing":[[500,"g","beef mince"],[1,"","brown onion"],[1,"tbsp","oil","p"]],"steps":[["Step text, clear and specific.",8],["Step without a timer."]]}`;
 const RECIPE_RULES=`Rules for every recipe: metric units only (g, ml, tsp, tbsp, cup, or "" for counted items); ingredient names as they'd appear on a New Zealand supermarket shelf (Woolworths, New World, PAK'nSAVE), e.g. "kūmara", "capsicum", "courgette"; mark pantry staples (oil, salt, pepper, flour, sugar, soy sauce, butter, spices) with "p" as a 4th item; steps written HelloFresh-style: 4-7 numbered steps, each one or two short sentences, saying the heat and what "done" looks like; add the minutes as the 2nd item of a step only when there's waiting or cooking time.`;
-async function aiAsk(payload){
-  if(LOCAL&&!window.AI_TEST) throw new Error('AI ideas work in the real app once you’re signed in');
-  const h=S.linkHelper; if(!h||!h.url){ aiSetup(); throw new Error('quiet'); }
+/* ---- talking to Gemini. With the family's key in hand the app calls Gemini itself, word by word (fast); otherwise it
+   goes through the Google helper. Thinking is kept low: these are quick jobs. ---- */
+const AI_MODEL_DEFAULT='gemini-3.6-flash';
+async function aiModel(key,force){
+  const saved=lsGet('fs.aiModel',''); if(saved&&!force) return saved;
+  try{ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':key}}); const j=await r.json();
+    const ok=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/gemini-[\d.]+-flash$/.test(m.name)).map(m=>m.name.replace('models/','')).sort((a,b)=>parseFloat(b.split('-')[1])-parseFloat(a.split('-')[1]));
+    if(ok.length){ lsSet('fs.aiModel',ok[0]); return ok[0]; } }catch(e){}
+  return AI_MODEL_DEFAULT;
+}
+// one call. payload: {prompt, file:{mime,data}, url, json:true|false}; onText(partial) streams the words as they arrive
+async function aiAsk(payload,onText){
+  if(LOCAL&&!window.AI_TEST) throw new Error('AI works in the real app once you’re signed in');
+  if(S.aiKey) return aiDirect(S.aiKey,payload,onText);
+  const h=S.linkHelper; if(!h||!h.url){ requirePin(()=>aiSetup()); throw new Error('quiet'); }
   let t; try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:h.key,action:'ai'},payload)),redirect:'follow'}); t=await r.text(); }
   catch(e){ throw new Error('Could not reach your Google helper. Check the internet and try again.'); }
-  let j; try{ j=JSON.parse(t); }catch(e){ aiSetup(true); throw new Error('quiet'); }
-  if(j.error==='nokey'){ aiSetup(); throw new Error('quiet'); }
+  let j; try{ j=JSON.parse(t); }catch(e){ requirePin(()=>aiSetup(true)); throw new Error('quiet'); }
+  if(j.error==='nokey'){ requirePin(()=>aiSetup()); throw new Error('quiet'); }
   if(j.error) throw new Error(/not allowed/.test(j.error)?'The helper key doesn’t match. Copy the helper code again (⚙️ → Connect calendars).':'Gemini said: '+String(j.error).slice(0,160));
-  const s=String(j.text||'').replace(/^```(?:json)?\s*|\s*```$/g,''); try{ return JSON.parse(s); }catch(e){ throw new Error('Gemini sent back something I couldn’t read. Try again.'); }
+  return aiParse(j.text,payload.json!==false);
 }
+function aiParse(text,json){ const s=String(text||'').replace(/^```(?:json)?\s*|\s*```$/g,'').trim(); if(!json) return s; try{ return JSON.parse(s); }catch(e){ const m=s.match(/\{[\s\S]*\}/); if(m) try{ return JSON.parse(m[0]); }catch(x){} throw new Error('Gemini sent back something I couldn’t read. Try again.'); } }
+async function aiDirect(key,payload,onText,tried){
+  tried=tried||{};
+  const json=payload.json!==false, parts=[{text:String(payload.prompt||'').slice(0,120000)}];
+  if(payload.url) parts[0].text+='\n\nWeb page to read: '+payload.url;
+  if(payload.file&&payload.file.data) parts.push({inline_data:{mime_type:payload.file.mime||'image/jpeg',data:payload.file.data}});
+  const gc={temperature:0.4}; if(json) gc.responseMimeType='application/json'; if(!tried.think) gc.thinkingConfig={thinkingLevel:'low'};
+  const body={contents:[{role:'user',parts}],generationConfig:gc}; if(payload.url&&!tried.url) body.tools=[{url_context:{}}];
+  const model=await aiModel(key);
+  const ctl=new AbortController(); payload.abort=ctl;
+  let r; try{ r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:ctl.signal}); }
+  catch(e){ if(e.name==='AbortError') throw new Error('quiet'); throw new Error('Could not reach Gemini. Check the internet and try again.'); }
+  if(!r.ok){ const t=await r.text().catch(()=>''); 
+    if(r.status===404&&!tried.model){ tried.model=true; await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
+    if(r.status===400&&/think/i.test(t)&&!tried.think){ tried.think=true; return aiDirect(key,payload,onText,tried); }
+    if(r.status===400&&/url_context|tool/i.test(t)&&!tried.url){ tried.url=true; return aiDirect(key,payload,onText,tried); }
+    if(r.status===400&&/API key|invalid/i.test(t)) throw new Error('Gemini didn’t accept the key. Check it under ⚙️ → ✨ AI.');
+    if(r.status===429) throw new Error('Gemini is busy (the free limit for this minute is used up). Try again in a moment.');
+    let msg=''; try{ msg=JSON.parse(t).error.message; }catch(e){} throw new Error('Gemini said: '+(msg||r.status).toString().slice(0,160)); }
+  let text='', buf=''; const rd=r.body.getReader(), dec=new TextDecoder();
+  while(true){ const {done,value}=await rd.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf('\n'))>=0){ const line=buf.slice(0,i).trim(); buf=buf.slice(i+1); if(!line.startsWith('data:')) continue;
+      try{ const j=JSON.parse(line.slice(5)); const ps=(((j.candidates||[])[0]||{}).content||{}).parts||[]; const add=ps.map(p=>p.text||'').join(''); if(add){ text+=add; if(onText) onText(text); else aiProgress(text); } }catch(e){} } }
+  if(buf.trim().startsWith('data:')) try{ const j=JSON.parse(buf.trim().slice(5)); const add=((((j.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||'').join(''); if(add){ text+=add; if(onText) onText(text); } }catch(e){}
+  if(!text) throw new Error('Gemini sent nothing back. Try again.');
+  return aiParse(text,json);
+}
+
+/* ---- family memory: notes the family drops in, which every AI feature reads first ---- */
+const memNotes=()=>(S.memory||[]).filter(m=>m.text);
+// what to tell Gemini: all the notes when they're short, otherwise the ones that share words with the question
+function memoryContext(query,budget){
+  budget=budget||5000; const notes=memNotes(); if(!notes.length) return '';
+  const line=n=>'- '+(n.title?n.title+': ':'')+n.text.replace(/\s+/g,' ').trim();
+  let all=notes.map(line).join('\n'); if(all.length<=budget) return all;
+  const words=new Set(String(query||'').toLowerCase().split(/[^a-zāēīōū']+/).filter(w=>w.length>3));
+  const score=n=>{ const t=(n.title+' '+n.text+' '+(n.tags||[]).join(' ')).toLowerCase(); let k=0; words.forEach(w=>{ if(t.includes(w)) k++; }); return k+(n.pin?3:0); };
+  const picked=notes.map(n=>[score(n),n]).sort((a,b)=>b[0]-a[0]||(b[1].at||0)-(a[1].at||0)); let out='', used=0;
+  for(const [,n] of picked){ const l=line(n); if(used+l.length>budget) continue; out+=l+'\n'; used+=l.length; }
+  return out.trim();
+}
+const familyIntro=()=>`The family (Auckland, New Zealand): ${eaters().map(p=>p.name+(p.id===(traveller()||{}).id?' (flies for work as cabin crew, often away)':'')).join(', ')}. Today is ${fmtD(new Date(),{weekday:'long',day:'numeric',month:'long',year:'numeric'})}.`;
+const withMemory=(prompt,query)=>{ const mc=memoryContext(query||prompt); return familyIntro()+(mc?'\n\nThings the family has told you (use them, they matter):\n'+mc:'')+'\n\n'+prompt; };
+function openMemory(){
+  let q='';
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const k=q.trim().toLowerCase();
+    const list=memNotes().filter(n=>!k||(n.title+' '+n.text+' '+(n.tags||[]).join(' ')).toLowerCase().includes(k)).sort((a,b)=>(b.pin?1:0)-(a.pin?1:0)||(b.at||0)-(a.at||0));
+    m.innerHTML=`<div class="tvhead"><h2>🧠 Family memory</h2><button class="save" id="x">Done</button></div>
+      <p class="note">What the family knows. Meal ideas, recipes, bills and Ask all read these first, so the more you put in, the better they get: who likes what, allergies, the car, the house, school, routines, favourite shops, anything.</p>
+      <div class="memdrop" id="drop"><b>➕ Drop a file here, or tap</b><small>Notes, PDFs, photos, screenshots, Word files. Gemini reads them into short notes you can edit.</small><input type="file" id="mf" multiple accept="image/*,application/pdf,text/*,.txt,.md,.csv,.docx" hidden></div>
+      <form class="addrow" id="mform" style="padding:8px 0"><input id="mtxt" placeholder="…or type a fact: Aria is allergic to peanuts; the Mazda takes 95" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
+      <input class="txt" id="mq" placeholder="Search the notes" value="${esc(q)}" autocomplete="off">
+      <div class="tvlist">${list.map(n=>`<button class="mrow mem" data-m="${n.id}"><span class="me">${n.pin?'📌':n.src==='file'?'📄':'📝'}</span><span class="mrt"><b>${esc(n.title||n.text.slice(0,60))}</b><small>${esc(n.text.slice(0,140))}${n.text.length>140?'…':''}</small></span></button>`).join('')||'<p class="note">Nothing yet. Drop in a file or type a fact.</p>'}</div>`;
+    m.querySelector('#x').onclick=close;
+    const dz=m.querySelector('#drop'), fi=m.querySelector('#mf'); dz.onclick=()=>fi.click();
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add('over'); })); ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove('over'); }));
+    dz.addEventListener('drop',e=>memFiles([...e.dataTransfer.files],draw)); fi.onchange=()=>{ memFiles([...fi.files],draw); fi.value=''; };
+    m.querySelector('#mform').onsubmit=e=>{ e.preventDefault(); const v=m.querySelector('#mtxt').value.trim(); if(!v) return; addMem({text:v,src:'typed'}); draw(); };
+    const qi=m.querySelector('#mq'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=m.querySelector('#mq'); n.focus(); n.setSelectionRange(p,p); };
+    m.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ close(); editMem((S.memory||[]).find(x=>x.id===b.dataset.m)); });
+  }; draw(); });
+}
+function addMem(n){ S.memory=S.memory||[]; const x=Object.assign({id:uid(),title:'',text:'',tags:[],at:Date.now(),by:mePerson()||''},n); x.text=String(x.text).slice(0,4000); x.title=String(x.title||'').slice(0,80); S.memory.unshift(x); save(); return x; }
+function editMem(n){
+  modal((m,close)=>{ m.classList.add('wide');
+    m.innerHTML=`<h2>${n.src==='file'?'📄':'📝'} Memory note</h2><div class="rform"><label>Title<input class="txt" id="t" value="${esc(n.title||'')}" placeholder="e.g. The Mazda, Aria's school, What we like to eat"></label>
+      <label>What to remember<textarea class="txt" id="x" rows="9">${esc(n.text)}</textarea></label>
+      <label class="small" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="pin" ${n.pin?'checked':''}> 📌 Always include this (even when there are lots of notes)</label>
+      ${n.file?`<p class="note">From ${esc(n.file)}${n.at?' · '+fmtD(new Date(n.at),{day:'numeric',month:'short',year:'numeric'}):''}</p>`:''}</div>
+      <div class="mact"><button class="del" id="d">Delete</button><button class="cancel" id="c">Back</button><button class="save" id="s">Save</button></div>`;
+    m.querySelector('#c').onclick=()=>{ close(); openMemory(); };
+    m.querySelector('#d').onclick=()=>{ S.memory=S.memory.filter(x=>x.id!==n.id); save(); close(); openMemory(); };
+    m.querySelector('#s').onclick=()=>{ n.title=m.querySelector('#t').value.trim().slice(0,80); n.text=m.querySelector('#x').value.trim().slice(0,4000); n.pin=m.querySelector('#pin').checked; if(!n.text){ toast('Type something to remember'); return; } save(); close(); openMemory(); };
+  });
+}
+async function memFiles(files,after){
+  for(const f of files.slice(0,10)){
+    try{
+      if(/^text\/|\.(txt|md|csv)$/i.test(f.type+' '+f.name)){ const t=(await f.text()).trim(); if(t) addMem({title:f.name.replace(/\.[^.]+$/,''),text:t.slice(0,4000),src:'file',file:f.name}); continue; }
+      if(/\.docx$/i.test(f.name)){ const t=await docxText(f); if(t) addMem({title:f.name.replace(/\.[^.]+$/,''),text:t.slice(0,4000),src:'file',file:f.name}); continue; }
+      const done=aiBusy('Reading '+f.name+'…');
+      try{ const data=await fileForAI(f);
+        const out=await aiAsk({prompt:withMemory(`Read the attached file for a family's memory bank. Return JSON only: {"title":"short title","notes":["one fact per item, short, in plain English, keep names, numbers, dates, amounts and addresses exactly"]}. Keep every fact that could matter to the family later (people, pets, cars, house, school, work, health, money, routines, preferences, contacts, dates, bookings, recipes). Skip boilerplate and legal text. Up to 40 facts.`),file:data,json:true});
+        done(); const notes=(out.notes||[]).map(String).filter(Boolean); if(!notes.length) throw new Error('Nothing useful found in '+f.name);
+        addMem({title:String(out.title||f.name).slice(0,80),text:notes.map(x=>'• '+x).join('\n'),src:'file',file:f.name}); toast('Read '+f.name+': '+notes.length+' facts'); }
+      catch(e){ done(); throw e; }
+    }catch(e){ if(e.message!=='quiet') toast(e.message||('Could not read '+f.name)); }
+  }
+  if(after) after();
+}
+async function docxText(f){
+  try{ const buf=await f.arrayBuffer(), dv=new DataView(buf), u8=new Uint8Array(buf);
+    // find the central directory, then word/document.xml
+    let eocd=-1; for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--) if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } if(eocd<0) return '';
+    let p=dv.getUint32(eocd+16,true); const n=dv.getUint16(eocd+10,true);
+    for(let k=0;k<n;k++){ if(dv.getUint32(p,true)!==0x02014b50) break; const method=dv.getUint16(p+10,true), csz=dv.getUint32(p+20,true), nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+      const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl)); p+=46+nl+el+cl;
+      if(name!=='word/document.xml') continue;
+      const lnl=dv.getUint16(off+26,true), lel=dv.getUint16(off+28,true), start=off+30+lnl+lel, data=u8.subarray(start,start+csz);
+      let xml; if(method===0) xml=new TextDecoder().decode(data); else { const ds=new DecompressionStream('deflate-raw'); const w=ds.writable.getWriter(); w.write(data); w.close(); xml=await new Response(ds.readable).text(); }
+      return xml.replace(/<\/w:p>/g,'\n').replace(/<w:tab\/>/g,'\t').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(+n)).replace(/\n{3,}/g,'\n\n').trim(); }
+    return ''; }catch(e){ return ''; }
+}
+
+/* ---- Ask: anything about the family, answered from what the app knows ---- */
+function askContext(){
+  const today=dk(new Date()), days=[...Array(8)].map((_,i)=>dk(addDays(new Date(),i))), out=[];
+  const tp=traveller(); if(tp){ const now=new Date(), r=travellerNow(now), fl=(S.flights||[]).filter(f=>f.who===tp.id), nx=fl.filter(f=>fS(f)>now).sort((a,b)=>fS(a)-fS(b))[0], hm2=fl.filter(f=>fS(f)>now&&HOME.includes(f.to)).sort((a,b)=>fS(a)-fS(b))[0];
+    const ft=f=>f?`${f.from}→${f.to} leaving ${fmtD(fS(f),{weekday:'short',day:'numeric',month:'short'})} ${fmtTime(fS(f),'Pacific/Auckland')}, landing ${fmtD(fE(f),{weekday:'short',day:'numeric',month:'short'})} ${fmtTime(fE(f),'Pacific/Auckland')} (NZ time)`:'';
+    out.push(`${tp.name} right now: ${r?(r.air?'in the air '+r.air.from+'→'+r.air.to:'away in '+(r.a?r.a[0]+', '+r.a[2]:r.code)):'at home'}.${nx?' Next flight: '+ft(nx)+'.':' No more flights loaded.'}${hm2?' Back home: lands '+fmtD(fE(hm2),{weekday:'long',day:'numeric',month:'short'})+' '+fmtTime(fE(hm2),'Pacific/Auckland')+' NZ time.':''}`); }
+  for(const key of days){ const items=itemsForDay(key).filter(x=>x.k==='ev'&&x.e).map(x=>(x.e.time?t12(x.e.time)+' ':'')+x.e.title+(x.e.whos&&x.e.whos.length?' ('+x.e.whos.map(nm).join(', ')+')':'')); if(items.length) out.push(`${key===today?'Today':fmtD(kd(key),{weekday:'long',day:'numeric',month:'short'})}: ${items.join('; ')}`); }
+  const jobs=(S.todos||[]).filter(t=>!t.done&&vis(t)); if(jobs.length) out.push('Jobs to do: '+jobs.slice(0,40).map(t=>t.title+(person(t.who)?' ('+nm(t.who)+')':'')).join('; '));
+  const meals=(S.meals||[]).filter(m=>days.includes(m.date)); if(meals.length) out.push('Meal plan: '+meals.map(m=>{ const r=m.rid&&recipeById(m.rid); return fmtD(kd(m.date),{weekday:'short'})+' '+m.slot+': '+(r?r.name:m.note||''); }).join('; '));
+  const shop=(S.groceries||[]).filter(g=>!g.done); if(shop.length) out.push('Shopping list: '+shop.slice(0,60).map(g=>g.name).join(', '));
+  const bills=(S.bills||[]).filter(b=>b.status==='due'||b.status==='check'); if(bills.length) out.push('Bills: '+bills.map(b=>(b.biller||'Bill')+' '+$m(b.amount)+(b.due?' due '+b.due:'')+(b.status==='check'?' (to check)':'')+(b.directDebit?' (direct debit)':'')).join('; '));
+  const rn=(S.renewals||[]).filter(r=>r.due); if(rn.length) out.push('Renewals: '+rn.map(r=>r.what+(r.item?' '+r.item:'')+' due '+r.due).join('; '));
+  return out.join('\n');
+}
+let askLog=[], askCur=null;
+function openAsk(seed){
+  modal((m,close)=>{ m.classList.add('wide','tvsheet');
+    m.innerHTML=`<div class="tvhead"><h2>💬 Ask</h2><button class="save" id="x">Done</button></div>
+      <div class="asklog" id="log"></div>
+      <div class="askchips" id="chips"></div>
+      <form class="addrow" id="af"><input id="aq" placeholder="e.g. What’s on tomorrow? When is Mummy home? What do we need for Thursday’s dinner?" autocomplete="off" enterkeyhint="send"><button aria-label="Ask">➤</button></form>`;
+    const log=m.querySelector('#log'), qi=m.querySelector('#aq');
+    const chips=['What’s on this week?','When is Mummy home?','What should I cook tonight?','What bills are due?','What jobs are mine?'];
+    const drawLog=()=>{ log.innerHTML=askLog.map(x=>`<div class="ask ${x.who}">${x.who==='you'?esc(x.text):mdLite(x.text)}</div>`).join('')||'<p class="note">Ask anything about the family’s week, meals, bills, jobs or what’s in memory. Answers come from what the app knows, not the internet.</p>'; log.scrollTop=log.scrollHeight;
+      m.querySelector('#chips').innerHTML=askLog.length?'':chips.map(c=>`<button type="button" class="opt sm" data-c="${esc(c)}">${esc(c)}</button>`).join(''); m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>ask(b.dataset.c)); };
+    const ask=async q=>{ if(!q) return; qi.value=''; askLog.push({who:'you',text:q}); const a={who:'ai',text:'…'}; askLog.push(a); drawLog();
+      const hist=askLog.slice(-7,-2).map(x=>(x.who==='you'?'Q: ':'A: ')+x.text).join('\n');
+      const prompt=withMemory(`You are the family's helper on their fridge screen. Answer the question briefly and warmly in plain English (NZ spelling), using ONLY the facts below and the family notes. If you don't know, say so and suggest where to look in the app. Use short lines or a short list; no headings; no markdown tables.\n\nWhat the app knows:\n${askContext()}\n${hist?'\nEarlier in this chat:\n'+hist+'\n':''}\nQuestion: ${q}`,q);
+      const pl={prompt,json:false}; askCur=pl;
+      try{ const txt=await aiAsk(pl,t=>{ a.text=t; drawLog(); }); a.text=txt; }catch(e){ a.text=e.message==='quiet'?'(AI isn’t set up yet)':'⚠️ '+e.message; } drawLog(); };
+    m.querySelector('#x').onclick=()=>{ if(askCur&&askCur.abort) try{ askCur.abort.abort(); }catch(e){} close(); }; m.querySelector('#af').onsubmit=e=>{ e.preventDefault(); ask(qi.value.trim()); };
+    drawLog(); if(seed) ask(seed); else qi.focus();
+  });
+}
+// a little markdown: bold, bullets, line breaks
+function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n').map(l=>/^\s*[-•*]\s+/.test(l)?'<div class="li">• '+l.replace(/^\s*[-•*]\s+/,'')+'</div>':l?'<div>'+l+'</div>':'').join(''); }
+
 const cleanRecipe=x=>({id:'ai-'+uid(),name:String(x.name||'Recipe').slice(0,80),meal:['dinner','lunch','breakfast'].includes(x.meal)?x.meal:'dinner',emoji:x.emoji||'🍽️',mins:+x.mins||0,serves:+x.serves||4,tags:(x.tags||[]).map(String).slice(0,5),blurb:String(x.blurb||''),
   ing:(x.ing||[]).filter(i=>Array.isArray(i)&&i[2]).map(i=>[+i[0]||0,String(i[1]||''),String(i[2])].concat(i[3]==='p'?['p']:[])),steps:(x.steps||[]).map(s=>Array.isArray(s)?[String(s[0]),+s[1]||undefined].filter(v=>v!==undefined):[String(s)])});
-function aiBusy(msg){ const el=document.createElement('div'); el.className='aibusy'; el.innerHTML=`<div><div class="spin"></div><p>${esc(msg)}</p></div>`; document.body.appendChild(el); return ()=>el.remove(); }
+function aiBusy(msg){ const el=document.createElement('div'); el.className='aibusy'; el.innerHTML=`<div><div class="spin"></div><p>${esc(msg)}</p><small id="aiProg"></small></div>`; document.body.appendChild(el); return ()=>el.remove(); }
+function aiProgress(text){ const p=document.getElementById('aiProg'); if(p) p.textContent=text.length<40?'Thinking…':'Writing… '+text.split(/\s+/).length+' words'; }
 async function readRecipe(src){
   const done=aiBusy('Reading the recipe…');
-  try{ const out=await aiAsk(Object.assign({prompt:`Read the recipe in the attached ${src.file?'file':src.url?'web page':'text'} and return it as JSON exactly in this shape (one recipe object, no extra text):\n${RECIPE_SHAPE}\n${RECIPE_RULES}\nKeep the original quantities and serves; rewrite the method into clear steps.`+(src.text?'\n\nRECIPE:\n'+src.text.slice(0,20000):'')},src.file?{file:src.file}:src.url?{url:src.url}:{}));
+  try{ const out=await aiAsk(Object.assign({json:true,prompt:withMemory(`Read the recipe in the attached ${src.file?'file':src.url?'web page':'text'} and return it as JSON exactly in this shape (one recipe object, no extra text):\n${RECIPE_SHAPE}\n${RECIPE_RULES}\nKeep the original quantities and serves; rewrite the method into clear steps.`+(src.text?'\n\nRECIPE:\n'+src.text.slice(0,20000):''),'recipe')},src.file?{file:src.file}:src.url?{url:src.url}:{}));
     done(); const r=cleanRecipe(out.recipe||out); delete r.id; editRecipe(r); }
   catch(e){ done(); if(e.message!=='quiet') toast(e.message); }
 }
@@ -280,7 +434,7 @@ They already have these recipes, so suggest different ones: ${have}.${favs?' The
 Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
 Return JSON only: {"recipes":[ ...${st.n} objects shaped like ${RECIPE_SHAPE} ]} with "serves": ${st.people}.
 ${RECIPE_RULES}`;
-      try{ const out=await aiAsk({prompt}); done(); const rs=(out.recipes||[]).map(cleanRecipe).filter(r=>r.ing.length&&r.steps.length); if(!rs.length) throw new Error('No ideas came back. Try again.'); showIdeas(rs,plan); }
+      try{ const out=await aiAsk({prompt:withMemory(prompt,st.moods.join(' ')+' '+st.extra),json:true}); done(); const rs=(out.recipes||[]).map(cleanRecipe).filter(r=>r.ing.length&&r.steps.length); if(!rs.length) throw new Error('No ideas came back. Try again.'); showIdeas(rs,plan); }
       catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
   }; draw(); });
 }
@@ -300,7 +454,7 @@ function aiSetup(update){
   const h=S.linkHelper, tail=S.aiKeyTail;
   modal((m,close)=>{ const draw=(msg)=>{
     m.innerHTML=`<h2>✨ AI: your Gemini key</h2>
-    <p class="note">Meal ideas, reading recipes from photos and links, and reading bills use your own Gemini key. Paste it here once. It goes straight to your own Google helper and a locked spot in the family database that the app can write to but never read back, so it isn't on GitHub or the website, and nobody can see it later, not even here.</p>
+    <p class="note">Meal ideas, recipe reading, bills, family memory and Ask use your own Gemini key. Paste it here once. It's kept in the family database where only your family's signed-in Google accounts can reach it (never on GitHub or the website), so each phone and the fridge can talk to Gemini directly: that's what makes answers appear word by word. The Google helper gets a copy too, for reading bills.</p>
     ${tail?`<p style="font-size:18px">✅ A key is saved (ends ••••${esc(tail)}${S.aiKeyAt?', '+fmtD(new Date(S.aiKeyAt),{day:'numeric',month:'short'}):''}). Paste a new one to replace it.</p>`:''}
     <div class="step">Gemini API key <span style="font-weight:500">(from aistudio.google.com → Get API key)</span></div>
     <input class="txt" id="k" type="password" autocomplete="off" placeholder="Paste the key">
@@ -533,4 +687,99 @@ function openBill(b0){
     const pd=m.querySelector('#bpd'); if(pd) pd.onclick=()=>{ if(!keep()) return; close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>✅ ${esc(b0.biller)} ${$m(b0.amount)} paid</h2><div class="step">How?</div><div class="opts">${PAY_HOW.map(h=>`<button class="opt" data-h="${h}">${h}</button>`).join('')}</div><div class="mact"><button class="cancel" id="c">Cancel</button></div>`;
       m2.querySelector('#c').onclick=c2; m2.querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>{ b0.status='paid'; b0.paidAt=Date.now(); b0.paidHow=x.dataset.h; b0.paidBy=mePerson()||SYNC.me&&SYNC.me()||''; save(); c2(); renderAll(); toast('Marked paid'); openBills('due'); }); }); };
   }; draw(); });
+}
+
+/* ================= Aria's corner: savings jars and explorer quizzes (any child, any person really) ================= */
+const kidDocs=()=>(S.kids||[]);
+const jarsOf=pid=>kidDocs().filter(k=>k.kind==='jar'&&k.person===pid);
+const jarTotal=j=>(j.log||[]).reduce((t,x)=>t+(x.amt||0),0);
+const stampsOf=pid=>kidDocs().filter(k=>k.kind==='stamp'&&k.person===pid);
+const kidProfile=pid=>kidDocs().find(k=>k.kind==='profile'&&k.person===pid)||{};
+function kidWho(){ const w=lsGet('fs.kidWho',''); if(w&&person(w)) return w; const a=eaters().find(p=>/aria/i.test(p.name)); return a?a.id:(eaters()[2]||eaters()[0]||{}).id; }
+function openKids(){
+  const pid=kidWho(); if(!pid){ toast('Add the family in Settings first'); return; }
+  const prof=kidProfile(pid), jars=jarsOf(pid), stamps=stampsOf(pid), stars=stamps.reduce((t,s)=>t+(s.score||0),0), saved=jars.reduce((t,j)=>t+jarTotal(j),0);
+  modal((m,close)=>{ m.classList.add('wide','tvsheet','kids');
+    m.innerHTML=`<div class="tvhead"><h2>🌟 ${esc(nm(pid))}’s corner</h2><div class="row" style="gap:6px"><button class="xbtn" id="kw">👤</button><button class="save" id="x">Done</button></div></div>
+      <div class="kstats"><div><b>${$m(saved)}</b><small>saved</small></div><div><b>⭐ ${stars}</b><small>stars</small></div><div><b>${stamps.filter(s=>(s.score||0)>=4).length}</b><small>passport stamps</small></div></div>
+      <div class="step">💰 Savings jars</div>
+      <div class="jars">${jars.map(j=>{ const t=jarTotal(j), pc=j.target?Math.min(100,Math.round(t/j.target*100)):0; return `<button class="jar" data-jar="${j.id}"><span class="je">${esc(j.emoji||'🏺')}</span><b>${esc(j.name)}</b><div class="jbar"><i style="width:${pc}%"></i></div><small>${$m(t)}${j.target?' of '+$m(j.target)+' · '+pc+'%':''}</small></button>`; }).join('')}<button class="jar add" id="jadd"><span class="je">➕</span><b>New jar</b><small>a goal to save for</small></button></div>
+      <div class="step">🌍 Explorer quiz <span style="font-weight:500">· learn about the places we've been and want to go</span></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="kbig" id="kq">🧭 Quiz me on a country</button>${stamps.length?`<button class="xbtn" id="kp">🛂 My passport</button>`:''}</div>
+      <p class="note" style="margin-top:12px">Age ${prof.age||'?'} · questions are pitched for this age. <a href="#" id="kage">Change</a></p>`;
+    m.querySelector('#x').onclick=close;
+    m.querySelector('#kw').onclick=()=>{ close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>Whose corner?</h2><div class="opts">${eaters().map(p=>`<button class="opt ${p.id===pid?'on':''}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div><div class="mact"><button class="cancel" id="c">Cancel</button></div>`; m2.querySelector('#c').onclick=()=>{ c2(); openKids(); }; m2.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ lsSet('fs.kidWho',b.dataset.p); c2(); openKids(); }); }); };
+    m.querySelector('#kage').onclick=e=>{ e.preventDefault(); close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>How old is ${esc(nm(pid))}?</h2><input class="txt" id="a" type="number" inputmode="numeric" value="${prof.age||''}" style="width:120px"><div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="s">Save</button></div>`;
+      m2.querySelector('#c').onclick=()=>{ c2(); openKids(); }; m2.querySelector('#s').onclick=()=>{ const n=parseInt(m2.querySelector('#a').value,10); if(!(n>0&&n<120)){ toast('Type the age'); return; } let pr=kidDocs().find(k=>k.kind==='profile'&&k.person===pid); if(!pr){ pr={id:uid(),kind:'profile',person:pid}; S.kids.push(pr); } pr.age=n; save(); c2(); openKids(); }; }); };
+    m.querySelector('#jadd').onclick=()=>{ close(); editJar(null,pid); };
+    m.querySelectorAll('[data-jar]').forEach(b=>b.onclick=()=>{ close(); openJar(kidDocs().find(j=>j.id===b.dataset.jar)); });
+    m.querySelector('#kq').onclick=()=>{ close(); pickQuizCountry(pid); };
+    const kp=m.querySelector('#kp'); if(kp) kp.onclick=()=>{ close(); openPassport(pid); };
+  });
+}
+function editJar(j0,pid){
+  const j=j0?Object.assign({},j0):{kind:'jar',person:pid,name:'',emoji:'🏺',target:0};
+  modal((m,close)=>{ m.innerHTML=`<h2>${j0?'✏️ '+esc(j0.name):'➕ New savings jar'}</h2><div class="rform"><div class="row"><label>Emoji<input class="txt" id="e" value="${esc(j.emoji)}" style="width:80px"></label><label style="flex:1">What is it for?<input class="txt" id="n" value="${esc(j.name)}" placeholder="e.g. Nintendo Switch, Japan trip, bike"></label></div>
+    <label>Goal $ <small>(leave empty for a jar with no goal)</small><input class="txt" id="t" inputmode="decimal" value="${j.target?(j.target/100).toFixed(2):''}" style="width:160px"></label></div>
+    <div class="mact">${j0?'<button class="del" id="d">Delete</button>':''}<button class="cancel" id="c">Cancel</button><button class="save" id="s">Save</button></div>`;
+    m.querySelector('#c').onclick=()=>{ close(); j0?openJar(j0):openKids(); };
+    const d=m.querySelector('#d'); if(d) d.onclick=()=>{ if(!confirm('Delete this jar and its history?')) return; S.kids=S.kids.filter(x=>x.id!==j0.id); save(); close(); openKids(); };
+    m.querySelector('#s').onclick=()=>{ const n=m.querySelector('#n').value.trim(); if(!n){ toast('What is the jar for?'); return; } const t=Math.round(parseFloat(m.querySelector('#t').value.replace(/[$,]/g,''))*100)||0;
+      if(j0){ Object.assign(j0,{name:n,emoji:m.querySelector('#e').value.trim()||'🏺',target:t}); } else S.kids.push(Object.assign({id:uid(),log:[],at:Date.now()},j,{name:n,emoji:m.querySelector('#e').value.trim()||'🏺',target:t}));
+      save(); close(); openKids(); };
+  });
+}
+function openJar(j){
+  const t=jarTotal(j), pc=j.target?Math.min(100,Math.round(t/j.target*100)):0, log=(j.log||[]).slice().sort((a,b)=>(b.at||0)-(a.at||0));
+  const weekly=(()=>{ const ins=(j.log||[]).filter(x=>x.amt>0&&x.at>Date.now()-56*864e5); if(ins.length<2) return 0; return ins.reduce((s,x)=>s+x.amt,0)/8; })();
+  const left=j.target-t, weeks=weekly>0&&left>0?Math.ceil(left/weekly):0;
+  modal((m,close)=>{ m.classList.add('wide');
+    m.innerHTML=`<div class="rhead"><span class="rem">${esc(j.emoji||'🏺')}</span><div style="flex:1"><h2>${esc(j.name)}</h2><p class="note" style="margin:2px 0">${$m(t)} saved${j.target?' of '+$m(j.target)+(left>0?' · '+$m(left)+' to go':' · 🎉 goal reached!'):''}${weeks?' · about '+weeks+' week'+(weeks>1?'s':'')+' at this rate':''}</p></div></div>
+      ${j.target?`<div class="jbar big"><i style="width:${pc}%"></i><span>${pc}%</span></div>`:''}
+      <div class="row" style="gap:8px;margin:12px 0;flex-wrap:wrap"><button class="kbig" id="in">💵 Add money</button><button class="xbtn" id="out">🛍️ Take money out</button><button class="xbtn" id="ed">✏️</button></div>
+      <div class="step">History</div><div class="tvlist">${log.map(x=>`<div class="jlog"><span>${x.amt>0?'➕':'➖'} ${esc(x.note||(x.amt>0?'Added':'Taken out'))}</span><small>${fmtD(new Date(x.at),{day:'numeric',month:'short'})}${x.by&&person(x.by)?' · '+esc(nm(x.by)):''}</small><b class="${x.amt>0?'pos':'neg'}">${x.amt>0?'+':'−'}${$m(Math.abs(x.amt))}</b></div>`).join('')||'<p class="note">Nothing in the jar yet.</p>'}</div>
+      <div class="mact"><button class="cancel" id="bk">Back</button></div>`;
+    m.querySelector('#bk').onclick=()=>{ close(); openKids(); };
+    m.querySelector('#ed').onclick=()=>{ close(); editJar(j,j.person); };
+    const money=sign=>{ close(); requirePin(()=>modal((m2,c2)=>{ m2.innerHTML=`<h2>${sign>0?'💵 Add money to':'🛍️ Take money out of'} ${esc(j.name)}</h2><div class="rform"><label>Amount $<input class="txt" id="a" inputmode="decimal" placeholder="5.00" style="width:160px"></label>
+        <div class="opts">${['Pocket money','Birthday','Chores','Gift','Found it!'].concat(sign<0?['Bought it','Spent']:[]).map(x=>`<button class="opt sm" data-n="${x}">${x}</button>`).join('')}</div><label>Note<input class="txt" id="n" placeholder="what for?"></label></div>
+        <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="s">${sign>0?'Add':'Take out'}</button></div>`;
+      m2.querySelector('#c').onclick=()=>{ c2(); openJar(j); }; m2.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{ m2.querySelector('#n').value=b.dataset.n; }); m2.querySelector('#a').focus();
+      m2.querySelector('#s').onclick=()=>{ const a=Math.round(parseFloat(m2.querySelector('#a').value.replace(/[$,]/g,''))*100); if(!(a>0)){ toast('Type the amount'); return; } j.log=j.log||[]; j.log.push({at:Date.now(),amt:sign*a,note:m2.querySelector('#n').value.trim(),by:mePerson()||''}); save(); c2(); const nt=jarTotal(j); if(j.target&&nt>=j.target&&nt-sign*a<j.target) toast('🎉 '+nm(j.person)+' reached the goal!'); openJar(j); }; })); };
+    m.querySelector('#in').onclick=()=>money(1); m.querySelector('#out').onclick=()=>money(-1);
+  });
+}
+function pickQuizCountry(pid){
+  const been=Object.keys(S.visited||{}).filter(k=>visitedBy(k).length), dream=S.wish||[], done=new Set(stampsOf(pid).map(s=>s.country));
+  const name=k=>{ const p=(PLACES||[]).find(x=>x.key===k); return p?p.name:(PLACE_NAMES[k]||k); };
+  const pool=[...new Set(been.concat(dream))];
+  modal((m,close)=>{ m.innerHTML=`<h2>🧭 Which country?</h2>${pool.length?`<div class="step">Places we've been or want to go</div><div class="opts">${pool.map(k=>`<button class="opt sm" data-k="${esc(k)}">${done.has(k)?'🛂 ':''}${esc(name(k))}</button>`).join('')}</div>`:'<p class="note">Pin some countries on the globe (📍 Our travels) and they appear here.</p>'}
+    <div class="step">Or type one</div><form id="f" class="addrow" style="padding:0"><input id="c" placeholder="e.g. Japan, Peru, Egypt"><button aria-label="Go">➤</button></form><div class="mact"><button class="cancel" id="x">Cancel</button></div>`;
+    m.querySelector('#x').onclick=()=>{ close(); openKids(); };
+    m.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ close(); runQuiz(pid,name(b.dataset.k),b.dataset.k); });
+    m.querySelector('#f').onsubmit=e=>{ e.preventDefault(); const v=m.querySelector('#c').value.trim(); if(!v) return; close(); runQuiz(pid,v,v); };
+  });
+}
+async function runQuiz(pid,country,key){
+  const age=kidProfile(pid).age||9, done=aiBusy('Making a quiz about '+country+'…');
+  let quiz;
+  try{ quiz=await aiAsk({json:true,prompt:withMemory(`Make a fun 5-question multiple-choice quiz about ${country} for ${nm(pid)}, who is ${age} years old. Mix geography, animals, food, famous places, language and culture; one question can be about New Zealand's connection to it. Keep questions short and clear for that age, one correct answer each, 4 options. Return JSON only: {"intro":"one friendly sentence to start","questions":[{"q":"...","options":["a","b","c","d"],"answer":0,"fun":"a one-line fun fact shown after answering"}]}`,country)}); }
+  catch(e){ done(); if(e.message!=='quiet') toast(e.message); openKids(); return; }
+  done(); const qs=(quiz.questions||[]).filter(q=>q.q&&Array.isArray(q.options)&&q.options.length>=2).slice(0,5).map(q=>{ q.answer=Math.min(q.options.length-1,Math.max(0,parseInt(q.answer,10)||0)); return q; }); if(!qs.length){ toast('The quiz didn’t come through. Try again.'); openKids(); return; }
+  let i=0, score=0, picked=null;
+  modal((m,close)=>{ m.classList.add('wide','kids'); const draw=()=>{
+    if(i>=qs.length){ const stamp={id:uid(),kind:'stamp',person:pid,country:key,name:country,score,at:Date.now()}; S.kids.push(stamp); save();
+      m.innerHTML=`<div class="qdone"><div class="qbig">${score>=4?'🏆':score>=3?'🌟':'💪'}</div><h2>${score} out of ${qs.length}</h2><p style="font-size:19px">${score>=4?'Brilliant! That’s a passport stamp for '+esc(country)+'. 🛂':score>=3?'Nice work! One more right next time for a stamp.':'Good try! Have another go soon.'}</p><p class="note">⭐ ${score} star${score===1?'':'s'} added</p></div><div class="mact"><button class="cancel" id="again">🔁 Another country</button><button class="save" id="x">Done</button></div>`;
+      m.querySelector('#x').onclick=()=>{ close(); openKids(); }; m.querySelector('#again').onclick=()=>{ close(); pickQuizCountry(pid); }; return; }
+    const q=qs[i];
+    m.innerHTML=`<div class="tvhead"><h2>🧭 ${esc(country)}</h2><span class="note">${i+1} / ${qs.length} · ⭐ ${score}</span></div>${i===0&&picked===null&&quiz.intro?`<p class="note">${esc(quiz.intro)}</p>`:''}
+      <p class="qq">${esc(q.q)}</p><div class="qopts">${q.options.map((o,k)=>`<button class="qopt ${picked===null?'':k===q.answer?'qright':k===picked?'qwrong':'qdim'}" data-o="${k}" ${picked!==null?'disabled':''}>${esc(o)}</button>`).join('')}</div>
+      ${picked!==null?`<p class="qfun">${picked===q.answer?'✅ Yes!':'❌ Not quite, it’s '+esc(q.options[q.answer])+'.'} ${esc(q.fun||'')}</p><div class="mact"><button class="save" id="n">${i+1<qs.length?'Next ›':'Finish'}</button></div>`:''}`;
+    m.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{ picked=+b.dataset.o; if(picked===q.answer) score++; draw(); });
+    const n=m.querySelector('#n'); if(n) n.onclick=()=>{ i++; picked=null; draw(); };
+  }; draw(); });
+}
+function openPassport(pid){
+  const st=stampsOf(pid).sort((a,b)=>(b.at||0)-(a.at||0));
+  modal((m,close)=>{ m.classList.add('wide'); m.innerHTML=`<div class="tvhead"><h2>🛂 ${esc(nm(pid))}’s passport</h2><button class="save" id="x">Done</button></div><div class="stamps">${st.map(s=>`<div class="stamp ${(s.score||0)>=4?'ok':''}"><b>${esc(s.name||s.country)}</b><small>${s.score}/5 · ${fmtD(new Date(s.at),{day:'numeric',month:'short',year:'numeric'})}</small></div>`).join('')}</div>`; m.querySelector('#x').onclick=()=>{ close(); openKids(); }; });
 }

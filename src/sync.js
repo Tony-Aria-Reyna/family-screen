@@ -8,11 +8,11 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
   onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 
-const COLS = ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills'];
+const COLS = ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids'];
 // gift ideas: only the people picked in Settings can read them, so a 'no' here is normal, not an error
 const SOFT = ['gifts'];
 // newer lists: if the database rules haven't been updated yet, they just don't sync (and we say so) rather than locking the app
-const NEWER = ['recipes', 'meals', 'renewals', 'bills'];
+const NEWER = ['recipes', 'meals', 'renewals', 'bills', 'memory', 'kids'];
 let rulesOld = false;
 export const needsRules = () => rulesOld;
 
@@ -84,8 +84,9 @@ export function start(householdId, state, changed) {
     synced.settings = JSON.stringify(settingsOf(S));
     onChange('settings');
   }, err => onChange('error', err)));
-  SOFT.forEach(listenSoft);
+  SOFT.forEach(listenSoft); if (me()) watchKey();
   for (const c of COLS) {
+    S[c] = S[c] || [];
     unsub.push(onSnapshot(collection(db, 'households', hid, c), snap => {
       let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
       if (PRIV.includes(c)) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
@@ -165,8 +166,16 @@ export async function pushSupported() { try { return await isSupported(); } catc
 export async function pushToken(vapidKey, reg) { return getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: reg }); }
 export const getDevices = () => devices;
 export const getNotifier = () => notifier;
-// the Gemini key: written here, never read back by the app (the database rules forbid reading it); the helper reads it
-export const saveSecret = data => setDoc(doc(db, 'households', hid, 'secrets', 'ai'), clean(data));
+// the Gemini key: saved here for the family's devices and the helper (only signed-in family members can read it)
+export const saveSecret = data => setDoc(doc(db, 'households', hid, 'secrets', 'ai'), clean(data)).then(() => { S.aiKey = data.gemini || ''; });
+// the family's own Gemini key: kept in the database where only signed-in family members can read it, so the app can
+// talk to Gemini directly (fast, word by word) instead of going through the Google helper
+let keyUnsub = null;
+function watchKey() {
+  if (keyUnsub) { try { keyUnsub(); } catch (e) {} }
+  keyUnsub = onSnapshot(doc(db, 'households', hid, 'secrets', 'ai'), d => { S.aiKey = (d.exists() && d.data().gemini) || ''; onChange('aikey'); }, () => { S.aiKey = ''; });
+  unsub.push(keyUnsub);
+}
 export const saveDevice = (hash, data) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: clean(data) });
 export const removeDevice = hash => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: deleteField() });
 export const requestTest = hash => updateDoc(doc(db, 'households', hid), { testPing: { hash, at: Date.now() } });

@@ -1,0 +1,36 @@
+import asyncio
+from playwright.async_api import async_playwright
+async def main():
+    async with async_playwright() as p:
+        b=await p.chromium.launch()
+        pg=await b.new_page(viewport={'width':1885,'height':940},timezone_id='Pacific/Auckland',locale='en-NZ')
+        errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
+        await pg.goto('http://localhost:5500/index.html?demo'); await pg.wait_for_timeout(600)
+        await pg.click('#globeBtn'); await pg.wait_for_timeout(800)
+        await pg.click('[data-gm="1"]'); await pg.wait_for_timeout(2300)
+        print('card:', (await pg.locator('.tvcard').inner_text()).replace('\n',' | '))
+        # tap Australia-ish: find screen point
+        pt=await pg.evaluate("(()=>{ const s=document.querySelector('#stage svg').getBoundingClientRect(); return [s.left,s.top]; })()")
+        await pg.click('#tvEdit'); await pg.wait_for_timeout(200)
+        await pg.fill('#tvQ','japan'); await pg.wait_for_timeout(100)
+        for pid in ['p1','p2','p3']: await pg.click(f'.tvp[data-k="Japan"][data-p="{pid}"]')
+        await pg.fill('#tvQ','united'); await pg.click('.tvp[data-k="United States of America"][data-p="p2"]'); await pg.click('.tvp[data-k="United Kingdom"][data-p="p1"]')
+        await pg.fill('#tvQ','fiji'); await pg.click('.tvp[data-k="Fiji"][data-p="p3"]'); await pg.click('.tvp[data-k="Fiji"][data-p="p1"]')
+        await pg.fill('#tvQ','raro'); print('raro search:', await pg.locator('#tvL').inner_text())
+        await pg.fill('#tvQ','cook'); await pg.click('.tvp[data-k="Cook Islands"][data-p="p2"]')
+        await pg.fill('#tvQ','australia'); await pg.click('.tvp[data-k="Australia"][data-p="p1"]'); await pg.click('.tvp[data-k="Australia"][data-p="p2"]')
+        await pg.fill('#tvQ',''); await pg.wait_for_timeout(100); await pg.screenshot(path='/tmp/tv_list.png')
+        await pg.click('#ok'); await pg.wait_for_timeout(400)
+        print('card after:', (await pg.locator('.tvcard').inner_text()).replace('\n',' | '))
+        await pg.screenshot(path='/tmp/tv1.png')
+        # tap on NZ pin location to open country
+        xy=await pg.evaluate("""(()=>{ const s=document.querySelector('#stage svg').getBoundingClientRect(); return null; })()""")
+        await pg.mouse.click(942, 470); await pg.wait_for_timeout(300)
+        print('tap modal:', (await pg.locator('.modal').inner_text())[:80].replace('\n',' | ') if await pg.locator('.modal').count() else 'none')
+        print(errs); await b.close()
+        b=await p.chromium.launch(); ctx=await b.new_context(viewport={'width':400,'height':820},has_touch=True,is_mobile=True,timezone_id='Pacific/Auckland')
+        pg=await ctx.new_page(); await pg.goto('http://localhost:5500/index.html?demo'); await pg.wait_for_timeout(600)
+        await pg.evaluate("S.visited={'Japan':['p1','p2','p3'],'Australia':['p1','p2'],'Fiji':['p3'],'Cook Islands':['p2'],'United States of America':['p2']}; save()")
+        await pg.click('[data-tab=where]'); await pg.wait_for_timeout(500); await pg.click('[data-gm="1"]'); await pg.wait_for_timeout(2300)
+        await pg.screenshot(path='/tmp/tv2.png'); await b.close()
+asyncio.run(main())
