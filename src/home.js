@@ -783,3 +783,71 @@ function openPassport(pid){
   const st=stampsOf(pid).sort((a,b)=>(b.at||0)-(a.at||0));
   modal((m,close)=>{ m.classList.add('wide'); m.innerHTML=`<div class="tvhead"><h2>🛂 ${esc(nm(pid))}’s passport</h2><button class="save" id="x">Done</button></div><div class="stamps">${st.map(s=>`<div class="stamp ${(s.score||0)>=4?'ok':''}"><b>${esc(s.name||s.country)}</b><small>${s.score}/5 · ${fmtD(new Date(s.at),{day:'numeric',month:'short',year:'numeric'})}</small></div>`).join('')}</div>`; m.querySelector('#x').onclick=()=>{ close(); openKids(); }; });
 }
+
+/* ================= Alexa: the family's own private voice skill ================= */
+const ALEXA_SKILL=/*@ALEXA@*/'';
+function alexaNames(){ const out=[]; eaters().forEach(p=>{ const n=String(p.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim(); if(n&&!out.some(x=>x.toLowerCase()===n.toLowerCase())) out.push(n); }); return out; }
+function alexaCode(){
+  return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames()));
+}
+function alexaModel(){
+  const people=alexaNames(), P={name:'PERSON',values:people.concat(['everyone']).map(n=>({name:{value:n}}))};
+  const I=(name,slots,samples)=>({name,slots:slots||[],samples:samples||[]});
+  const s=(n,t)=>({name:n,type:t});
+  return JSON.stringify({interactionModel:{languageModel:{invocationName:'family screen',types:people.length?[P]:[],intents:[
+    I('AMAZON.StopIntent'),I('AMAZON.CancelIntent'),I('AMAZON.HelpIntent'),I('AMAZON.NavigateHomeIntent'),I('AMAZON.FallbackIntent'),
+    I('AddShopIntent',[s('item','AMAZON.SearchQuery')],['add {item} to the shopping list','add {item} to the list','put {item} on the shopping list','put {item} on the list','we need {item}','we are out of {item}','we have run out of {item}','buy {item}','get {item}','add {item}']),
+    I('ShopListIntent',[],["what's on the shopping list",'what is on the shopping list','read the shopping list','read out the shopping list','what do we need','what do we need from the shops','shopping list']),
+    I('AddJobIntent',[s('task','AMAZON.SearchQuery'),s('person','PERSON')],['add a job','add a task','add a to do','put a job on the list','add a job for {person}','add a task for {person}','give {person} a job','new job for {person}']),
+    I('JobsIntent',[s('person','PERSON')],['what jobs are there','what jobs do we have','what is on the jobs list','read the jobs','what jobs does {person} have','what has {person} got to do','what jobs are left']),
+    I('AddEventIntent',[s('title','AMAZON.SearchQuery'),s('when','AMAZON.DATE'),s('time','AMAZON.TIME'),s('person','PERSON')],['add something to the calendar','put something in the calendar','add an event','add a calendar entry','new calendar entry','add something to the calendar for {person}','put something in the calendar on {when}']),
+    I('AgendaIntent',[s('when','AMAZON.DATE')],['what is on','what is on {when}',"what's on {when}",'what is happening {when}','what have we got on {when}','what is in the calendar {when}','read the calendar','what is on this week']),
+    I('WhereIntent',[s('person','PERSON')],['where is {person}','where is everyone','when is {person} home','when is {person} back','is {person} home','where is she','when is she home','when is she back']),
+    I('BillsIntent',[],['what bills are due','any bills','what do we owe','what bills do we have','are there any bills','bills']),
+    I('RenewalsIntent',[],['what is coming up','what renewals are due','what needs renewing','when is the warrant due','when is the rego due']),
+    I('MealIntent',[s('when','AMAZON.DATE')],['what is for dinner','what is for dinner {when}','what are we eating {when}','what is for tea','what is the meal plan','what is for dinner tonight']),
+    I('RememberIntent',[s('text','AMAZON.SearchQuery')],['remember {text}','remember that {text}','make a note {text}','note that {text}','do not forget {text}']),
+    I('AskIntent',[s('q','AMAZON.SearchQuery')],['tell me {q}','ask {q}','answer {q}','find out {q}','i want to know {q}','do you know {q}','question {q}','help me with {q}','what about {q}'])
+  ]}}},null,2);
+}
+function openAlexa(){
+  if(!S.voiceKey){ S.voiceKey=(uid()+uid()+uid()).replace(/[^a-z0-9]/gi,'').slice(0,28); save(); }
+  let test='';
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
+    const url=S.voiceUrl||'';
+    m.innerHTML=`<div class="tvhead"><h2>🔊 Alexa</h2><button class="save" id="x">Done</button></div>
+      <p class="note">Ask your Echo about the family, and add things to the lists by voice. It talks only to your own Google helper, using a key just for this. Nothing is published to Amazon's skill store: it stays private to the Echoes signed in to the Amazon account you build it with.</p>
+      <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
+        <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: make sure it's on <b>version 10</b> (copy the code and the settings file again if not).</li>
+          <li>In script.google.com, press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
+          <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
+        </ol>
+        <label class="small" style="font-weight:700">Paste that web app URL here<input class="txt" id="vu" value="${esc(url)}" placeholder="https://script.google.com/macros/s/..../exec"></label>
+        <div class="row" style="gap:8px;margin-top:8px"><button class="xbtn" id="vs">Save</button><button class="xbtn" id="vt" ${url?'':'disabled'}>🧪 Test it</button><span class="note" id="vr">${esc(test)}</span></div></div>
+      <div class="srccard" style="margin-top:12px"><h4>Step 2 · Make the skill</h4>
+        <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
+          <li>On a computer go to <b>developer.amazon.com/alexa/console/ask</b> and sign in with <b>the same Amazon account the Echo uses</b> — not a different one. A skill you build yourself only works on that account's Echoes, and it needs no approval from Amazon.</li>
+          <li><b>Create Skill</b> → name it <b>Family Screen</b> → primary locale <b>English (AU)</b> → <b>Custom</b> model → <b>Alexa-hosted (Node.js)</b> → Create. Pick <b>Start from scratch</b> if it asks.</li>
+          <li>Open the <b>Build</b> tab → <b>JSON Editor</b> → select everything there and paste over it with <b>Copy the voice model</b> below → <b>Save</b> → <b>Build model</b> (takes a minute).</li>
+          <li>Open the <b>Code</b> tab → click in <b>index.js</b> → select all → paste over it with <b>Copy the skill code</b> below → <b>Save</b> → <b>Deploy</b>.</li>
+          <li>That's it. The skill is live on your own Echoes straight away; it never needs Amazon's approval.</li>
+        </ol>
+        <div class="row" style="gap:8px"><button class="xbtn" id="cm" style="background:#ffe5a8;font-weight:800">📋 Copy the voice model</button><button class="xbtn" id="cc" style="background:#ffe5a8;font-weight:800">📋 Copy the skill code</button></div>
+        <p class="note" style="margin-top:8px">The skill code holds your web address and voice key, so don't paste it anywhere public. If it ever gets out, press <b>New key</b> below and paste the code in again.</p>
+        <button class="xbtn" id="nk">🔑 New key</button></div>
+      <div class="srccard" style="margin-top:12px"><h4>Step 3 · Say</h4>
+        <div class="vsay">${[['What’s on today?','the calendar, any day'],['What’s on this Friday?',''],['Where is everyone?','who’s away, who’s flying, when she’s home'],['What’s for dinner?','tonight or any night'],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance'],['Add milk to the shopping list.',''],['What’s on the shopping list?',''],['Add a job.','it asks what, and who for'],['Put something in the calendar.','it asks what, when, what time, who for'],['Remember that the bins go out Tuesday.','goes into family memory'],['Tell me what we need for Thursday’s dinner.','anything at all']].map(([a,b])=>`<div><b>“Alexa, ask Family Screen ${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>
+        <p class="note">You can also say “Alexa, open Family Screen” and then just talk, without saying the name again.</p></div>`;
+    m.querySelector('#x').onclick=close;
+    const vu=m.querySelector('#vu');
+    m.querySelector('#vs').onclick=()=>{ const v=vu.value.trim(); if(v&&!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v)){ toast('That should be the web app URL ending in /exec'); return; } S.voiceUrl=v; save(); test=''; draw(); toast('Saved'); };
+    m.querySelector('#cm').onclick=()=>{ try{ navigator.clipboard.writeText(alexaModel()).then(()=>toast('Voice model copied')); }catch(e){ toast('Copy didn’t work here. Use a computer.'); } };
+    m.querySelector('#cc').onclick=()=>{ if(!S.voiceUrl){ toast('Paste the web app URL first'); return; } try{ navigator.clipboard.writeText(alexaCode()).then(()=>toast('Skill code copied')); }catch(e){ toast('Copy didn’t work here. Use a computer.'); } };
+    m.querySelector('#nk').onclick=()=>{ if(!confirm('Make a new voice key? You’ll need to paste the skill code into Amazon again.')) return; S.voiceKey=(uid()+uid()+uid()).replace(/[^a-z0-9]/gi,'').slice(0,28); save(); toast('New key made'); draw(); };
+    const vt=m.querySelector('#vt'); if(vt) vt.onclick=async()=>{ test='checking…'; draw();
+      try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const j=JSON.parse(await r.text());
+        test=j.ok?'✅ Helper answered (version '+j.version+')':'⚠️ '+(j.error==='not allowed'?'the helper doesn’t know this key yet — it may still be on an older version':j.error); }
+      catch(e){ test='⚠️ Couldn’t reach it. Check the URL and that access is set to Anyone.'; } draw(); };
+  }; draw(); });
+}

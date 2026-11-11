@@ -331,6 +331,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .btab{width:100%;border-collapse:collapse;font-size:15px}.btab td,.btab th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}.btab th{color:var(--muted);font-size:13px}
 .bfold{background:#fffaf0;border:1px solid #f1e3c4;border-radius:14px;padding:10px 12px}.bfold b{font-size:17px}.flist{max-height:260px;overflow:auto;margin-top:8px}
 .libwait{color:#fff;font-size:22px;font-weight:700;text-align:center;padding-top:30vh}
+.vsay{display:grid;gap:6px;margin:4px 0}.vsay div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:16px}.vsay small{display:block;color:var(--muted);font-size:13px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;text-align:left;font:inherit;min-height:108px}
 .tile .ti{font-size:34px;line-height:1.1}.tile b{font-size:17px}.tile small{color:var(--muted);font-size:13px;min-height:16px}
@@ -1571,6 +1572,10 @@ function editCard(idx){
 }
 function renderShop(){ keepInput('sIn',renderShop_); }
 function renderShop_(){
+  // things added by voice arrive without an aisle: tidy them up here, where the aisle list lives
+  let tidied=false;
+  for(const g of S.groceries||[]) if(g.voice){ delete g.voice; if(!g.aisle&&shop(g.shop)&&shop(g.shop).aisles) g.aisle=guessAisle(g.name); tidied=true; }
+  if(tidied) save();
   const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
   let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Minimise the shopping list" aria-label="Minimise">»</button></div>
   ${cardRowHTML()}
@@ -2461,6 +2466,9 @@ function openHelpers(){
         <li>Choose <b>billsCheckNow</b> in the function menu at the top and press ▶ <b>Run</b>. Approve the Gmail, Drive and Sheets permissions (Google words it strongly; it only reads the bills address and files bills).</li>
         <li>That's it: this card turns green within 5 minutes.</li></ol>
       <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div></div>
+    <div class="srccard" style="margin-top:12px"><h4>🔊 Alexa ${S.voiceUrl?'<span class="pill-ok">✓ set up</span>':'<span class="pill-wait">not set up</span>'}</h4>
+      <p class="note">Ask your Echo what's on, where everyone is, what's for dinner, and add things to the lists by voice.</p>
+      <button class="xbtn" id="hal">🔊 Set up Alexa</button></div>
     <div class="srccard" style="margin-top:12px"><h4>📅 Calendar &amp; AI helper ${!h||!h.url?'<span class="pill-wait">not set up</span>':cal===null?'<span class="pill-wait">checking…</span>':cal.ok?`<span class="pill-ok">✓ up to date${cal.hasKey?' · AI key ✓':''}</span>`:'<span class="pill-wait">⬆️ needs updating</span>'}</h4>
       <p class="note">Fetches calendar links, and runs meal ideas and recipe reading with your Gemini key.</p>
       ${!h||!h.url?'<button class="xbtn" id="hs">Set it up</button>':`<ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55"><li>Open your <b>calendar helper</b> project at script.google.com.</li><li>Tap <b>Copy calendar helper code</b>, paste over the old code, Ctrl + S.</li><li><b>Deploy → Manage deployments</b> → ✏️ → Version: <b>New version</b> → Deploy.</li></ol>
@@ -2469,6 +2477,7 @@ function openHelpers(){
     m.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ try{ navigator.clipboard.writeText(fileText(b.dataset.copy)).then(()=>toast(b.dataset.copy==='code'?'Helper code copied':'Settings file copied')); }catch(e){ toast('Copy didn’t work on this device. Use a computer.'); } });
     const hc=m.querySelector('#hc'); if(hc) hc.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Calendar helper code copied')); }catch(e){ toast('Copy failed'); } };
     const hs=m.querySelector('#hs'); if(hs) hs.onclick=()=>{ close(); openHelperSetup(); };
+    const hal=m.querySelector('#hal'); if(hal) hal.onclick=()=>{ close(); openAlexa(); };
     const hk=m.querySelector('#hk'); if(hk) hk.onclick=()=>{ close(); aiSetup(); };
   }; draw();
     if(h&&h.url&&!LOCAL) fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'ping'}),redirect:'follow'}).then(r=>r.text()).then(t=>{ try{ const j=JSON.parse(t); cal={ok:!!j.ok&&j.helper>=2,hasKey:!!j.hasKey}; }catch(e){ cal={ok:false}; } if(m.isConnected) draw(); }).catch(()=>{ cal={ok:false}; if(m.isConnected) draw(); });
@@ -2662,6 +2671,7 @@ function moreTiles(){ return [
   ['🌟',(()=>{ const k=typeof kidWho==='function'&&kidWho(); return k?nm(k)+'’s corner':'Kids’ corner'; })(),()=>openKids(),()=>''],
   ['🧠','Family memory',()=>typeof openMemory==='function'?openMemory():toast('Coming soon'),()=>(S.memory||[]).length?(S.memory||[]).length+' notes':''],
   ['💬','Ask',()=>typeof openAsk==='function'?openAsk():toast('Coming soon'),()=>'anything about the family'],
+  ['🔊','Alexa',()=>requirePin(()=>openAlexa()),()=>S.voiceUrl?'set up':'set up voice'],
   ['⚙️','Settings',()=>openSettings(),()=>''],
 ]; }
 function openMore(){
