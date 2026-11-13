@@ -331,6 +331,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .btab{width:100%;border-collapse:collapse;font-size:15px}.btab td,.btab th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}.btab th{color:var(--muted);font-size:13px}
 .bfold{background:#fffaf0;border:1px solid #f1e3c4;border-radius:14px;padding:10px 12px}.bfold b{font-size:17px}.flist{max-height:260px;overflow:auto;margin-top:8px}
 .libwait{color:#fff;font-size:22px;font-weight:700;text-align:center;padding-top:30vh}
+.dirn{background:#fff7d6;border:1px solid #f1e3c4;border-radius:12px;padding:8px 12px;font-size:15px;margin:6px 0}
 .vsay{display:grid;gap:6px;margin:4px 0}.vsay div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:16px}.vsay small{display:block;color:var(--muted);font-size:13px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;text-align:left;font:inherit;min-height:108px}
@@ -4758,8 +4759,9 @@ function openAlexa(){
     m.innerHTML=`<div class="tvhead"><h2>🔊 Alexa</h2><button class="save" id="x">Done</button></div>
       <p class="note">Ask your Echo about the family, and add things to the lists by voice. It talks only to your own Google helper, using a key just for this. Nothing is published to Amazon's skill store: it stays private to the Echoes signed in to the Amazon account you build it with.</p>
       <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
+        <p class="dirn">📋 Everything here is copied <b>from this app</b> and pasted <b>into Google and Amazon</b>. Do it all on a computer.</p>
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
-          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: make sure it's on <b>version 10</b> (copy the code and the settings file again if not).</li>
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v10</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
           <li>In script.google.com, press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
           <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
         </ol>
@@ -4769,8 +4771,8 @@ function openAlexa(){
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
           <li>On a computer go to <b>developer.amazon.com/alexa/console/ask</b> and sign in with <b>the same Amazon account the Echo uses</b> — not a different one. A skill you build yourself only works on that account's Echoes, and it needs no approval from Amazon.</li>
           <li><b>Create Skill</b> → name it <b>Family Screen</b> → primary locale <b>English (AU)</b> → <b>Custom</b> model → <b>Alexa-hosted (Node.js)</b> → Create. Pick <b>Start from scratch</b> if it asks.</li>
-          <li>Open the <b>Build</b> tab → <b>JSON Editor</b> → select everything there and paste over it with <b>Copy the voice model</b> below → <b>Save</b> → <b>Build model</b> (takes a minute).</li>
-          <li>Open the <b>Code</b> tab → click in <b>index.js</b> → select all → paste over it with <b>Copy the skill code</b> below → <b>Save</b> → <b>Deploy</b>.</li>
+          <li>Press <b>📋 Copy the voice model</b> below. In Amazon: <b>Build</b> tab → <b>JSON Editor</b> → click in the text → <b>Ctrl + A</b>, <b>Ctrl + V</b> → <b>Save</b> → <b>Build model</b> (takes a minute).</li>
+          <li>Press <b>📋 Copy the skill code</b> below. In Amazon: <b>Code</b> tab → click in <b>index.js</b> → <b>Ctrl + A</b>, <b>Ctrl + V</b> → <b>Save</b> → <b>Deploy</b>.</li>
           <li>That's it. The skill is live on your own Echoes straight away; it never needs Amazon's approval.</li>
         </ol>
         <div class="row" style="gap:8px"><button class="xbtn" id="cm" style="background:#ffe5a8;font-weight:800">📋 Copy the voice model</button><button class="xbtn" id="cc" style="background:#ffe5a8;font-weight:800">📋 Copy the skill code</button></div>
@@ -5088,19 +5090,21 @@ function openHelpers(){
     <div class="srccard"><h4>🤖 Reminder helper ${running?`<span class="pill-ok">✓ running v${nt.version||'?'}</span>`:'<span class="pill-wait">not running</span>'} ${running&&needUpd?`<span class="pill-wait">⬆️ v${latestV} available</span>`:running?'<span class="pill-ok">up to date</span>':''}</h4>
       <p class="note">Reminders, flight tracking, renewals, bills by email, and keeping the database rules up to date.</p>
       ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}
+      <p class="dirn">📋 You copy <b>from here</b> and paste <b>into Google</b> — never the other way. Do it on a computer, with this app open in one tab and script.google.com in another.</p>
       <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55">
-        <li>On a computer open <b>script.google.com</b> → your <b>Family Screen Helper</b> project.</li>
-        <li><b>Code.gs</b>: tap <b>Copy helper code</b>, click in Code.gs, Ctrl + A, paste, Ctrl + S.</li>
-        <li><b>appsscript.json</b> (⚙️ Project Settings → tick “Show appsscript.json”): tap <b>Copy settings file</b>, paste over it, Ctrl + S.</li>
-        <li>Choose <b>billsCheckNow</b> in the function menu at the top and press ▶ <b>Run</b>. Approve the Gmail, Drive and Sheets permissions (Google words it strongly; it only reads the bills address and files bills).</li>
-        <li>That's it: this card turns green within 5 minutes.</li></ol>
+        <li>Press <b>📋 Copy helper code</b> below. That puts the newest code on your clipboard.</li>
+        <li>In the other tab: <b>script.google.com</b> → your <b>Family Screen Helper</b> project → click <b>Code.gs</b> in the left list.</li>
+        <li>Click anywhere in that code, press <b>Ctrl + A</b> (selects all the old code), then <b>Ctrl + V</b> (pastes the new code over it), then <b>Ctrl + S</b> to save. Line 9 should now read <code>HELPER_VERSION = ${latestV}</code>.</li>
+        <li>Now press <b>📋 Copy settings file</b> below. In Apps Script click <b>appsscript.json</b> in the left list (if it isn't there: ⚙️ <b>Project Settings</b> → tick “Show appsscript.json manifest file in editor”), then <b>Ctrl + A</b>, <b>Ctrl + V</b>, <b>Ctrl + S</b>.</li>
+        <li>At the top, change the function box from <b>setup</b> to <b>billsCheckNow</b>, press ▶ <b>Run</b>, and approve the Gmail, Drive and Sheets permissions. (Google words them strongly; the helper only reads your bills address and files bills.)</li>
+        <li>Done. This card turns green within 5 minutes.</li></ol>
       <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div></div>
     <div class="srccard" style="margin-top:12px"><h4>🔊 Alexa ${S.voiceUrl?'<span class="pill-ok">✓ set up</span>':'<span class="pill-wait">not set up</span>'}</h4>
       <p class="note">Ask your Echo what's on, where everyone is, what's for dinner, and add things to the lists by voice.</p>
       <button class="xbtn" id="hal">🔊 Set up Alexa</button></div>
     <div class="srccard" style="margin-top:12px"><h4>📅 Calendar &amp; AI helper ${!h||!h.url?'<span class="pill-wait">not set up</span>':cal===null?'<span class="pill-wait">checking…</span>':cal.ok?`<span class="pill-ok">✓ up to date${cal.hasKey?' · AI key ✓':''}</span>`:'<span class="pill-wait">⬆️ needs updating</span>'}</h4>
       <p class="note">Fetches calendar links, and runs meal ideas and recipe reading with your Gemini key.</p>
-      ${!h||!h.url?'<button class="xbtn" id="hs">Set it up</button>':`<ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55"><li>Open your <b>calendar helper</b> project at script.google.com.</li><li>Tap <b>Copy calendar helper code</b>, paste over the old code, Ctrl + S.</li><li><b>Deploy → Manage deployments</b> → ✏️ → Version: <b>New version</b> → Deploy.</li></ol>
+      ${!h||!h.url?'<button class="xbtn" id="hs">Set it up</button>':`<p class="dirn">📋 You copy <b>from here</b> and paste <b>into Google</b>. Do it on a computer.</p><ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55"><li>Press <b>📋 Copy calendar helper code</b> below.</li><li>Open your <b>calendar helper</b> project at script.google.com (a different project from the Family Screen Helper) → <b>Code.gs</b>.</li><li>Click in the code, <b>Ctrl + A</b>, <b>Ctrl + V</b>, <b>Ctrl + S</b>.</li><li><b>Deploy</b> → <b>Manage deployments</b> → ✏️ → Version: <b>New version</b> → <b>Deploy</b>. Without this last step the old code keeps running.</li></ol>
       <div class="row"><button class="xbtn" id="hc" style="background:#ffe5a8;font-weight:800">📋 Copy calendar helper code</button>${cal&&cal.ok&&!cal.hasKey?'<button class="xbtn" id="hk">✨ Add the Gemini key</button>':''}</div>`}</div>`;
     m.querySelector('#x').onclick=close;
     m.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{ try{ navigator.clipboard.writeText(fileText(b.dataset.copy)).then(()=>toast(b.dataset.copy==='code'?'Helper code copied':'Settings file copied')); }catch(e){ toast('Copy didn’t work on this device. Use a computer.'); } });
@@ -5749,7 +5753,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwcelwmf';
+const FS_VERSION='fs-mweokugf';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

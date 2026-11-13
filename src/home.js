@@ -818,8 +818,9 @@ function openAlexa(){
     m.innerHTML=`<div class="tvhead"><h2>🔊 Alexa</h2><button class="save" id="x">Done</button></div>
       <p class="note">Ask your Echo about the family, and add things to the lists by voice. It talks only to your own Google helper, using a key just for this. Nothing is published to Amazon's skill store: it stays private to the Echoes signed in to the Amazon account you build it with.</p>
       <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
+        <p class="dirn">📋 Everything here is copied <b>from this app</b> and pasted <b>into Google and Amazon</b>. Do it all on a computer.</p>
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
-          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: make sure it's on <b>version 10</b> (copy the code and the settings file again if not).</li>
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v10</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
           <li>In script.google.com, press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
           <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
         </ol>
@@ -829,8 +830,8 @@ function openAlexa(){
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
           <li>On a computer go to <b>developer.amazon.com/alexa/console/ask</b> and sign in with <b>the same Amazon account the Echo uses</b> — not a different one. A skill you build yourself only works on that account's Echoes, and it needs no approval from Amazon.</li>
           <li><b>Create Skill</b> → name it <b>Family Screen</b> → primary locale <b>English (AU)</b> → <b>Custom</b> model → <b>Alexa-hosted (Node.js)</b> → Create. Pick <b>Start from scratch</b> if it asks.</li>
-          <li>Open the <b>Build</b> tab → <b>JSON Editor</b> → select everything there and paste over it with <b>Copy the voice model</b> below → <b>Save</b> → <b>Build model</b> (takes a minute).</li>
-          <li>Open the <b>Code</b> tab → click in <b>index.js</b> → select all → paste over it with <b>Copy the skill code</b> below → <b>Save</b> → <b>Deploy</b>.</li>
+          <li>Press <b>📋 Copy the voice model</b> below. In Amazon: <b>Build</b> tab → <b>JSON Editor</b> → click in the text → <b>Ctrl + A</b>, <b>Ctrl + V</b> → <b>Save</b> → <b>Build model</b> (takes a minute).</li>
+          <li>Press <b>📋 Copy the skill code</b> below. In Amazon: <b>Code</b> tab → click in <b>index.js</b> → <b>Ctrl + A</b>, <b>Ctrl + V</b> → <b>Save</b> → <b>Deploy</b>.</li>
           <li>That's it. The skill is live on your own Echoes straight away; it never needs Amazon's approval.</li>
         </ol>
         <div class="row" style="gap:8px"><button class="xbtn" id="cm" style="background:#ffe5a8;font-weight:800">📋 Copy the voice model</button><button class="xbtn" id="cc" style="background:#ffe5a8;font-weight:800">📋 Copy the skill code</button></div>
