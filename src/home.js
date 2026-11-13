@@ -866,3 +866,27 @@ function openAlexa(){
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
   }; draw(); });
 }
+
+/* ================= Help: what you can say to Alexa ================= */
+function helpGroups(){
+  const tp=traveller(), her=tp?tp.name:'Mummy', kid=(eaters().find(p=>/aria/i.test(p.name))||eaters()[2]||eaters()[0]||{}).name||'Aria', me=(mePerson()&&nm(mePerson()))||(eaters()[0]||{}).name||'Tony';
+  return [
+    ['📅','The day',[['What’s on today?','everything in the calendar'],['What’s on tomorrow?',''],['What’s on this week?',''],['What’s on this Friday?','any day you like']]],
+    ['✈️','Where’s '+her+'?',[['Where is everyone?','in the air, which city, or home'],['When is '+her+' home?','when she lands, in our time']]],
+    ['🍽️','Food',[['What’s for dinner?','tonight'],['What’s for dinner on Saturday?',''],['What’s on the shopping list?','reads it out'],['Add milk to the shopping list.','goes straight on the list'],['We’re out of bread.','same thing']]],
+    ['✅','Jobs',[['What are my jobs?','just yours'],['What jobs does '+kid+' have?',''],['What jobs are there?','everyone’s'],['Add a job.','it asks what, and who for']]],
+    ['🗓️','Putting things in',[['Put something in the calendar.','asks what, when, what time, who for — then reads it back'],['Remember that the bins go out Tuesday.','saved into family memory']]],
+    ['💰','Money',[['How much have I saved?','your savings jars'],['How much has '+kid+' saved?',''],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance']]],
+    ['💬','Anything else',[['Tell me what we need for Thursday’s dinner.',''],['Tell me how long until '+her+' is home.',''],['Tell me what I’ve forgotten today.','it answers from everything the app knows']]],
+    ['🗣️','If it doesn’t know your voice',[['I am '+me+'.','say it once and it remembers you']]],
+  ];
+}
+function openHelp(){
+  modal((m,close)=>{ m.classList.add('wide','tvsheet');
+    m.innerHTML=`<div class="tvhead"><h2>❓ What can I say?</h2><button class="save" id="x">Done</button></div>
+      <p class="helplead">Start with <b>“Alexa, ask Family Screen…”</b> and then say one of these.<br><small>Or say <b>“Alexa, open Family Screen”</b> first, and then just talk.</small></p>
+      <div class="tvlist">${helpGroups().map(([e,title,rows])=>`<div class="hgrp"><h4>${e} ${esc(title)}</h4>${rows.map(([a,b])=>`<div class="hrow"><b>“${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>`).join('')}
+      <p class="note">🔒 Private entries and gift ideas are never read out loud.</p></div>`;
+    m.querySelector('#x').onclick=close;
+  });
+}

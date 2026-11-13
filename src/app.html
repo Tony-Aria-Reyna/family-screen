@@ -332,6 +332,10 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .bfold{background:#fffaf0;border:1px solid #f1e3c4;border-radius:14px;padding:10px 12px}.bfold b{font-size:17px}.flist{max-height:260px;overflow:auto;margin-top:8px}
 .libwait{color:#fff;font-size:22px;font-weight:700;text-align:center;padding-top:30vh}
 .dirn{background:#fff7d6;border:1px solid #f1e3c4;border-radius:12px;padding:8px 12px;font-size:15px;margin:6px 0}
+.helplead{font-size:19px;background:#fff7d6;border-radius:14px;padding:12px 14px;margin:4px 0 10px}.helplead small{color:var(--muted);font-size:15px}
+.hgrp{margin-bottom:14px}.hgrp h4{margin:0 0 6px;font-size:20px}
+.hrow{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:6px}
+.hrow b{font-size:19px;line-height:1.35;display:block}.hrow small{color:var(--muted);font-size:14px}
 .vsay{display:grid;gap:6px;margin:4px 0}.vsay div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:16px}.vsay small{display:block;color:var(--muted);font-size:13px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px;text-align:left;font:inherit;min-height:108px}
@@ -2471,7 +2475,7 @@ function openHelpers(){
       <div class="row"><button class="xbtn" data-copy="code" style="background:#ffe5a8;font-weight:800">📋 Copy helper code</button><button class="xbtn" data-copy="manifest">📋 Copy settings file</button></div></div>
     <div class="srccard" style="margin-top:12px"><h4>🔊 Alexa ${S.voiceUrl?'<span class="pill-ok">✓ set up</span>':'<span class="pill-wait">not set up</span>'}</h4>
       <p class="note">Ask your Echo what's on, where everyone is, what's for dinner, and add things to the lists by voice.</p>
-      <button class="xbtn" id="hal">🔊 Set up Alexa</button></div>
+      <div class="row" style="gap:8px"><button class="xbtn" id="hal">🔊 Set up Alexa</button><button class="xbtn" id="hhelp">❓ What can I say?</button></div></div>
     <div class="srccard" style="margin-top:12px"><h4>📅 Calendar &amp; AI helper ${!h||!h.url?'<span class="pill-wait">not set up</span>':cal===null?'<span class="pill-wait">checking…</span>':cal.ok?`<span class="pill-ok">✓ up to date${cal.hasKey?' · AI key ✓':''}</span>`:'<span class="pill-wait">⬆️ needs updating</span>'}</h4>
       <p class="note">Fetches calendar links, and runs meal ideas and recipe reading with your Gemini key.</p>
       ${!h||!h.url?'<button class="xbtn" id="hs">Set it up</button>':`<p class="dirn">📋 You copy <b>from here</b> and paste <b>into Google</b>. Do it on a computer.</p><ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55"><li>Press <b>📋 Copy calendar helper code</b> below.</li><li>Open your <b>calendar helper</b> project at script.google.com (a different project from the Family Screen Helper) → <b>Code.gs</b>.</li><li>Click in the code, <b>Ctrl + A</b>, <b>Ctrl + V</b>, <b>Ctrl + S</b>.</li><li><b>Deploy</b> → <b>Manage deployments</b> → ✏️ → Version: <b>New version</b> → <b>Deploy</b>. Without this last step the old code keeps running.</li></ol>
@@ -2481,6 +2485,7 @@ function openHelpers(){
     const hc=m.querySelector('#hc'); if(hc) hc.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Calendar helper code copied')); }catch(e){ toast('Copy failed'); } };
     const hs=m.querySelector('#hs'); if(hs) hs.onclick=()=>{ close(); openHelperSetup(); };
     const hal=m.querySelector('#hal'); if(hal) hal.onclick=()=>{ close(); openAlexa(); };
+    const hh=m.querySelector('#hhelp'); if(hh) hh.onclick=()=>{ close(); openHelp(); };
     const hk=m.querySelector('#hk'); if(hk) hk.onclick=()=>{ close(); aiSetup(); };
   }; draw();
     if(h&&h.url&&!LOCAL) fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'ping'}),redirect:'follow'}).then(r=>r.text()).then(t=>{ try{ const j=JSON.parse(t); cal={ok:!!j.ok&&j.helper>=2,hasKey:!!j.hasKey}; }catch(e){ cal={ok:false}; } if(m.isConnected) draw(); }).catch(()=>{ cal={ok:false}; if(m.isConnected) draw(); });
@@ -2665,6 +2670,7 @@ function openSync(){
 /* ================= settings ================= */
 // Everything that isn't on the front screen, as big tiles
 function moreTiles(){ return [
+  ['❓','What can I say?',()=>openHelp(),()=>'Alexa phrases'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
   ['📖','Recipes',()=>openRecipeBook(),()=>allRecipes().length+' recipes'],
