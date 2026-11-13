@@ -501,6 +501,13 @@ function vFind(h, name) {
   const n = normB(name); if (!n) return null;
   return vPeople(h).filter(p => normB(p.name) === n)[0] || vPeople(h).filter(p => normB(p.name).indexOf(n) === 0 || n.indexOf(normB(p.name)) === 0)[0] || null;
 }
+// Alexa tells us which voice profile is speaking (if the family set them up). We remember which profile is which
+// person the first time they say who they are, so "my jobs" means the right person's jobs afterwards.
+function vMe(h, b) {
+  const id = String(b.person_id || ''); if (!id) return null;
+  const map = h.voiceIds || {}; const pid = map[id]; if (!pid) return null;
+  return vPeople(h).filter(function (p) { return p.id === pid; })[0] || null;
+}
 function vList(a) { a = a.filter(Boolean); return a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
 function vDay(key, now) {
   const t = keyOf(now); if (key === t) return 'today'; if (key === keyOf(addDays(now, 1))) return 'tomorrow'; if (key === keyOf(addDays(now, -1))) return 'yesterday';
@@ -542,13 +549,35 @@ function voiceDo(h, action, b) {
   }
   if (action === 'job_add') {
     const task = String(b.task || '').trim(); if (!task) return { speech: 'What is the job?', ask: 'task' };
-    const p = vFind(h, b.person);
+    const p = /^(me|myself|i)$/i.test(String(b.person || '').trim()) ? vMe(h, b) : (vFind(h, b.person) || (b.person ? null : vMe(h, b)) || null);
     if (!p && vPeople(h).length > 1 && !b.force) return { speech: 'Who is that job for? ' + vList(vPeople(h).map(function (x) { return x.name; })) + '?', ask: 'person' };
     patch('households/' + hid + '/todos/' + newId(), { title: task.charAt(0).toUpperCase() + task.slice(1), who: p ? p.id : '', done: false, at: now.getTime(), voice: true });
     return { speech: 'Added ' + task + (p ? ' to ' + p.name + "'s jobs" : ' to the jobs list') + '.' };
   }
+  if (action === 'identify') {
+    const p = vFind(h, b.person);
+    if (!p) return { speech: 'I did not catch that name. Who is this? ' + vList(vPeople(h).map(function (x) { return x.name; })) + '?', ask: 'person' };
+    if (!b.person_id) return { speech: 'Thanks ' + p.name + ', but this Echo cannot tell voices apart yet. Set up a voice profile in the Alexa app and tell me again.' };
+    const map = h.voiceIds || {}; map[b.person_id] = p.id; patch('households/' + hid, { voiceIds: map });
+    return { speech: "Got it. I'll know your voice as " + p.name + ' from now on.' };
+  }
+  if (action === 'jars') {
+    const mine = vMe(h, b), p = b.me ? mine : (vFind(h, b.person) || mine);
+    if (b.me && !mine) return { speech: 'I am not sure whose voice this is. Say, I am ' + vPeople(h)[0].name + ', and I will remember.', ask: 'person' };
+    let jars = listDocs('households/' + hid + '/kids').filter(function (x) { return x.kind === 'jar'; });
+    if (p) jars = jars.filter(function (x) { return x.person === p.id; });
+    if (!jars.length) return { speech: p ? p.name + ' has no savings jars yet.' : 'There are no savings jars yet.' };
+    const tot = function (j) { return (j.log || []).reduce(function (t, x) { return t + (x.amt || 0); }, 0); };
+    const bits = jars.slice(0, 4).map(function (j) {
+      const t = tot(j), who = p ? '' : (vPeople(h).filter(function (x) { return x.id === j.person; })[0] || {}).name + "'s ";
+      return who + j.name + ', ' + money(t) + (j.target ? ' of ' + money(j.target) + ', ' + Math.min(100, Math.round(t / j.target * 100)) + ' per cent' : '');
+    });
+    return { speech: (p ? p.name + ': ' : '') + vList(bits) + '.' };
+  }
   if (action === 'jobs') {
-    const p = vFind(h, b.person), lost = b.person && !p ? "I'm not sure who " + b.person + ' is, so here are all of them. ' : '';
+    const mine = vMe(h, b);
+    if (b.me && !mine) return { speech: 'I am not sure whose voice this is. Say, I am ' + vPeople(h)[0].name + ', and I will remember.', ask: 'person' };
+    const p = b.me ? mine : vFind(h, b.person), lost = !b.me && b.person && !p ? "I'm not sure who " + b.person + ' is, so here are all of them. ' : '';
     let t = listDocs('households/' + hid + '/todos').filter(function (x) { return !x.done && !x.priv; });
     if (p) t = t.filter(function (x) { return x.who === p.id; });
     if (!t.length) return { speech: lost + (p ? p.name + ' has no jobs waiting. Nice.' : 'There are no jobs waiting. Nice.') };
@@ -573,6 +602,8 @@ function voiceDo(h, action, b) {
   }
   if (action === 'where') {
     const tp = vPeople(h).filter(function (p) { return p.traveller; })[0];
+    const asked = vFind(h, b.person);
+    if (asked && tp && asked.id !== tp.id) return { speech: 'Only ' + tp.name + "'s flights are tracked, so I can't say where " + asked.name + ' is.' };
     const nm = tp ? tp.name : 'She';
     const fl = listDocs('households/' + hid + '/flights').filter(function (f) { return !tp || f.who === tp.id; });
     const live = h.live || {};
