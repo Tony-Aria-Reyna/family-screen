@@ -540,6 +540,11 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .pc-head{flex:none;position:relative;z-index:5;background:var(--bg)}
 .pc-head h2{margin:0;font-size:23px;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .pc-head button{flex:none;background:var(--card);border-radius:12px;min-width:36px;height:38px;font-size:20px;box-shadow:0 1px 0 var(--line)}
+.pc-who{position:relative;width:40px;height:40px;border-radius:12px;background:var(--soft);font-size:19px;flex:none}
+.pc-who.filtered{background:#ffe5a8}.pc-who i{position:absolute;top:-4px;right:-4px;background:#b45309;color:#fff;font-style:normal;font-size:11px;font-weight:800;border-radius:9px;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px}
+.fnote{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff7d6;border:1px solid #f1e3c4;border-radius:12px;padding:6px 10px;margin:0 6px 6px;font-size:14px;font-weight:600;flex:none}
+.fnote button{margin-left:auto;background:#ffe5a8;border-radius:10px;padding:5px 10px;font:inherit;font-size:13px;font-weight:800}
+.chip.showall{background:#ffe5a8;border-color:#e0b100;font-weight:800}
 .pv-seg{display:flex;background:var(--soft);border-radius:12px;padding:3px;gap:2px}
 .pc-head .pv-seg button{box-shadow:none;background:none;min-width:0;height:34px;padding:0 9px;font-size:14px;font-weight:700;border-radius:9px;color:var(--muted)}
 .pc-head .pv-seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -2801,9 +2806,25 @@ function renderClock(){
 }
 
 /* ================= people bar + calendar navigation ================= */
+// Whose entries this device shows. Remembered per device (never synced), so hiding someone here doesn't hide them anywhere else.
+const hiddenPeople=()=>S.people.filter(p=>!p.show);
+function showEveryone(){ S.people.forEach(p=>p.show=true); savePrefs(); renderAll(); toast('Showing everyone'); }
+function toggleShow(id){ const p=person(id); if(!p) return; p.show=!p.show; if(!S.people.some(x=>x.show)){ p.show=true; toast('Keep at least one person showing'); return; } savePrefs(); renderAll(); }
+function openWhoFilter(){
+  modal((m,close)=>{ const draw=()=>{
+    m.innerHTML=`<h2>👥 Whose calendar to show</h2><p class="note">Just for this device. Hiding someone here doesn't hide them anywhere else.</p>
+      <div class="opts" style="flex-direction:column;align-items:stretch">${S.people.map(p=>`<button class="opt ${p.show?'on':''}" data-who="${p.id}"><span class="tick">${p.show?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')}</div>
+      <div class="mact">${hiddenPeople().length?'<button class="cancel" id="all">Show everyone</button>':''}<button class="save" id="ok">Done</button></div>`;
+    m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ toggleShow(b.dataset.who); draw(); });
+    const a=m.querySelector('#all'); if(a) a.onclick=()=>{ showEveryone(); draw(); };
+    m.querySelector('#ok').onclick=close;
+  }; draw(); });
+}
+const filterNote=()=>{ const h=hiddenPeople(); return h.length?`<div class="fnote">👁️ Hiding ${esc(h.map(p=>p.name).join(', '))}<button data-showall>Show everyone</button></div>`:''; };
 function renderBar(){
-  $('#bar').innerHTML=S.people.map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('');
-  $('#bar').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ const p=person(b.dataset.p); p.show=!p.show; savePrefs(); renderBar(); renderCal(); });
+  $('#bar').innerHTML=S.people.map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')+(hiddenPeople().length?'<button class="chip showall" data-showall>👁️ Show everyone</button>':'');
+  $('#bar').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>toggleShow(b.dataset.p));
+  $('#bar').querySelectorAll('[data-showall]').forEach(b=>b.onclick=showEveryone);
   renderCalHead();
 }
 let fDay=dk(new Date());
@@ -5559,8 +5580,13 @@ function renderPhoneTop(){
 let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
 const ROW=58, MODES=['day','week','split','month'];
 let pView=lsGet('fs.pview','month'), pwScroll=null, pwSnap=lsGet('fs.pwsnap','split'), pwY=0;
-const pvSeg=()=>`<div class="pv-seg"><button data-pv="month" class="${pView==='month'?'on':''}">Month</button><button data-pv="week" class="${pView==='week'?'on':''}">Week</button></div>`;
-function wirePvSeg(el){ el.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{ if(pView===b.dataset.pv) return; pView=b.dataset.pv; lsSet('fs.pview',pView); pwScroll=null; renderPCal(); }); }
+const pvSeg=()=>`<div class="pv-seg"><button data-pv="month" class="${pView==='month'?'on':''}">Month</button><button data-pv="week" class="${pView==='week'?'on':''}">Week</button></div><button class="pc-who ${hiddenPeople().length?'filtered':''}" id="pcWho" aria-label="Whose calendar">👥${hiddenPeople().length?`<i>${S.people.length-hiddenPeople().length}</i>`:''}</button>`;
+function wirePvSeg(el){
+  el.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{ if(pView===b.dataset.pv) return; pView=b.dataset.pv; lsSet('fs.pview',pView); pwScroll=null; renderPCal(); });
+  const w=el.querySelector('#pcWho'); if(w) w.onclick=openWhoFilter;
+  const head=el.querySelector('.pc-head'); if(head&&hiddenPeople().length){ head.insertAdjacentHTML('afterend',filterNote()); }
+  el.querySelectorAll('[data-showall]').forEach(b=>b.onclick=showEveryone);
+}
 // phone week: 7 columns on a time grid (like Samsung's week view)
 function renderPWeek(el){
   const HW=46, m=monday(kd(pSel)), todayK=dk(new Date()), now=new Date(), nmin=now.getHours()*60+now.getMinutes();
@@ -5640,7 +5666,7 @@ function renderPCal(){
   const T=timelineHTML(pSel), keepScroll=el.querySelector('.ps-scroll');
   if(keepScroll&&el.dataset.day===pSel) pScroll=keepScroll.scrollTop; else pScroll=null;
   el.dataset.day=pSel;
-  el.innerHTML=`<div class="pc-head"><h2>${fmtD(pMonth,{month:'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</h2>${pvSeg()}<button id="pcPrev" aria-label="Previous month">‹</button><button id="pcNext" aria-label="Next month">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
+  el.innerHTML=`<div class="pc-head"><h2>${fmtD(pMonth,{month:innerWidth<460?'short':'long',year:pMonth.getFullYear()===new Date().getFullYear()?undefined:'numeric'})}</h2>${pvSeg()}<button id="pcPrev" aria-label="Previous month">‹</button><button id="pcNext" aria-label="Next month">›</button><button class="pc-today" id="pcToday">${new Date().getDate()}</button></div>
     <div class="pc-dow">${['M','T','W','T','F','S','S'].map(x=>`<span>${x}</span>`).join('')}</div>
     <div class="pc-gridwrap" id="pcWrap"><div class="pc-grid" id="pcGrid">${cells}</div></div>
     <div class="pc-sheet" id="pcSheet"><div class="pc-grab"></div>
@@ -5797,7 +5823,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwererni';
+const FS_VERSION='fs-mwes9o4m';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
