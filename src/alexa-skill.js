@@ -38,7 +38,7 @@ const asked = function (h, what) {
   a['asked_' + what] = 1; h.attributesManager.setSessionAttributes(a); return false;
 };
 const elicit = function (h, name, prompt) { return h.responseBuilder.speak(prompt).reprompt(prompt).addElicitSlotDirective(name).getResponse(); };
-const answer = function (h, r) { return h.responseBuilder.speak(r.speech).withSimpleCard('Family Screen', r.speech).getResponse(); };
+const answer = function (h, r) { return h.responseBuilder.speak(r.ssml || r.speech).withSimpleCard('Family Screen', r.speech).getResponse(); };
 const run = function (h, body) { body.person_id = who(h); return post(body).then(function (r) { return answer(h, r.speech ? r : { speech: r.error === 'not allowed' ? 'The voice key does not match. Copy the skill code from the app again.' : 'Sorry, I could not reach the family screen.' }); }); };
 const named = function (h) { const p = slot(h, 'person'); return p; };
 const peopleList = PEOPLE.length < 2 ? '' : PEOPLE.slice(0, -1).join(', ') + ' or ' + PEOPLE[PEOPLE.length - 1];
@@ -142,6 +142,14 @@ H.Meal = {
   canHandle: function (h) { return intentName(h) === 'MealIntent'; },
   handle: function (h) { return run(h, { action: 'meal', date: slot(h, 'when') }); }
 };
+H.Wake = {
+  canHandle: function (h) { return intentName(h) === 'WakeIntent'; },
+  handle: function (h) {
+    const person = slot(h, 'person');
+    if (!person && PEOPLE.length > 1 && !asked(h, 'wake')) return elicit(h, 'person', 'Who am I waking up?');
+    return run(h, { action: 'wake', person: person });
+  }
+};
 H.Remember = {
   canHandle: function (h) { return intentName(h) === 'RememberIntent'; },
   handle: function (h) { const t = slot(h, 'text'); if (!t) return elicit(h, 'text', 'What should I remember?'); return run(h, { action: 'remember', text: t }); }
@@ -181,6 +189,6 @@ const ErrorHandler = {
   }
 };
 exports.handler = Alexa.SkillBuilders.custom()
-  .addRequestHandlers(H.Yes, H.No, H.Launch, H.AddShop, H.ShopList, H.AddJob, H.MyJobs, H.Jobs, H.Identify, H.Jars, H.MyJars, H.AddEvent, H.Agenda, H.Where, H.Bills, H.Renewals, H.Meal, H.Remember, H.Ask, H.Help, H.Stop, H.YesNoIdle, H.Fallback, H.SessionEnded)
+  .addRequestHandlers(H.Yes, H.No, H.Launch, H.AddShop, H.ShopList, H.AddJob, H.MyJobs, H.Jobs, H.Identify, H.Jars, H.MyJars, H.AddEvent, H.Agenda, H.Where, H.Bills, H.Renewals, H.Meal, H.Wake, H.Remember, H.Ask, H.Help, H.Stop, H.YesNoIdle, H.Fallback, H.SessionEnded)
   .addErrorHandlers(ErrorHandler)
   .lambda();

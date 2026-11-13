@@ -705,9 +705,10 @@ function openKids(){
       <div class="step">💰 Savings jars</div>
       <div class="jars">${jars.map(j=>{ const t=jarTotal(j), pc=j.target?Math.min(100,Math.round(t/j.target*100)):0; return `<button class="jar" data-jar="${j.id}"><span class="je">${esc(j.emoji||'🏺')}</span><b>${esc(j.name)}</b><div class="jbar"><i style="width:${pc}%"></i></div><small>${$m(t)}${j.target?' of '+$m(j.target)+' · '+pc+'%':''}</small></button>`; }).join('')}<button class="jar add" id="jadd"><span class="je">➕</span><b>New jar</b><small>a goal to save for</small></button></div>
       <div class="step">🌍 Explorer quiz <span style="font-weight:500">· learn about the places we've been and want to go</span></div>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="kbig" id="kq">🧭 Quiz me on a country</button>${stamps.length?`<button class="xbtn" id="kp">🛂 My passport</button>`:''}</div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="kbig" id="kq">🧭 Quiz me on a country</button><button class="xbtn" id="kwake">🎵 Wake-up song</button>${stamps.length?`<button class="xbtn" id="kp">🛂 My passport</button>`:''}</div>
       <p class="note" style="margin-top:12px">Age ${prof.age||'?'} · questions are pitched for this age. <a href="#" id="kage">Change</a></p>`;
     m.querySelector('#x').onclick=close;
+    m.querySelector('#kwake').onclick=()=>{ close(); openWake(pid); };
     m.querySelector('#kw').onclick=()=>{ close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>Whose corner?</h2><div class="opts">${eaters().map(p=>`<button class="opt ${p.id===pid?'on':''}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div><div class="mact"><button class="cancel" id="c">Cancel</button></div>`; m2.querySelector('#c').onclick=()=>{ c2(); openKids(); }; m2.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ lsSet('fs.kidWho',b.dataset.p); c2(); openKids(); }); }); };
     m.querySelector('#kage').onclick=e=>{ e.preventDefault(); close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>How old is ${esc(nm(pid))}?</h2><input class="txt" id="a" type="number" inputmode="numeric" value="${prof.age||''}" style="width:120px"><div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="s">Save</button></div>`;
       m2.querySelector('#c').onclick=()=>{ c2(); openKids(); }; m2.querySelector('#s').onclick=()=>{ const n=parseInt(m2.querySelector('#a').value,10); if(!(n>0&&n<120)){ toast('Type the age'); return; } let pr=kidDocs().find(k=>k.kind==='profile'&&k.person===pid); if(!pr){ pr={id:uid(),kind:'profile',person:pid}; S.kids.push(pr); } pr.age=n; save(); c2(); openKids(); }; }); };
@@ -787,6 +788,16 @@ function openPassport(pid){
 /* ================= Alexa: the family's own private voice skill ================= */
 const ALEXA_SKILL=/*@ALEXA@*/'';
 function alexaNames(){ const out=[]; eaters().forEach(p=>{ const n=String(p.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim(); if(n&&!out.some(x=>x.toLowerCase()===n.toLowerCase())) out.push(n); }); return out; }
+// what the family calls the skill: "Alexa, ask <name> ..."
+const voiceName=()=>(S.voiceName||'family screen');
+const voiceSay=()=>voiceName()==='family screen'?'Family Screen':voiceName();
+function cleanVoiceName(v){ return String(v||'').toLowerCase().replace(/[^a-z' ]/g,' ').replace(/\s+/g,' ').trim(); }
+function voiceNameProblem(n){ const w=n.split(' ');
+  if(w.length<2) return 'Amazon needs at least two words.';
+  if(w.some(x=>['alexa','amazon','echo','computer','skill','app'].includes(x))) return 'It can’t include Alexa, Amazon, Echo, computer, skill or app.';
+  if(w.some(x=>['ask','tell','open','launch','start','load','begin','enable','use','run','play','resume','to','from','by','if','and','whether','in','using','with','about','for','that','on'].includes(x))) return 'Leave out words like ask, tell, open, to, for and and. Alexa uses those herself.';
+  if(w.length===2&&w.some(x=>['the','a','an','of','up','at','off'].includes(x))) return 'A two-word name can’t use the, a, an or of.';
+  return ''; }
 function alexaCode(){
   return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames()));
 }
@@ -794,7 +805,7 @@ function alexaModel(){
   const people=alexaNames(), P={name:'PERSON',values:people.concat(['everyone']).map(n=>({name:{value:n}}))};
   const I=(name,slots,samples)=>({name,slots:slots||[],samples:samples||[]});
   const s=(n,t)=>({name:n,type:t});
-  return JSON.stringify({interactionModel:{languageModel:{invocationName:'family screen',types:people.length?[P]:[],intents:[
+  return JSON.stringify({interactionModel:{languageModel:{invocationName:voiceName(),types:people.length?[P]:[],intents:[
     I('AMAZON.StopIntent'),I('AMAZON.CancelIntent'),I('AMAZON.HelpIntent'),I('AMAZON.NavigateHomeIntent'),I('AMAZON.FallbackIntent'),I('AMAZON.YesIntent'),I('AMAZON.NoIntent'),
     I('AddShopIntent',[s('item','AMAZON.SearchQuery')],['add {item} to the shopping list','add {item} to the list','put {item} on the shopping list','put {item} on the list','we need {item}','we are out of {item}','we have run out of {item}','buy {item}','get {item}','add {item}']),
     I('ShopListIntent',[],["what's on the shopping list",'what is on the shopping list','read the shopping list','read out the shopping list','what do we need','what do we need from the shops','shopping list']),
@@ -810,6 +821,7 @@ function alexaModel(){
     I('BillsIntent',[],['what bills are due','any bills','what do we owe','what bills do we have','are there any bills','bills']),
     I('RenewalsIntent',[],['what is coming up','what renewals are due','what needs renewing','when is the warrant due','when is the rego due']),
     I('MealIntent',[s('when','AMAZON.DATE')],['what is for dinner','what is for dinner {when}','what are we eating {when}','what is for tea','what is the meal plan','what is for dinner tonight']),
+    I('WakeIntent',[s('person','PERSON')],['wake up {person}','wake {person} up','wake up','sing the wake up song','sing the wake up song for {person}','sing {person} the wake up song','sing a wake up song for {person}','good morning song','good morning song for {person}','time to get up {person}','get {person} out of bed','do the wake up song']),
     I('RememberIntent',[s('text','AMAZON.SearchQuery')],['remember {text}','remember that {text}','make a note {text}','note that {text}','do not forget {text}']),
     I('AskIntent',[s('q','AMAZON.SearchQuery')],['tell me {q}','ask {q}','answer {q}','find out {q}','i want to know {q}','do you know {q}','question {q}','help me with {q}','what about {q}'])
   ]}}},null,2);
@@ -824,7 +836,7 @@ function openAlexa(){
       <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
         <p class="dirn">📋 Everything here is copied <b>from this app</b> and pasted <b>into Google and Amazon</b>. Do it all on a computer.</p>
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
-          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v10</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v11</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
           <li>In script.google.com open the <b>Family Screen Helper</b> project — the reminder one, <b>not</b> the calendar helper. Press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
           <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
         </ol>
@@ -841,16 +853,21 @@ function openAlexa(){
         <div class="row" style="gap:8px"><button class="xbtn" id="cm" style="background:#ffe5a8;font-weight:800">📋 Copy the voice model</button><button class="xbtn" id="cc" style="background:#ffe5a8;font-weight:800">📋 Copy the skill code</button></div>
         <p class="note" style="margin-top:8px">The skill code holds your web address and voice key, so don't paste it anywhere public. If it ever gets out, press <b>New key</b> below and paste the code in again.</p>
         <button class="xbtn" id="nk">🔑 New key</button></div>
+      <div class="srccard" style="margin-top:12px"><h4>🗣️ What you call her</h4>
+        <p class="note">You say <b>“Alexa, ask ${esc(voiceSay())}…”</b>. Change the name to anything you like, two words or more.</p>
+        <div class="row" style="gap:8px"><input class="txt" id="vn" value="${esc(voiceName())}" style="flex:1" maxlength="40"><button class="xbtn" id="vns">Save name</button></div>
+        <p class="note" style="margin-top:6px">After changing it: <b>📋 Copy the voice model</b> again → Amazon <b>Build</b> tab → <b>JSON Editor</b> → paste over the lot → <b>Save</b> → <b>Build skill</b>. The skill code doesn't change.</p></div>
       <div class="srccard" style="margin-top:12px"><h4>Step 3 · Say</h4>
-        <div class="vsay">${[['What’s on today?','the calendar, any day'],['What’s on this week?',''],['Where is everyone?','who’s away, who’s flying, when she’s home'],['What’s for dinner?','tonight or any night'],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance'],['What are my jobs?','your own, if it knows your voice'],['How much have I saved?','the savings jars'],['Add milk to the shopping list.','saves straight away'],['What’s on the shopping list?',''],['Add a job.','it asks what, and who for'],['Put something in the calendar.','asks what, when, what time, who for — then reads it back before saving'],['Remember that the bins go out Tuesday.','goes into family memory'],['Tell me what we need for Thursday’s dinner.','anything at all']].map(([a,b])=>`<div><b>“Alexa, ask Family Screen ${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>
-        <p class="note">You can also say “Alexa, open Family Screen” and then just talk, without saying the name again.</p></div>
+        <div class="vsay">${[['What’s on today?','the calendar, any day'],['What’s on this week?',''],['Where is everyone?','who’s away, who’s flying, when she’s home'],['What’s for dinner?','tonight or any night'],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance'],['What are my jobs?','your own, if it knows your voice'],['How much have I saved?','the savings jars'],['Add milk to the shopping list.','saves straight away'],['What’s on the shopping list?',''],['Add a job.','it asks what, and who for'],['Put something in the calendar.','asks what, when, what time, who for — then reads it back before saving'],['Remember that the bins go out Tuesday.','goes into family memory'],['Tell me what we need for Thursday’s dinner.','anything at all']].map(([a,b])=>`<div><b>“Alexa, ask ${esc(voiceSay())} ${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>
+        <p class="note">You can also say “Alexa, open ${esc(voiceSay())}” and then just talk, without saying the name again.</p></div>
       <div class="srccard" style="margin-top:12px"><h4>🗣️ So it knows who's talking</h4>
-        <p class="note">“What are my jobs?” and “how much have I saved?” need Alexa to recognise the voice. In the <b>Alexa app</b> → <b>More</b> → <b>Settings</b> → <b>Your Profile &amp; Family</b> → <b>Voice ID</b>, each of you sets up a voice profile (a minute each). Then say <b>“Alexa, ask Family Screen I am ${esc((eaters()[0]||{}).name||'Tony')}”</b> once and it remembers which profile is which person.</p>
+        <p class="note">“What are my jobs?” and “how much have I saved?” need Alexa to recognise the voice. In the <b>Alexa app</b> → <b>More</b> → <b>Settings</b> → <b>Your Profile &amp; Family</b> → <b>Voice ID</b>, each of you sets up a voice profile (a minute each). Then say <b>“Alexa, ask ${esc(voiceSay())} I am ${esc((eaters()[0]||{}).name||'Tony')}”</b> once and it remembers which profile is which person.</p>
         <p class="note">Without voice profiles it just asks “who are you?” first — nothing breaks.</p>
         <p class="note">🔒 Private entries and gift ideas are never read out, whoever is in the room. Bill amounts and savings totals are.</p></div>`;
     m.querySelector('#x').onclick=close;
     const vu=m.querySelector('#vu');
     m.querySelector('#vs').onclick=()=>{ const v=vu.value.trim(); if(v&&!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v)){ toast('That should be the web app URL ending in /exec'); return; } S.voiceUrl=v; save(); test=''; draw(); toast('Saved'); };
+    m.querySelector('#vns').onclick=()=>{ const n=cleanVoiceName(m.querySelector('#vn').value); const bad=voiceNameProblem(n); if(bad){ toast(bad); return; } S.voiceName=n==='family screen'?'':n; save(); draw(); toast('Saved. Now copy the voice model into Amazon again.'); };
     m.querySelector('#cm').onclick=()=>{ try{ navigator.clipboard.writeText(alexaModel()).then(()=>toast('Voice model copied')); }catch(e){ toast('Copy didn’t work here. Use a computer.'); } };
     m.querySelector('#cc').onclick=()=>{ if(!S.voiceUrl){ toast('Paste the web app URL first'); return; } try{ navigator.clipboard.writeText(alexaCode()).then(()=>toast('Skill code copied')); }catch(e){ toast('Copy didn’t work here. Use a computer.'); } };
     m.querySelector('#nk').onclick=()=>{ if(!confirm('Make a new voice key? You’ll need to paste the skill code into Amazon again.')) return; S.voiceKey=(uid()+uid()+uid()).replace(/[^a-z0-9]/gi,'').slice(0,28); save(); toast('New key made'); draw(); };
@@ -858,13 +875,52 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=10 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 10 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 10), then Deploy → New version.'
+          : j.ok&&j.version>=11 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 11 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 11), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
   }; draw(); });
+}
+
+/* ================= Wake-up song: a fresh rhyme about someone's day, played on this screen ================= */
+const WAKE_STYLES=[['funny','😜 Silly'],['pirate','🏴‍☠️ Pirate'],['trailer','🎬 Movie trailer'],['gentle','🌤️ Gentle']];
+let wakeCtx=null;
+function wakeJingle(){ try{ wakeCtx=wakeCtx||new (window.AudioContext||window.webkitAudioContext)(); const c=wakeCtx, t0=c.currentTime+0.05;
+    [[523,0],[659,.16],[784,.32],[1047,.48],[784,.72],[1047,.88]].forEach(([f,at])=>{ const o=c.createOscillator(), g=c.createGain(); o.type='triangle'; o.frequency.value=f; g.gain.setValueAtTime(0.0001,t0+at); g.gain.exponentialRampToValueAtTime(0.25,t0+at+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t0+at+(at>.8?.5:.2)); o.connect(g).connect(c.destination); o.start(t0+at); o.stop(t0+at+.6); });
+    return 1500; }catch(e){ return 0; } }
+function wakeSpeak(lines,then,onLine,onEnd){
+  if(!('speechSynthesis' in window)){ onEnd&&onEnd(); return; }
+  speechSynthesis.cancel();
+  const vs=speechSynthesis.getVoices(), v=vs.find(x=>/en[-_]NZ/i.test(x.lang))||vs.find(x=>/en[-_]AU/i.test(x.lang))||vs.find(x=>/en[-_]GB/i.test(x.lang))||vs.find(x=>/^en/i.test(x.lang));
+  const say=(t,i,sing)=>{ const u=new SpeechSynthesisUtterance(t); if(v) u.voice=v; u.rate=sing?0.92:1; u.pitch=sing?1.35:1; u.onstart=()=>onLine&&onLine(i); return u; };
+  lines.forEach((l,i)=>speechSynthesis.speak(say(l,i,true)));
+  const last=say(then,lines.length,false); last.onend=()=>onEnd&&onEnd(); speechSynthesis.speak(last);
+}
+function openWake(pid){
+  const kids=eaters(); let who=pid||(typeof kidWho==='function'&&kidWho())||(kids[0]||{}).id, song=null, busy=false, err='', at=-1;
+  modal((m,close)=>{ m.classList.add('wide','wake'); const stop=()=>{ try{ speechSynthesis.cancel(); }catch(e){} };
+    const play=()=>{ if(!song) return; at=-1; stop(); const wait=S.wakeSfx!==false?wakeJingle():0; setTimeout(()=>wakeSpeak(song.verse,song.then,i=>{ at=i; m.querySelectorAll('.wline').forEach((el,k)=>el.classList.toggle('on',k===i)); },()=>{ at=-1; m.querySelectorAll('.wline').forEach(el=>el.classList.remove('on')); }),wait); };
+    const fetchSong=async()=>{ if(busy) return; if(!S.voiceUrl){ err='Set up 🔊 Alexa first (More → Alexa, Step 1). The song comes from the same helper.'; draw(); return; }
+      busy=true; err=''; song=null; draw();
+      try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'wake',person:nm(who),style:S.wakeStyle||'funny'}),redirect:'follow'}); const j=await r.json();
+        if(j&&j.verse&&j.verse.length){ song=j; } else err=/not allowed/.test(j.error||'')?'The helper didn’t accept the voice key. Open More → Alexa → Test it.':(j.ask?'The helper doesn’t know '+nm(who)+' yet.':'The Reminder helper needs updating to version 11 (⚙️ → 🧰 Helpers), then Deploy → Manage deployments → New version.'); }
+      catch(e){ err='Couldn’t reach the helper. Check the internet and try again.'; }
+      busy=false; draw(); if(song) play(); };
+    const draw=()=>{ m.innerHTML=`<div class="tvhead"><h2>🎵 Wake-up song</h2><button class="save" id="x">Done</button></div>
+      <div class="opts" style="margin-bottom:8px">${kids.map(p=>`<button class="opt ${p.id===who?'on':''}" data-ww="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
+      <div class="opts wstyles">${WAKE_STYLES.map(([k,l])=>`<button class="opt ${(S.wakeStyle||'funny')===k?'on':''}" data-ws="${k}">${l}</button>`).join('')}</div>
+      <div class="wsong">${busy?'<div class="wwait">🎼 Writing today’s song…</div>':song?song.verse.map((l,i)=>`<div class="wline ${at===i?'on':''}">${esc(l)}</div>`).join('')+`<div class="wline wthen">${esc(song.then)}</div>`:err?`<p class="note">⚠️ ${esc(err)}</p>`:`<div class="wwait">A brand new rhyme about ${esc(nm(who))}’s day, every time.</div>`}</div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="kbig" id="wgo" ${busy?'disabled':''}>${song?'🎲 New song':'▶️ Wake up '+esc(nm(who))}</button>${song?'<button class="xbtn" id="wag">🔁 Again</button>':''}
+        <label class="note" style="display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" id="wfx" ${S.wakeSfx!==false?'checked':''}> Sound effects</label></div>
+      <p class="note" style="margin-top:10px">On the Echo, say <b>“Alexa, ask ${esc(voiceSay())} to wake up ${esc(nm(who))}”</b>. The style and sound-effects choice here is what Alexa uses too.</p>`;
+      m.querySelector('#x').onclick=()=>{ stop(); close(); };
+      m.querySelectorAll('[data-ww]').forEach(b=>b.onclick=()=>{ who=b.dataset.ww; song=null; err=''; stop(); draw(); });
+      m.querySelectorAll('[data-ws]').forEach(b=>b.onclick=()=>{ S.wakeStyle=b.dataset.ws; save(); song=null; stop(); draw(); });
+      m.querySelector('#wgo').onclick=fetchSong; const ag=m.querySelector('#wag'); if(ag) ag.onclick=play;
+      m.querySelector('#wfx').onchange=e=>{ S.wakeSfx=e.target.checked; save(); };
+    }; draw(); });
 }
 
 /* ================= Help: what you can say to Alexa ================= */
@@ -877,6 +933,7 @@ function helpGroups(){
     ['✅','Jobs',[['What are my jobs?','just yours'],['What jobs does '+kid+' have?',''],['What jobs are there?','everyone’s'],['Add a job.','it asks what, and who for']]],
     ['🗓️','Putting things in',[['Put something in the calendar.','asks what, when, what time, who for — then reads it back'],['Remember that the bins go out Tuesday.','saved into family memory']]],
     ['💰','Money',[['How much have I saved?','your savings jars'],['How much has '+kid+' saved?',''],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance']]],
+    ['🎵','Wake-up song',[['Wake up '+kid+'.','a brand new silly rhyme about the day, every time'],['Sing the wake up song for '+me+'.','works for anyone']]],
     ['💬','Anything else',[['Tell me what we need for Thursday’s dinner.',''],['Tell me how long until '+her+' is home.',''],['Tell me what I’ve forgotten today.','it answers from everything the app knows']]],
     ['🗣️','If it doesn’t know your voice',[['I am '+me+'.','say it once and it remembers you']]],
   ];
@@ -884,7 +941,7 @@ function helpGroups(){
 function openHelp(){
   modal((m,close)=>{ m.classList.add('wide','tvsheet');
     m.innerHTML=`<div class="tvhead"><h2>❓ What can I say?</h2><button class="save" id="x">Done</button></div>
-      <p class="helplead">Start with <b>“Alexa, ask Family Screen…”</b> and then say one of these.<br><small>Or say <b>“Alexa, open Family Screen”</b> first, and then just talk.</small></p>
+      <p class="helplead">Start with <b>“Alexa, ask ${esc(voiceSay())}…”</b> and then say one of these.<br><small>Or say <b>“Alexa, open ${esc(voiceSay())}”</b> first, and then just talk.</small></p>
       <div class="tvlist">${helpGroups().map(([e,title,rows])=>`<div class="hgrp"><h4>${e} ${esc(title)}</h4>${rows.map(([a,b])=>`<div class="hrow"><b>“${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>`).join('')}
       <p class="note">🔒 Private entries and gift ideas are never read out loud.</p></div>`;
     m.querySelector('#x').onclick=close;

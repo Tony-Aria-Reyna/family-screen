@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 10;
+const HELPER_VERSION = 11;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -643,6 +643,12 @@ function voiceDo(h, action, b) {
     const names = dinner.map(function (m) { if (m.note) return m.note; const r = getDoc('households/' + hid + '/recipes/' + m.rid); return r ? r.name : 'something'; });
     return { speech: 'Dinner ' + vDay(key, now) + ': ' + vList(names) + '.' };
   }
+  if (action === 'wake') {
+    const ppl = vPeople(h);
+    const p = /^(me|myself)$/i.test(String(b.person || '').trim()) ? vMe(h, b) : (vFind(h, b.person) || (ppl.length === 1 ? ppl[0] : null));
+    if (!p) return { speech: 'Who am I waking up? ' + vList(ppl.map(function (x) { return x.name; })) + '?', ask: 'person' };
+    return wakeSong(h, p, now, b);
+  }
   if (action === 'remember') {
     const text = String(b.text || '').trim(); if (!text) return { speech: 'What should I remember?', ask: 'text' };
     patch('households/' + hid + '/memory/' + newId(), { text: text, title: '', at: now.getTime(), src: 'voice' });
@@ -662,6 +668,49 @@ function voiceDo(h, action, b) {
     return { speech: String(sp || 'Sorry, I did not catch that.').replace(/[#*`]/g, '') };
   }
   return { speech: 'I am not sure what to do with that.' };
+}
+/* ---------- the wake-up song: a fresh silly rhyme about that person's actual day ---------- */
+const WAKE_STYLES = { funny: 'silly and cheerful, the kind a seven-year-old giggles at', pirate: 'in a jolly pirate voice, with an arr or two', trailer: 'like an over-the-top movie trailer announcer', gentle: 'soft, warm and kind, like a cuddle' };
+function wakeWeather(h) {
+  try {
+    const cache = CacheService.getScriptCache(), lat = +h.homeLat || -36.91, lon = +h.homeLon || 174.65, ck = 'wx|' + lat + '|' + lon;
+    const hit = cache.get(ck); if (hit) return hit;
+    const r = UrlFetchApp.fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weather_code,temperature_2m_max,precipitation_probability_max&timezone=auto&forecast_days=1', { muteHttpExceptions: true });
+    const d = JSON.parse(r.getContentText()).daily, c = d.weather_code[0], hi = Math.round(d.temperature_2m_max[0]), rain = d.precipitation_probability_max[0];
+    const sky = c === 0 ? 'sunny' : c <= 2 ? 'mostly sunny' : c === 3 ? 'cloudy' : c <= 48 ? 'foggy' : c <= 57 ? 'drizzly' : c <= 67 ? 'rainy' : c <= 77 ? 'snowy' : c <= 82 ? 'showery' : 'stormy';
+    const out = sky + ', a high of ' + hi + ' degrees' + (rain >= 50 ? ', and take a raincoat' : '');
+    cache.put(ck, out, 1800); return out;
+  } catch (e) { return ''; }
+}
+const xmlSafe = function (t) { return String(t || '').replace(/[#*`<>]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ').trim(); };
+function wakeSong(h, p, now, b) {
+  const hid = h._id, today = keyOf(now);
+  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+  const mine = vEventsOn(h, today).filter(function (e) { const w = (e.whos || []); return !w.length || w.indexOf('all') >= 0 || w.indexOf(p.id) >= 0; });
+  const first = mine.filter(function (e) { return e.time; })[0] || mine[0];
+  const tp = vPeople(h).filter(function (x) { return x.traveller; })[0];
+  let where = ''; if (tp && tp.id !== p.id) { try { where = voiceDo(h, 'where', {}).speech; } catch (e) {} }
+  const wx = wakeWeather(h);
+  const style = WAKE_STYLES[b.style] ? b.style : (WAKE_STYLES[h.wakeStyle] ? h.wakeStyle : 'funny');
+  const then = [wx ? 'Today is ' + wx + '.' : '', first ? 'First up' + (first.time ? ' at ' + fmt12(first.time) : '') + ': ' + first.title + '.' : 'Nothing in the calendar today.'].filter(Boolean).join(' ');
+  // a rhyme that always works, for when the AI is slow or not set up
+  let verse = ['Wakey wakey, ' + p.name + ', open up your eyes,', 'It is ' + dayName + ' morning, time to rise!', first ? 'You have got ' + first.title + ' on the way,' : 'The whole day is yours to play,', 'So jump out of bed and seize the day!'];
+  const gk = geminiKey(h);
+  if (gk) {
+    try {
+      const facts = ['Name: ' + p.name, 'Day: ' + dayName, mine.length ? 'Their day: ' + mine.slice(0, 4).map(function (e) { return (e.time ? fmt12(e.time) + ' ' : '') + e.title; }).join('; ') : 'Nothing in their calendar today', where ? 'Family news: ' + where : '', wx ? 'Weather: ' + wx : ''].filter(Boolean).join('\n');
+      const prompt = 'Write a brand new wake-up rhyme for a child in a New Zealand family, to be spoken aloud by a smart speaker. Style: ' + WAKE_STYLES[style] + '. '
+        + 'Exactly four short lines that rhyme (AABB), bouncy rhythm, under 45 words in total. Use their name and one or two real things from the facts below. Kind and funny, never mean, nothing scary, no brand names, and do not copy any existing song. '
+        + 'Plain words only: no emoji, no markdown, no stage directions. Make it different from yesterday (random seed ' + Math.floor(Math.random() * 1e6) + ').\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
+      const j = JSON.parse(String(gemini(gk, [{ text: prompt }], true)).replace(/^```(?:json)?|```$/g, '').trim());
+      const ls = (j.lines || []).map(xmlSafe).filter(Boolean).slice(0, 6);
+      if (ls.length >= 2) verse = ls;
+    } catch (e) {}
+  }
+  verse = verse.map(xmlSafe);
+  const fx = h.wakeSfx === false ? '' : '<audio src="soundbank://soundlibrary/animals/amzn_sfx_rooster_crow_01"/> ';
+  const ssml = fx + '<prosody rate="95%" pitch="+12%">' + verse.join(' <break time="350ms"/> ') + '</prosody> <break time="700ms"/> ' + xmlSafe(then);
+  return { speech: verse.join(' ') + ' ' + then, ssml: ssml, verse: verse, then: then, name: p.name, style: style };
 }
 // everything the family's helper knows, as plain lines for the AI to read
 function voiceContext(h, now) {

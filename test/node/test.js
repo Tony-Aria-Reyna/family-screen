@@ -57,6 +57,9 @@ const dir=r=>(r.response.directives||[]).map(d=>d.type+(d.slotToElicit?':'+d.slo
   await T('where','IntentRequest','WhereIntent',{});
   await T('bills','IntentRequest','BillsIntent',{});
   await T('meal','IntentRequest','MealIntent',{});
+  await T('wake nobody','IntentRequest','WakeIntent',{});
+  await T('wake aria','IntentRequest','WakeIntent',{person:'Aria'});
+  await T('wake asked','IntentRequest','WakeIntent',{},{asked_wake:1});
   await T('remember','IntentRequest','RememberIntent',{text:'the bins go out Tuesday'});
   await T('ask','IntentRequest','AskIntent',{q:'what do we need for thursday dinner'});
   await T('help','IntentRequest','AMAZON.HelpIntent',{});
