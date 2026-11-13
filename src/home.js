@@ -300,7 +300,9 @@ function memoryContext(query,budget){
   for(const [,n] of picked){ const l=line(n); if(used+l.length>budget) continue; out+=l+'\n'; used+=l.length; }
   return out.trim();
 }
-const familyIntro=()=>`The family (Auckland, New Zealand): ${eaters().map(p=>p.name+(p.id===(traveller()||{}).id?' (flies for work as cabin crew, often away)':'')).join(', ')}. Today is ${fmtD(new Date(),{weekday:'long',day:'numeric',month:'long',year:'numeric'})}.`;
+const akaOf=p=>[p.nick].concat(String(p.aka||'').split(',')).map(x=>String(x||'').trim()).filter(Boolean);
+const whoLines=()=>eaters().map(p=>'- '+p.name+(p.role?': '+p.role:'')+(p.id===(traveller()||{}).id?' (flies for work as cabin crew, often away)':'')+(akaOf(p).length?'. Also called: '+akaOf(p).join(', '):'')).join('\n');
+const familyIntro=()=>`The family (Auckland, New Zealand). Who's who (a nickname in a calendar entry or a note means that person; "at X's" means at their place):\n${whoLines()}${S.famNote?'\n'+S.famNote:''}\nToday is ${fmtD(new Date(),{weekday:'long',day:'numeric',month:'long',year:'numeric'})}.`;
 const withMemory=(prompt,query)=>{ const mc=memoryContext(query||prompt); return familyIntro()+(mc?'\n\nThings the family has told you (use them, they matter):\n'+mc:'')+'\n\n'+prompt; };
 function openMemory(){
   let q='';
@@ -802,7 +804,7 @@ function alexaCode(){
   return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames()));
 }
 function alexaModel(){
-  const people=alexaNames(), P={name:'PERSON',values:people.concat(['everyone']).map(n=>({name:{value:n}}))};
+  const people=alexaNames(), syn=n=>{ const p=eaters().find(q=>alexaNames().includes(n)&&String(q.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim().toLowerCase()===n.toLowerCase()); return p?akaOf(p).map(a=>a.replace(/[^A-Za-z0-9 '-]/g,'').trim()).filter(Boolean):[]; }, P={name:'PERSON',values:people.concat(['everyone']).map(n=>{ const sy=syn(n); return {name:sy.length?{value:n,synonyms:sy}:{value:n}}; })};
   const I=(name,slots,samples)=>({name,slots:slots||[],samples:samples||[]});
   const s=(n,t)=>({name:n,type:t});
   return JSON.stringify({interactionModel:{languageModel:{invocationName:voiceName(),types:people.length?[P]:[],intents:[
@@ -836,7 +838,7 @@ function openAlexa(){
       <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
         <p class="dirn">📋 Everything here is copied <b>from this app</b> and pasted <b>into Google and Amazon</b>. Do it all on a computer.</p>
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
-          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v11</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v12</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
           <li>In script.google.com open the <b>Family Screen Helper</b> project — the reminder one, <b>not</b> the calendar helper. Press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
           <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
         </ol>
@@ -875,12 +877,30 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=11 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 11 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 11), then Deploy → New version.'
+          : j.ok&&j.version>=12 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 12 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 12), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
+  }; draw(); });
+}
+
+/* ================= Who's who: relationships and nicknames, so the AI and Alexa know who is who ================= */
+function openWhosWho(){
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
+    m.innerHTML=`<div class="tvhead"><h2>👪 Who's who</h2><button class="save" id="x">Done</button></div>
+      <p class="note">Tell the app who everyone is and what you call each other. Alexa, the wake-up song and 💬 Ask all use this, so “sleepover at Nana's” is understood as that person's place, and “wake up Nana” works too.</p>
+      ${eaters().map(p=>`<div class="srccard" style="margin-top:10px"><h4><span class="dot" style="background:${p.color};display:inline-block;margin-right:6px"></span>${esc(p.name)}</h4>
+        <label class="small" style="font-weight:700">Who they are<input class="txt" data-role="${p.id}" value="${esc(p.role||'')}" placeholder="e.g. Dad · Mum · daughter, age 7 · Mum's mother, lives with us" maxlength="120"></label>
+        <label class="small" style="font-weight:700;margin-top:6px;display:block">Also called <span style="font-weight:500">(commas between)</span><input class="txt" data-aka="${p.id}" value="${esc([p.nick,p.aka].filter(Boolean).join(', '))}" placeholder="e.g. Mummy, Mum · Nana, Grandma" maxlength="120"></label></div>`).join('')}
+      <div class="srccard" style="margin-top:10px"><h4>🏡 Anyone or anything else</h4>
+        <label class="small">Friends, relatives, pets and places that turn up in the calendar<textarea class="txt" id="fn" rows="3" maxlength="600" placeholder="e.g. Grandad Pete lives in Tauranga. Mia is Aria's best friend from school. Biscuit is the cat.">${esc(S.famNote||'')}</textarea></label></div>
+      <p class="note" style="margin-top:10px">After adding or changing an “also called” name, copy the <b>voice model</b> into Amazon again (More → 🔊 Alexa) so Alexa learns to hear it.</p>`;
+    m.querySelector('#x').onclick=close;
+    m.querySelectorAll('[data-role]').forEach(i=>i.onchange=()=>{ person(i.dataset.role).role=i.value.trim(); save(); });
+    m.querySelectorAll('[data-aka]').forEach(i=>i.onchange=()=>{ const p=person(i.dataset.aka), list=i.value.split(',').map(x=>x.trim()).filter(Boolean); if(p.traveller){ p.nick=list[0]||''; p.aka=list.slice(1).join(', '); } else { p.nick=''; p.aka=list.join(', '); } save(); renderAll(); });
+    m.querySelector('#fn').onchange=e=>{ S.famNote=e.target.value.trim(); save(); };
   }; draw(); });
 }
 
@@ -905,7 +925,7 @@ function openWake(pid){
     const fetchSong=async()=>{ if(busy) return; if(!S.voiceUrl){ err='Set up 🔊 Alexa first (More → Alexa, Step 1). The song comes from the same helper.'; draw(); return; }
       busy=true; err=''; song=null; draw();
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'wake',person:nm(who),style:S.wakeStyle||'funny'}),redirect:'follow'}); const j=await r.json();
-        if(j&&j.verse&&j.verse.length){ song=j; } else err=/not allowed/.test(j.error||'')?'The helper didn’t accept the voice key. Open More → Alexa → Test it.':(j.ask?'The helper doesn’t know '+nm(who)+' yet.':'The Reminder helper needs updating to version 11 (⚙️ → 🧰 Helpers), then Deploy → Manage deployments → New version.'); }
+        if(j&&j.verse&&j.verse.length){ song=j; } else err=/not allowed/.test(j.error||'')?'The helper didn’t accept the voice key. Open More → Alexa → Test it.':(j.ask?'The helper doesn’t know '+nm(who)+' yet.':'The Reminder helper needs updating to version 12 (⚙️ → 🧰 Helpers), then Deploy → Manage deployments → New version.'); }
       catch(e){ err='Couldn’t reach the helper. Check the internet and try again.'; }
       busy=false; draw(); if(song) play(); };
     const draw=()=>{ m.innerHTML=`<div class="tvhead"><h2>🎵 Wake-up song</h2><button class="save" id="x">Done</button></div>

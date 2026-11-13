@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 11;
+const HELPER_VERSION = 12;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -497,9 +497,23 @@ function doPost(e) {
 }
 const VOICE_MAX = 55;                                     // keep spoken answers short
 function vPeople(h) { return (h.people || []).filter(p => p.id !== 'all'); }
+// every name a person goes by: their own, what the kids call them, and the "also called" list from Who's who
+function vAka(p) { return [p.name, p.nick].concat(String(p.aka || '').split(',')).map(function (x) { return String(x || '').trim(); }).filter(Boolean); }
 function vFind(h, name) {
   const n = normB(name); if (!n) return null;
-  return vPeople(h).filter(p => normB(p.name) === n)[0] || vPeople(h).filter(p => normB(p.name).indexOf(n) === 0 || n.indexOf(normB(p.name)) === 0)[0] || null;
+  return vPeople(h).filter(p => vAka(p).some(a => normB(a) === n))[0] || vPeople(h).filter(p => normB(p.name).indexOf(n) === 0 || n.indexOf(normB(p.name)) === 0)[0] || null;
+}
+// Who's who, as plain lines for the AI: who each person is and the names the family uses for them
+function vWho(h) {
+  const lines = vPeople(h).map(function (p) { const aka = vAka(p).slice(1);
+    return '- ' + p.name + (p.role ? ': ' + p.role : '') + (p.traveller ? ' (flies for work as cabin crew, often away)' : '') + (aka.length ? '. Also called: ' + aka.join(', ') : ''); });
+  return "WHO'S WHO (a nickname in a calendar entry means that person; \"at X's\" means at their place):\n" + lines.join('\n') + (h.famNote ? '\n' + String(h.famNote).slice(0, 600) : '');
+}
+// does this calendar entry involve this person? Ticked for them, for everyone, or names them in the title
+function vInvolves(e, p) {
+  const w = e.whos || []; if (!w.length || w.indexOf('all') >= 0 || w.indexOf(p.id) >= 0) return true;
+  const t = ' ' + String(e.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ';
+  return vAka(p).some(function (a) { const k = a.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); return k.length > 1 && t.indexOf(' ' + k + ' ') >= 0; });
 }
 // Alexa tells us which voice profile is speaking (if the family set them up). We remember which profile is which
 // person the first time they say who they are, so "my jobs" means the right person's jobs afterwards.
@@ -661,7 +675,7 @@ function voiceDo(h, action, b) {
     const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
     const prompt = 'You are the family\'s helper, answering out loud through an Echo speaker in Auckland, New Zealand. Today is ' + dayName + ', ' + today + ', and the time is ' + fmtTime(now) + '. '
       + 'Answer in at most ' + VOICE_MAX + ' words, as one or two spoken sentences. No lists, no markdown, no emoji, no headings. Plain speech only, New Zealand English. '
-      + 'Use ONLY the facts below. If the answer is not there, say so in one sentence and suggest where to look in the app.\n\n' + ctx + '\n\nQuestion: ' + q
+      + 'Use the who\'s who to work out who is meant by a nickname or a relationship (for example my mum, Grandma). Use ONLY the facts below. If the answer is not there, say so in one sentence and suggest where to look in the app.\n\n' + ctx + '\n\nQuestion: ' + q
       + '\n\nReturn JSON only: {"speech":"..."}';
     const txt = gemini(gk, [{ text: prompt }], true);
     let sp = ''; try { sp = JSON.parse(String(txt).replace(/^```(?:json)?|```$/g, '').trim()).speech; } catch (x) { sp = String(txt).replace(/[#*`]/g, '').slice(0, 300); }
@@ -686,22 +700,31 @@ const xmlSafe = function (t) { return String(t || '').replace(/[#*`<>]/g, '').re
 function wakeSong(h, p, now, b) {
   const hid = h._id, today = keyOf(now);
   const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
-  const mine = vEventsOn(h, today).filter(function (e) { const w = (e.whos || []); return !w.length || w.indexOf('all') >= 0 || w.indexOf(p.id) >= 0; });
+  const all = vEventsOn(h, today), mine = all.filter(function (e) { return vInvolves(e, p); });
+  const others = all.filter(function (e) { return mine.indexOf(e) < 0; }), tmrw = vEventsOn(h, keyOf(addDays(now, 1)));
+  const line = function (e) { return vSay(e, h); };
   const first = mine.filter(function (e) { return e.time; })[0] || mine[0];
   const tp = vPeople(h).filter(function (x) { return x.traveller; })[0];
   let where = ''; if (tp && tp.id !== p.id) { try { where = voiceDo(h, 'where', {}).speech; } catch (e) {} }
   const wx = wakeWeather(h);
   const style = WAKE_STYLES[b.style] ? b.style : (WAKE_STYLES[h.wakeStyle] ? h.wakeStyle : 'funny');
-  const then = [wx ? 'Today is ' + wx + '.' : '', first ? 'First up' + (first.time ? ' at ' + fmt12(first.time) : '') + ': ' + first.title + '.' : 'Nothing in the calendar today.'].filter(Boolean).join(' ');
+  const then = [wx ? 'Today is ' + wx + '.' : '', mine.length ? 'On today: ' + vList(mine.slice(0, 3).map(function (e) { return e.title + (e.time ? ' at ' + fmt12(e.time) : ''); })) + '.' : 'Nothing in the calendar today.'].filter(Boolean).join(' ');
   // a rhyme that always works, for when the AI is slow or not set up
   let verse = ['Wakey wakey, ' + p.name + ', open up your eyes,', 'It is ' + dayName + ' morning, time to rise!', first ? 'You have got ' + first.title + ' on the way,' : 'The whole day is yours to play,', 'So jump out of bed and seize the day!'];
   const gk = geminiKey(h);
   if (gk) {
     try {
-      const facts = ['Name: ' + p.name, 'Day: ' + dayName, mine.length ? 'Their day: ' + mine.slice(0, 4).map(function (e) { return (e.time ? fmt12(e.time) + ' ' : '') + e.title; }).join('; ') : 'Nothing in their calendar today', where ? 'Family news: ' + where : '', wx ? 'Weather: ' + wx : ''].filter(Boolean).join('\n');
-      const prompt = 'Write a brand new wake-up rhyme for a child in a New Zealand family, to be spoken aloud by a smart speaker. Style: ' + WAKE_STYLES[style] + '. '
-        + 'Exactly four short lines that rhyme (AABB), bouncy rhythm, under 45 words in total. Use their name and one or two real things from the facts below. Kind and funny, never mean, nothing scary, no brand names, and do not copy any existing song. '
-        + 'Plain words only: no emoji, no markdown, no stage directions. Make it different from yesterday (random seed ' + Math.floor(Math.random() * 1e6) + ').\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
+      const facts = ['The song is for: ' + p.name, 'Day: ' + dayName,
+        mine.length ? p.name + "'s day today: " + mine.slice(0, 6).map(line).join('; ') : 'Nothing in ' + p.name + "'s calendar today",
+        others.length ? 'Other entries today (ticked for someone else, but judge from the wording whether ' + p.name + ' is part of it): ' + others.slice(0, 5).map(line).join('; ') : '',
+        tmrw.length ? 'Tomorrow: ' + tmrw.slice(0, 4).map(line).join('; ') : '',
+        where ? 'Family news: ' + where : '', wx ? 'Weather: ' + wx : '', vWho(h)].filter(Boolean).join('\n');
+      const prompt = 'Write a brand new wake-up rhyme for someone in a New Zealand family, to be spoken aloud by a smart speaker. Style: ' + WAKE_STYLES[style] + '. '
+        + 'Four to six short lines that rhyme in pairs, bouncy rhythm, under 60 words in total. Use their name. '
+        + 'Work in the two or three most exciting real things about THEIR day from the facts below: a sleepover, a party, a trip or a visitor beats an ordinary lesson. '
+        + "Use the who's who to get people right: call relatives what this person would call them (their mum is Mum or Mummy, their grandmother by the family's name for her), and never explain the relationship. "
+        + 'Only use facts that are given; do not invent plans. Kind and funny, never mean, nothing scary, no brand names, and do not copy any existing song. '
+        + 'Plain words only: no emoji, no markdown, no stage directions. Make it different every time (random seed ' + Math.floor(Math.random() * 1e6) + ').\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
       const j = JSON.parse(String(gemini(gk, [{ text: prompt }], true)).replace(/^```(?:json)?|```$/g, '').trim());
       const ls = (j.lines || []).map(xmlSafe).filter(Boolean).slice(0, 6);
       if (ls.length >= 2) verse = ls;
@@ -716,6 +739,7 @@ function wakeSong(h, p, now, b) {
 function voiceContext(h, now) {
   const hid = h._id, out = [], today = keyOf(now);
   const nameOf = function (id) { const p = vPeople(h).filter(function (x) { return x.id === id; })[0]; return p ? p.name : ''; };
+  out.push(vWho(h));
   try { out.push('WHERE: ' + voiceDo(h, 'where', {}).speech); } catch (e) {}
   const lines = [];
   for (let i = 0; i < 8; i++) { const k = keyOf(addDays(now, i)), evs = vEventsOn(h, k); if (evs.length) lines.push(vDay(k, now) + ' (' + k + '): ' + evs.map(function (e) { return vSay(e, h); }).join('; ')); }

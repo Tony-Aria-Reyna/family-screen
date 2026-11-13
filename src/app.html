@@ -2705,6 +2705,7 @@ function moreTiles(){ return [
   ['💳','Loyalty cards',()=>openCards(),()=>(S.cards||[]).length?(S.cards||[]).length+' cards':''],
   ['🎁','Gift ideas',()=>openGifts(),()=>'🔒 PIN'],
   ['🌟',(()=>{ const k=typeof kidWho==='function'&&kidWho(); return k?nm(k)+'’s corner':'Kids’ corner'; })(),()=>openKids(),()=>''],
+  ['👪','Who’s who',()=>requirePin(()=>openWhosWho()),()=>eaters().some(p=>p.role)?'relationships & nicknames':'tell the app who’s who'],
   ['🎵','Wake-up song',()=>typeof openWake==='function'?openWake():toast('Coming soon'),()=>'a new rhyme each day'],
   ['🧠','Family memory',()=>typeof openMemory==='function'?openMemory():toast('Coming soon'),()=>(S.memory||[]).length?(S.memory||[]).length+' notes':''],
   ['💬','Ask',()=>typeof openAsk==='function'?openAsk():toast('Coming soon'),()=>'anything about the family'],
@@ -2741,7 +2742,7 @@ function openSettings(){
       <label class="small"><input type="checkbox" id="privShow" ${showPriv()?'checked':''}> Show my private entries on this device</label>
       <div class="row" style="margin-top:8px;align-items:center"><span class="small">Signed in as ${esc(SYNC.me())}, which is</span>${S.people.map(q=>`<button class="opt sm ${mePerson()===q.id?'on':''}" data-mep="${q.id}"><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`).join('')}</div>
       <p class="note">Your Google account is linked to your name, so jobs you hand to someone else show “from ${esc(mePerson()?nm(mePerson()):'you')}”. ${S.people.filter(q=>q.email).map(q=>esc(q.name)+': '+esc(q.email)).join(' · ')}</p></div>`:''}
-    <div class="step">People: type each name and tap a colour</div>
+    <div class="step">People: type each name and tap a colour <button class="xbtn" id="goWho" style="margin-left:8px">👪 Who’s who</button></div>
     ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
       ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
       <label class="small"><input type="radio" name="trav" data-trav="${p.id}" ${p.traveller?'checked':''}> travels for work ✈️</label>
@@ -2761,6 +2762,7 @@ function openSettings(){
     <div class="mact"><button class="save" id="ok">Done</button></div>`;
     const re=()=>{ save(); renderAll(); };
     m.querySelector('#goSync').onclick=()=>{ close(); openSync(); };
+    m.querySelector('#goWho').onclick=()=>{ close(); openWhosWho(); };
     const ps=m.querySelector('#pinSet')||m.querySelector('#pinChange'); if(ps) ps.onclick=()=>{ close(); setPinFlow(()=>openSettings()); };
     const po=m.querySelector('#pinOff'); if(po) po.onclick=()=>{ S.pinHash=''; save(); draw(); toast('Settings PIN turned off'); };
     const pvs=m.querySelector('#privShow'); if(pvs) pvs.onchange=()=>{ lsSet('fs.showPriv',pvs.checked); renderAll(); toast(pvs.checked?'Your private entries show here':'Your private entries are hidden here'); };
