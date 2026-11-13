@@ -27,6 +27,8 @@ function post(body) {
     go(HELPER_URL, data, 0);
   });
 }
+// Only intent requests have a name (asking a launch request for one throws)
+const intentName = function (h) { return Alexa.getRequestType(h.requestEnvelope) === 'IntentRequest' ? Alexa.getIntentName(h.requestEnvelope) : ''; };
 const slot = function (h, name) { const v = Alexa.getSlotValue(h.requestEnvelope, name); return v ? String(v).trim() : ''; };
 // Alexa passes a person id when it recognises the speaker's voice profile
 const who = function (h) { const sys = (h.requestEnvelope.context || {}).System || {}; return (sys.person || {}).personId || ''; };
@@ -50,15 +52,15 @@ H.Launch = {
   }
 };
 H.AddShop = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AddShopIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AddShopIntent'; },
   handle: function (h) { const item = slot(h, 'item'); if (!item) return elicit(h, 'item', 'What should I add to the shopping list?'); return run(h, { action: 'shop_add', item: item }); }
 };
 H.ShopList = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'ShopListIntent'; },
+  canHandle: function (h) { return intentName(h) === 'ShopListIntent'; },
   handle: function (h) { return run(h, { action: 'shop_list' }); }
 };
 H.AddJob = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AddJobIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AddJobIntent'; },
   handle: function (h) {
     const task = slot(h, 'task'), person = named(h);
     if (!task) return elicit(h, 'task', 'What is the job?');
@@ -67,11 +69,11 @@ H.AddJob = {
   }
 };
 H.Jobs = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'JobsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'JobsIntent'; },
   handle: function (h) { return run(h, { action: 'jobs', person: named(h) }); }
 };
 H.MyJobs = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'MyJobsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'MyJobsIntent'; },
   handle: function (h) {
     const p = named(h);
     if (p) return run(h, { action: 'jobs', person: p });                      // they answered "who is this?"
@@ -80,15 +82,15 @@ H.MyJobs = {
   }
 };
 H.Identify = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'IdentifyIntent'; },
+  canHandle: function (h) { return intentName(h) === 'IdentifyIntent'; },
   handle: function (h) { const p = named(h); if (!p) return elicit(h, 'person', 'Who are you? ' + peopleList + '?'); return run(h, { action: 'identify', person: p }); }
 };
 H.Jars = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'JarsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'JarsIntent'; },
   handle: function (h) { return run(h, { action: 'jars', person: named(h) }); }
 };
 H.MyJars = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'MyJarsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'MyJarsIntent'; },
   handle: function (h) {
     const p = named(h);
     if (p) return run(h, { action: 'jars', person: p });
@@ -97,7 +99,7 @@ H.MyJars = {
   }
 };
 H.AddEvent = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AddEventIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AddEventIntent'; },
   handle: function (h) {
     const title = slot(h, 'title'), when = slot(h, 'when'), time = slot(h, 'time'), person = named(h);
     if (!title) return elicit(h, 'title', 'What should I put in the calendar?');
@@ -113,58 +115,58 @@ H.AddEvent = {
 const todayKey = function (plus) { const d = new Date(Date.now() + (plus || 0) * 864e5 + 13 * 36e5); return d.toISOString().slice(0, 10); };
 const sayTime = function (t) { const p = String(t).split(':'), hh = +p[0]; return (hh % 12 || 12) + (p[1] === '00' ? '' : ':' + p[1]) + (hh < 12 ? ' in the morning' : hh < 18 ? ' in the afternoon' : ' in the evening'); };
 H.Yes = {
-  canHandle: function (h) { const a = h.attributesManager.getSessionAttributes() || {}; return Alexa.getIntentName(h.requestEnvelope) === 'AMAZON.YesIntent' && !!a.pending; },
+  canHandle: function (h) { const a = h.attributesManager.getSessionAttributes() || {}; return intentName(h) === 'AMAZON.YesIntent' && !!a.pending; },
   handle: function (h) { const a = h.attributesManager.getSessionAttributes(); const body = a.pending; a.pending = null; h.attributesManager.setSessionAttributes(a); return run(h, body); }
 };
 H.No = {
-  canHandle: function (h) { const a = h.attributesManager.getSessionAttributes() || {}; return Alexa.getIntentName(h.requestEnvelope) === 'AMAZON.NoIntent' && !!a.pending; },
+  canHandle: function (h) { const a = h.attributesManager.getSessionAttributes() || {}; return intentName(h) === 'AMAZON.NoIntent' && !!a.pending; },
   handle: function (h) { const a = h.attributesManager.getSessionAttributes(); a.pending = null; h.attributesManager.setSessionAttributes(a); return h.responseBuilder.speak('Okay, I have left it out.').getResponse(); }
 };
 H.Agenda = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AgendaIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AgendaIntent'; },
   handle: function (h) { return run(h, { action: 'agenda', date: slot(h, 'when') }); }
 };
 H.Where = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'WhereIntent'; },
+  canHandle: function (h) { return intentName(h) === 'WhereIntent'; },
   handle: function (h) { return run(h, { action: 'where', person: named(h) }); }
 };
 H.Bills = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'BillsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'BillsIntent'; },
   handle: function (h) { return run(h, { action: 'bills' }); }
 };
 H.Renewals = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'RenewalsIntent'; },
+  canHandle: function (h) { return intentName(h) === 'RenewalsIntent'; },
   handle: function (h) { return run(h, { action: 'renewals' }); }
 };
 H.Meal = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'MealIntent'; },
+  canHandle: function (h) { return intentName(h) === 'MealIntent'; },
   handle: function (h) { return run(h, { action: 'meal', date: slot(h, 'when') }); }
 };
 H.Remember = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'RememberIntent'; },
+  canHandle: function (h) { return intentName(h) === 'RememberIntent'; },
   handle: function (h) { const t = slot(h, 'text'); if (!t) return elicit(h, 'text', 'What should I remember?'); return run(h, { action: 'remember', text: t }); }
 };
 H.Ask = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AskIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AskIntent'; },
   handle: function (h) { const q = slot(h, 'q'); if (!q) return elicit(h, 'q', 'What would you like to know?'); return run(h, { action: 'ask', q: q }); }
 };
 H.Help = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AMAZON.HelpIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AMAZON.HelpIntent'; },
   handle: function (h) {
     const s = 'Try: what is on today. Where is everyone. What is for dinner. What bills are due. What is coming up. What are my jobs. How much has everyone saved. Add milk to the shopping list. Add a job. Put something in the calendar. Remember that the bins go out on Tuesday. Or start with tell me, and ask anything about the family. If I do not know your voice, say, I am, and your name.';
     return h.responseBuilder.speak(s).reprompt('What would you like to know?').getResponse();
   }
 };
 H.Stop = {
-  canHandle: function (h) { const n = Alexa.getIntentName(h.requestEnvelope); return Alexa.getRequestType(h.requestEnvelope) === 'IntentRequest' && (n === 'AMAZON.StopIntent' || n === 'AMAZON.CancelIntent' || n === 'AMAZON.NavigateHomeIntent'); },
+  canHandle: function (h) { const n = intentName(h); return Alexa.getRequestType(h.requestEnvelope) === 'IntentRequest' && (n === 'AMAZON.StopIntent' || n === 'AMAZON.CancelIntent' || n === 'AMAZON.NavigateHomeIntent'); },
   handle: function (h) { return h.responseBuilder.speak('Okay.').getResponse(); }
 };
 H.Fallback = {
-  canHandle: function (h) { return Alexa.getIntentName(h.requestEnvelope) === 'AMAZON.FallbackIntent'; },
+  canHandle: function (h) { return intentName(h) === 'AMAZON.FallbackIntent'; },
   handle: function (h) { return h.responseBuilder.speak('Sorry, I did not catch that. You can ask what is on today, or start with tell me and ask anything. Say help for more.').reprompt('What would you like to know?').getResponse(); }
 };
 H.YesNoIdle = {
-  canHandle: function (h) { const n = Alexa.getIntentName(h.requestEnvelope); return n === 'AMAZON.YesIntent' || n === 'AMAZON.NoIntent'; },
+  canHandle: function (h) { const n = intentName(h); return n === 'AMAZON.YesIntent' || n === 'AMAZON.NoIntent'; },
   handle: function (h) { return h.responseBuilder.speak('Sorry, I am not sure what you are saying yes or no to. Say help to hear what I can do.').reprompt('What would you like to know?').getResponse(); }
 };
 H.SessionEnded = {
@@ -175,7 +177,7 @@ const ErrorHandler = {
   canHandle: function () { return true; },
   handle: function (h, error) {
     console.log('Error: ' + error.message);
-    return h.responseBuilder.speak('Sorry, I could not reach the family screen just then. Please try again.').getResponse();
+    return h.responseBuilder.speak('Sorry, something went wrong just then. Please try again.').getResponse();
   }
 };
 exports.handler = Alexa.SkillBuilders.custom()
