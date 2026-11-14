@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 14;
+const HELPER_VERSION = 15;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -749,9 +749,22 @@ function wakeSong(h, p, now, b) {
   const wx = wakeWeather(h);
   const style = WAKE_STYLES[b.style] ? b.style : (WAKE_STYLES[h.wakeStyle] ? h.wakeStyle : 'funny');
   const then = [wx ? 'Today is ' + wx + '.' : '', mine.length ? 'On today: ' + vList(mine.slice(0, 3).map(function (e) { return e.title + (e.time ? ' at ' + fmt12(e.time) : ''); })) + '.' : 'Nothing in the calendar today.'].filter(Boolean).join(' ');
-  // a rhyme that always works, for when the AI is slow or not set up
-  let verse = ['Wakey wakey, ' + p.name + ', open up your eyes,', 'It is ' + dayName + ' morning, time to rise!', first ? 'You have got ' + first.title + ' on the way,' : 'The whole day is yours to play,', 'So jump out of bed and seize the day!'];
+  // rhymes that always work, for when the AI is slow or not set up: a different one each time
+  const N = p.name, F = first ? first.title.replace(/[.!?]+$/, '') : '';
+  const spare = [
+    ['Wakey wakey, ' + N + ', open up your eyes,', 'It is ' + dayName + ' morning, time to rise!', 'The birds are up, the kettle too,', 'And all of us are waiting for you!'],
+    ['Rise and shine, ' + N + ', the night is done,', dayName + ' is here and so is the fun!', 'Wiggle your toes and stretch up high,', 'Then wave your sleepy dreams goodbye!'],
+    ['Knock knock, ' + N + ', it is ' + dayName + ' calling,', 'Out of that bed with no more stalling!', 'Your pillow says it needs a rest,', 'So up you get and do your best!'],
+    ['Good morning, ' + N + ', the sun says hi,', 'Your blanket is sad but do not cry!', 'Feet on the floor, one, two, three,', 'Breakfast is waiting, come and see!'],
+    ['Hello, hello, is ' + N + ' in there?', 'I see a nose and sleepy hair!', 'It is ' + dayName + ', a brand new day,', 'So hop on up and come and play!']];
+  const props = PropertiesService.getScriptProperties(), pk = 'wake|' + hid + '|' + p.id;
+  let past = []; try { past = JSON.parse(props.getProperty(pk) || '[]'); } catch (e) {}
+  const fresh = spare.filter(function (v) { return past.indexOf(v.join(' ')) < 0; });
+  let verse = (fresh.length ? fresh : spare)[Math.floor(Math.random() * (fresh.length ? fresh : spare).length)];
+  if (F) verse = verse.concat(['First up today: ' + F + '!']);
+  let aiNote = '';
   const gk = aiReady(h);
+  if (!gk) aiNote = 'No AI key is set up, so this is a built-in rhyme. Add one in More, AI.';
   if (gk) {
     try {
       const facts = ['The song is for: ' + p.name, 'Day: ' + dayName,
@@ -759,21 +772,30 @@ function wakeSong(h, p, now, b) {
         others.length ? 'Other entries today (ticked for someone else, but judge from the wording whether ' + p.name + ' is part of it): ' + others.slice(0, 5).map(line).join('; ') : '',
         tmrw.length ? 'Tomorrow: ' + tmrw.slice(0, 4).map(line).join('; ') : '',
         where ? 'Family news: ' + where : '', wx ? 'Weather: ' + wx : '', vWho(h)].filter(Boolean).join('\n');
+      const angles = ['a sports commentator calling the big moment', 'the bed and pillow complaining they need a break', 'a silly animal (pick an unusual New Zealand one) delivering the news', 'a countdown to blast-off', 'breakfast foods calling out from the kitchen', 'a royal announcement for Your Majesty', 'a detective solving the mystery of who is still asleep', 'the weather itself doing the talking', 'a very excited tour guide to the day ahead', 'socks and shoes arguing about who goes first', 'a secret mission briefing', 'a rhyme built around one ridiculous made-up word'];
+      const angle = angles[Math.floor(Math.random() * angles.length)];
       const prompt = 'Write a brand new wake-up rhyme for someone in a New Zealand family, to be spoken aloud by a smart speaker. Style: ' + WAKE_STYLES[style] + '. '
+        + 'Today\'s angle, to keep it fresh: ' + angle + '. '
         + 'Four to six short lines that rhyme in pairs, bouncy rhythm, under 60 words in total. Use their name. '
-        + 'Work in the two or three most exciting real things about THEIR day from the facts below: a sleepover, a party, a trip or a visitor beats an ordinary lesson. '
+        + 'Work in the two or three most exciting real things about THEIR day from the facts below: a sleepover, a party, a trip or a visitor beats an ordinary lesson. Say each thing in your own playful words; never paste a calendar entry in as written. '
         + "Use the who's who to get people right: call relatives what this person would call them (their mum is Mum or Mummy, their grandmother by the family's name for her), and never explain the relationship. "
         + 'Only use facts that are given; do not invent plans. Kind and funny, never mean, nothing scary, no brand names, and do not copy any existing song. '
-        + 'Plain words only: no emoji, no markdown, no stage directions. Make it different every time (random seed ' + Math.floor(Math.random() * 1e6) + ').\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
-      const j = JSON.parse(String(aiCall(h, [{ text: prompt }], true)).replace(/^```(?:json)?|```$/g, '').trim());
-      const ls = (j.lines || []).map(xmlSafe).filter(Boolean).slice(0, 6);
-      if (ls.length >= 2) verse = ls;
-    } catch (e) {}
+        + 'Be surprising: do not open with "wakey wakey" or "rise and shine", and avoid the rhymes eyes/rise and day/play/way. '
+        + (past.length ? 'These were used on recent mornings. Do not reuse their opening, their rhymes or their jokes:\n' + past.map(function (x) { return '- ' + x; }).join('\n') + '\n' : '')
+        + 'Plain words only: no emoji, no markdown, no stage directions.\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
+      const raw = String(aiCall(h, [{ text: prompt }], true)), cut = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+      const j = JSON.parse(cut);
+      const ls = (j.lines || []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 6);
+      if (ls.length >= 2) verse = ls; else aiNote = 'The AI sent back an empty song, so this is a built-in rhyme.';
+    } catch (e) { aiNote = 'The AI did not answer (' + String(e.message || e).slice(0, 140) + '), so this is a built-in rhyme.'; console.log('wake: ' + e.message); }
   }
+  try { props.setProperty(pk, JSON.stringify([verse.join(' ')].concat(past).slice(0, 5))); } catch (e) {}
   verse = verse.map(xmlSafe);
   const fx = h.wakeSfx === false ? '' : '<audio src="soundbank://soundlibrary/animals/amzn_sfx_rooster_crow_01"/> ';
   const ssml = fx + '<prosody rate="95%" pitch="+12%">' + verse.join(' <break time="350ms"/> ') + '</prosody> <break time="700ms"/> ' + xmlSafe(then);
-  return { speech: verse.join(' ') + ' ' + then, ssml: ssml, verse: verse, then: then, name: p.name, style: style };
+  const out = { speech: verse.join(' ') + ' ' + then, ssml: ssml, verse: verse, then: then, name: p.name, style: style };
+  if (aiNote) out.aiNote = aiNote;
+  return out;
 }
 // everything the family's helper knows, as plain lines for the AI to read
 function voiceContext(h, now) {

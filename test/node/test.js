@@ -15,7 +15,8 @@ const mocks=`
 function listDocs(p){ const pre=p+'/'; return Object.keys(DB).filter(k=>k.startsWith(pre)&&k.slice(pre.length).indexOf('/')<0).map(k=>Object.assign({},DB[k],{_id:k.split('/').pop()})); }
 function patch(p,f){ DB[p]=Object.assign({},DB[p]||{},JSON.parse(JSON.stringify(f))); }
 function getDoc(p){ return DB[p]?Object.assign({},DB[p],{_id:p.split('/').pop()}):null; }
-function gemini(k,parts,q){ return JSON.stringify({speech:'Dinner on Thursday is spaghetti; you still need mince.'}); }
+const PP={}; const PropertiesService={getScriptProperties:()=>({getProperty:k=>PP[k]||null,setProperty:(k,v)=>{PP[k]=v;}})};
+function gemini(k,parts,q){ const t=parts[0].text; if(/wake-up rhyme/.test(t)){ global.WAKEN=(global.WAKEN||0)+1; if(global.WAKEN===2) throw new Error('Gemini 429: quota'); return 'Here you go: {"lines":["Aria, Aria, the kiwi is calling,","Machan has pancakes, no more stalling!"]}'; } return JSON.stringify({speech:'Dinner on Thursday is spaghetti; you still need mince.'}); }
 `;
 const helper=new Function('DB','ContentService',code+mocks+'; return doPost;')(DB,ContentService);
 const srv=http.createServer((req,res)=>{ let b=''; req.on('data',c=>b+=c); req.on('end',()=>{
@@ -59,6 +60,8 @@ const dir=r=>(r.response.directives||[]).map(d=>d.type+(d.slotToElicit?':'+d.slo
   await T('meal','IntentRequest','MealIntent',{});
   await T('wake nobody','IntentRequest','WakeIntent',{});
   await T('wake aria','IntentRequest','WakeIntent',{person:'Aria'});
+  await T('wake aria 2','IntentRequest','WakeIntent',{person:'Aria'});
+  await T('wake aria 3','IntentRequest','WakeIntent',{person:'Aria'});
   await T('wake asked','IntentRequest','WakeIntent',{},{asked_wake:1});
   await T('remember','IntentRequest','RememberIntent',{text:'the bins go out Tuesday'});
   await T('ask','IntentRequest','AskIntent',{q:'what do we need for thursday dinner'});

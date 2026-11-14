@@ -943,9 +943,9 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=14 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 14 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 14), then Deploy → New version.'
+          : j.ok&&j.version>=15 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 15 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 15), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
@@ -997,7 +997,7 @@ function openWake(pid){
     const draw=()=>{ m.innerHTML=`<div class="tvhead"><h2>🎵 Wake-up song</h2><button class="save" id="x">Done</button></div>
       <div class="opts" style="margin-bottom:8px">${kids.map(p=>`<button class="opt ${p.id===who?'on':''}" data-ww="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
       <div class="opts wstyles">${WAKE_STYLES.map(([k,l])=>`<button class="opt ${(S.wakeStyle||'funny')===k?'on':''}" data-ws="${k}">${l}</button>`).join('')}</div>
-      <div class="wsong">${busy?'<div class="wwait">🎼 Writing today’s song…</div>':song?song.verse.map((l,i)=>`<div class="wline ${at===i?'on':''}">${esc(l)}</div>`).join('')+`<div class="wline wthen">${esc(song.then)}</div>`:err?`<p class="note">⚠️ ${esc(err)}</p>`:`<div class="wwait">A brand new rhyme about ${esc(nm(who))}’s day, every time.</div>`}</div>
+      <div class="wsong">${busy?'<div class="wwait">🎼 Writing today’s song…</div>':song?song.verse.map((l,i)=>`<div class="wline ${at===i?'on':''}">${esc(l)}</div>`).join('')+`<div class="wline wthen">${esc(song.then)}</div>`+(song.aiNote?`<p class="note">⚠️ ${esc(song.aiNote)}</p>`:''):err?`<p class="note">⚠️ ${esc(err)}</p>`:`<div class="wwait">A brand new rhyme about ${esc(nm(who))}’s day, every time.</div>`}</div>
       <div class="row" style="gap:8px;flex-wrap:wrap"><button class="kbig" id="wgo" ${busy?'disabled':''}>${song?'🎲 New song':'▶️ Wake up '+esc(nm(who))}</button>${song?'<button class="xbtn" id="wag">🔁 Again</button>':''}
         <label class="note" style="display:flex;align-items:center;gap:6px;margin-left:auto"><input type="checkbox" id="wfx" ${S.wakeSfx!==false?'checked':''}> Sound effects</label></div>
       <p class="note" style="margin-top:10px">On the Echo, say <b>“Alexa, ask ${esc(voiceSay())} to wake up ${esc(nm(who))}”</b>. The style and sound-effects choice here is what Alexa uses too.</p>`;
