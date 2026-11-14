@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 13;
+const HELPER_VERSION = 14;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -529,8 +529,20 @@ function vPeople(h) { return (h.people || []).filter(p => p.id !== 'all'); }
 function vAka(p) { return [p.name, p.nick].concat(String(p.aka || '').split(',')).map(function (x) { return String(x || '').trim(); }).filter(Boolean); }
 function vFind(h, name) {
   const n = normB(name); if (!n) return null;
-  return vPeople(h).filter(p => vAka(p).some(a => normB(a) === n))[0] || vPeople(h).filter(p => normB(p.name).indexOf(n) === 0 || n.indexOf(normB(p.name)) === 0)[0] || null;
+  const all = vPeople(h);
+  return all.filter(p => vAka(p).some(a => normB(a) === n))[0] || all.filter(p => normB(p.name).indexOf(n) === 0 || n.indexOf(normB(p.name)) === 0)[0] ||
+    // Alexa often mishears a name by a letter or two ("area" for Aria), so accept a close match
+    only(all.filter(p => vAka(p).some(a => { const b = normB(a); return b.length >= 4 && n.length >= 4 && vDist(b, n) <= 1; }))) ||
+    only(all.filter(p => vAka(p).some(a => { const b = normB(a); return b.length >= 3 && vSound(b) === vSound(n); }))) || null;
 }
+// only trust a close match when it points at exactly one person
+function only(list) { return list.length === 1 ? list[0] : null; }
+function vDist(a, b) { if (a === b) return 0; if (Math.abs(a.length - b.length) > 1) return 9;
+  const d = []; for (let i = 0; i <= a.length; i++) { d[i] = [i]; } for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[a.length][b.length]; }
+// A rough "sounds like" key: drops vowels after the first letter, so Aria, Area, Arya and Ariah all match
+function vSound(w) { return w.charAt(0) + w.slice(1).replace(/[aeiouyh]/g, '').replace(/(.)\1+/g, '$1'); }
 // Who's who, as plain lines for the AI: who each person is and the names the family uses for them
 function vWho(h) {
   const lines = vPeople(h).map(function (p) { const aka = vAka(p).slice(1);

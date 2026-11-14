@@ -47,7 +47,7 @@ const H = {};
 H.Launch = {
   canHandle: function (h) { return Alexa.getRequestType(h.requestEnvelope) === 'LaunchRequest'; },
   handle: function (h) {
-    const s = 'Hi. You can ask what is on today, where everyone is, what is for dinner, or what bills are due. You can also say, add milk to the shopping list, or, add a job.';
+    const s = 'Hi. What would you like?';
     return h.responseBuilder.speak(s).reprompt('What would you like to know?').getResponse();
   }
 };
@@ -161,7 +161,7 @@ H.Ask = {
 H.Help = {
   canHandle: function (h) { return intentName(h) === 'AMAZON.HelpIntent'; },
   handle: function (h) {
-    const s = 'Try: what is on today. Where is everyone. What is for dinner. What bills are due. What is coming up. What are my jobs. How much has everyone saved. Add milk to the shopping list. Add a job. Put something in the calendar. Remember that the bins go out on Tuesday. Or start with tell me, and ask anything about the family. If I do not know your voice, say, I am, and your name.';
+    const s = 'You can ask what is on today, what is for dinner, or to wake someone up. What would you like?';
     return h.responseBuilder.speak(s).reprompt('What would you like to know?').getResponse();
   }
 };
@@ -171,11 +171,11 @@ H.Stop = {
 };
 H.Fallback = {
   canHandle: function (h) { return intentName(h) === 'AMAZON.FallbackIntent'; },
-  handle: function (h) { return h.responseBuilder.speak('Sorry, I did not catch that. You can ask what is on today, or start with tell me and ask anything. Say help for more.').reprompt('What would you like to know?').getResponse(); }
+  handle: function (h) { return h.responseBuilder.speak('Sorry, I did not catch that. Try, what is on today.').reprompt('What would you like to know?').getResponse(); }
 };
 H.YesNoIdle = {
   canHandle: function (h) { const n = intentName(h); return n === 'AMAZON.YesIntent' || n === 'AMAZON.NoIntent'; },
-  handle: function (h) { return h.responseBuilder.speak('Sorry, I am not sure what you are saying yes or no to. Say help to hear what I can do.').reprompt('What would you like to know?').getResponse(); }
+  handle: function (h) { return h.responseBuilder.speak('Sorry, I am not sure what that was for. Say help if you like.').reprompt('What would you like to know?').getResponse(); }
 };
 H.SessionEnded = {
   canHandle: function (h) { return Alexa.getRequestType(h.requestEnvelope) === 'SessionEndedRequest'; },

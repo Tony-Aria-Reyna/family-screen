@@ -889,7 +889,7 @@ function alexaModel(){
     I('BillsIntent',[],['what bills are due','any bills','what do we owe','what bills do we have','are there any bills','bills']),
     I('RenewalsIntent',[],['what is coming up','what renewals are due','what needs renewing','when is the warrant due','when is the rego due']),
     I('MealIntent',[s('when','AMAZON.DATE')],['what is for dinner','what is for dinner {when}','what are we eating {when}','what is for tea','what is the meal plan','what is for dinner tonight']),
-    I('WakeIntent',[s('person','PERSON')],['wake up {person}','wake {person} up','wake up','sing the wake up song','sing the wake up song for {person}','sing {person} the wake up song','sing a wake up song for {person}','good morning song','good morning song for {person}','time to get up {person}','get {person} out of bed','do the wake up song']),
+    I('WakeIntent',[s('person','PERSON')],['wake up {person}','wake {person} up','wake {person}','wake up','wake up now','wake me up','get {person} up','get up {person}','sing to {person}','sing {person} awake','sing the wake up song','sing the wake up song for {person}','sing {person} the wake up song','sing a wake up song for {person}','good morning song','good morning song for {person}','morning song for {person}','time to get up {person}','time for {person} to get up','get {person} out of bed','do the wake up song']),
     I('RememberIntent',[s('text','AMAZON.SearchQuery')],['remember {text}','remember that {text}','make a note {text}','note that {text}','do not forget {text}']),
     I('AskIntent',[s('q','AMAZON.SearchQuery')],['tell me {q}','ask {q}','answer {q}','find out {q}','i want to know {q}','do you know {q}','question {q}','help me with {q}','what about {q}'])
   ]}}},null,2);
@@ -943,9 +943,9 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=13 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 13 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 13), then Deploy → New version.'
+          : j.ok&&j.version>=14 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 14 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 14), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
