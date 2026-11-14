@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 12;
+const HELPER_VERSION = 13;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -348,6 +348,34 @@ function getDoc(path) {
   const d = JSON.parse(r.getContentText()); const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); return o;
 }
 function geminiKey(h) { const s = getDoc('households/' + h._id + '/secrets/ai'); return (s && s.gemini) || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || ''; }
+/* The family picks the AI in the app (⚙️ → ✨ AI): Gemini or Claude, plus Claude's model and effort. Both keys live in the
+   family's secrets doc. aiCall is the one door every feature uses; if Claude fails and a Gemini key exists, Gemini answers. */
+function aiKeys(h) { if (!h._keys) { const s = getDoc('households/' + h._id + '/secrets/ai') || {}; h._keys = { gemini: s.gemini || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || '', claude: s.claude || '' }; } return h._keys; }
+function aiReady(h) { const k = aiKeys(h); return !!(k.gemini || (h.aiProv === 'claude' && k.claude)); }
+function aiCall(h, parts, quick) {
+  const k = aiKeys(h);
+  if (h.aiProv === 'claude' && k.claude) { try { return claude(k.claude, h, parts, quick); } catch (e) { if (!k.gemini) throw e; console.log('Claude failed, using Gemini: ' + e.message); } }
+  if (!k.gemini) { const e = new Error('No AI key is set up'); e.gemini = true; throw e; }
+  return gemini(k.gemini, parts, quick);
+}
+const CLAUDE_OK = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-2'];
+function claude(key, h, parts, quick) {
+  // voice answers (quick) must be back inside Alexa's 8 seconds: always the fastest model on low effort
+  const model = quick ? 'claude-haiku-5-5' : (CLAUDE_OK.indexOf(h.aiClaudeModel) >= 0 ? h.aiClaudeModel : 'claude-sonnet-5-5');
+  const effort = quick ? 'low' : (['low', 'medium', 'high'].indexOf(h.aiEffort) >= 0 ? h.aiEffort : 'low');
+  const content = [];
+  parts.forEach(function (p) { if (p.inline_data) { const mt = p.inline_data.mime_type;
+    if (mt === 'application/pdf') content.push({ type: 'document', source: { type: 'base64', media_type: mt, data: p.inline_data.data } });
+    else if (/^image\/(jpeg|png|gif|webp)$/.test(mt)) content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: p.inline_data.data } }); } });
+  content.push({ type: 'text', text: parts.filter(function (p) { return p.text; }).map(function (p) { return p.text; }).join('\n\n') + '\n\nReply with the JSON only: no other words, no code fence.' });
+  const call = function (withEffort) { const body = { model: model, max_tokens: quick ? 2000 : 8000, messages: [{ role: 'user', content: content }] }; if (withEffort) body.output_config = { effort: effort };
+    return UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, muteHttpExceptions: true, payload: JSON.stringify(body) }); };
+  let r = call(true);
+  if (r.getResponseCode() === 400 && /effort|output_config/i.test(r.getContentText())) r = call(false);
+  if (r.getResponseCode() !== 200) { const e = new Error('Claude ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 160)); e.gemini = true; throw e; }
+  const txt = (JSON.parse(r.getContentText()).content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('').replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '').trim();
+  const m = txt.match(/[\{\[][\s\S]*[\}\]]/); return m ? m[0] : txt;
+}
 function gemini(key, parts, quick) {
   const props = PropertiesService.getScriptProperties();
   const call = (m, think) => {
@@ -401,9 +429,9 @@ function billsTick(h, props, now, force) {
     if (force || now.getTime() - Number(props.getProperty(lastKey) || 0) > 9.5 * 60e3) {
       props.setProperty(lastKey, String(now.getTime()));
       const seen = {}; bills.forEach(b => seen[b._id] = 1);
-      const key = geminiKey(h);
+      const key = aiReady(h);
       const threads = GmailApp.search('to:' + addr + ' newer_than:30d', 0, 20);
-      if (threads.length && !key) throw new Error('No Gemini key yet: add it in the app (⚙️ → ✨ AI)');
+      if (threads.length && !key) throw new Error('No AI key yet: add it in the app (⚙️ → ✨ AI)');
       const inbox = folderPath(root, '_To file'), known = Object.keys(bills.reduce((o, b) => { if (b.biller) o[b.biller] = 1; return o; }, {})).slice(0, 60);
       const label = GmailApp.getUserLabelByName('Family Screen bills') || GmailApp.createLabel('Family Screen bills');
       for (const t of threads) {
@@ -419,7 +447,7 @@ function billsTick(h, props, now, force) {
             'Never guess: leave a field empty or 0 if it is not shown. Billers we already have: ' + JSON.stringify(known) + ' (use the same name if it is one of these).\n\n' +
             'From: ' + msg.getFrom() + '\nSubject: ' + msg.getSubject() + '\nDate: ' + msg.getDate() + '\n\n' + text.slice(0, 8000);
           const parts = [{ text: prompt }].concat(atts.map(a => ({ inline_data: { mime_type: a.getContentType().split(';')[0], data: Utilities.base64Encode(a.getBytes()) } })));
-          let d; try { d = JSON.parse(gemini(key, parts) || '{}'); } catch (e) { if (e.gemini) throw e; d = { is_bill: true, summary: 'Couldn\'t read this one: open the email.' }; }
+          let d; try { d = JSON.parse(aiCall(h, parts) || '{}'); } catch (e) { if (e.gemini) throw e; d = { is_bill: true, summary: 'Couldn\'t read this one: open the email.' }; }
           const fromEmail = { from: String(msg.getFrom()).slice(0, 160), subject: String(msg.getSubject() || '').slice(0, 160), at: msg.getDate().getTime(), link: 'https://mail.google.com/mail/u/0/#all/' + msg.getId() };
           if (d.is_bill === false) { patch(path + '/' + id, { status: 'notbill', at: msg.getDate().getTime(), fromEmail: fromEmail, summary: String(d.summary || '').slice(0, 200) }); seen[id] = 1; continue; }
           const amount = Math.max(0, Math.round(Number(d.amount_cents) || 0)), dd = /^\d{4}-\d{2}-\d{2}$/.test(d.due || '') ? d.due : '';
@@ -670,14 +698,14 @@ function voiceDo(h, action, b) {
   }
   if (action === 'ask') {
     const q = String(b.q || '').trim(); if (!q) return { speech: 'What would you like to know?', ask: 'q' };
-    const gk = geminiKey(h); if (!gk) return { speech: 'The family AI key is not set up yet. Add it in the app, under settings, A I.' };
+    const gk = aiReady(h); if (!gk) return { speech: 'The family AI key is not set up yet. Add it in the app, under settings, A I.' };
     const ctx = voiceContext(h, now);
     const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
     const prompt = 'You are the family\'s helper, answering out loud through an Echo speaker in Auckland, New Zealand. Today is ' + dayName + ', ' + today + ', and the time is ' + fmtTime(now) + '. '
       + 'Answer in at most ' + VOICE_MAX + ' words, as one or two spoken sentences. No lists, no markdown, no emoji, no headings. Plain speech only, New Zealand English. '
       + 'Use the who\'s who to work out who is meant by a nickname or a relationship (for example my mum, Grandma). Use ONLY the facts below. If the answer is not there, say so in one sentence and suggest where to look in the app.\n\n' + ctx + '\n\nQuestion: ' + q
       + '\n\nReturn JSON only: {"speech":"..."}';
-    const txt = gemini(gk, [{ text: prompt }], true);
+    const txt = aiCall(h, [{ text: prompt }], true);
     let sp = ''; try { sp = JSON.parse(String(txt).replace(/^```(?:json)?|```$/g, '').trim()).speech; } catch (x) { sp = String(txt).replace(/[#*`]/g, '').slice(0, 300); }
     return { speech: String(sp || 'Sorry, I did not catch that.').replace(/[#*`]/g, '') };
   }
@@ -711,7 +739,7 @@ function wakeSong(h, p, now, b) {
   const then = [wx ? 'Today is ' + wx + '.' : '', mine.length ? 'On today: ' + vList(mine.slice(0, 3).map(function (e) { return e.title + (e.time ? ' at ' + fmt12(e.time) : ''); })) + '.' : 'Nothing in the calendar today.'].filter(Boolean).join(' ');
   // a rhyme that always works, for when the AI is slow or not set up
   let verse = ['Wakey wakey, ' + p.name + ', open up your eyes,', 'It is ' + dayName + ' morning, time to rise!', first ? 'You have got ' + first.title + ' on the way,' : 'The whole day is yours to play,', 'So jump out of bed and seize the day!'];
-  const gk = geminiKey(h);
+  const gk = aiReady(h);
   if (gk) {
     try {
       const facts = ['The song is for: ' + p.name, 'Day: ' + dayName,
@@ -725,7 +753,7 @@ function wakeSong(h, p, now, b) {
         + "Use the who's who to get people right: call relatives what this person would call them (their mum is Mum or Mummy, their grandmother by the family's name for her), and never explain the relationship. "
         + 'Only use facts that are given; do not invent plans. Kind and funny, never mean, nothing scary, no brand names, and do not copy any existing song. '
         + 'Plain words only: no emoji, no markdown, no stage directions. Make it different every time (random seed ' + Math.floor(Math.random() * 1e6) + ').\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
-      const j = JSON.parse(String(gemini(gk, [{ text: prompt }], true)).replace(/^```(?:json)?|```$/g, '').trim());
+      const j = JSON.parse(String(aiCall(h, [{ text: prompt }], true)).replace(/^```(?:json)?|```$/g, '').trim());
       const ls = (j.lines || []).map(xmlSafe).filter(Boolean).slice(0, 6);
       if (ls.length >= 2) verse = ls;
     } catch (e) {}

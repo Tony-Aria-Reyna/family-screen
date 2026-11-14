@@ -250,6 +250,11 @@ async function aiModel(key,force){
 // one call. payload: {prompt, file:{mime,data}, url, json:true|false}; onText(partial) streams the words as they arrive
 async function aiAsk(payload,onText){
   if(LOCAL&&!window.AI_TEST) throw new Error('AI works in the real app once you’re signed in');
+  // Claude when the family has chosen it. Web links are still read by Gemini (it can open pages itself).
+  if(aiUsing()==='claude'&&!(payload.url&&S.aiKey)){
+    try{ return await aiClaude(S.claudeKey,payload,onText); }
+    catch(e){ if(e.message==='quiet'||!S.aiKey||!e.fallback) throw e; toast('Claude: '+e.message+' Using Gemini this time.'); }
+  }
   if(S.aiKey) return aiDirect(S.aiKey,payload,onText);
   const h=S.linkHelper; if(!h||!h.url){ requirePin(()=>aiSetup()); throw new Error('quiet'); }
   let t; try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:h.key,action:'ai'},payload)),redirect:'follow'}); t=await r.text(); }
@@ -259,7 +264,7 @@ async function aiAsk(payload,onText){
   if(j.error) throw new Error(/not allowed/.test(j.error)?'The helper key doesn’t match. Copy the helper code again (⚙️ → Connect calendars).':'Gemini said: '+String(j.error).slice(0,160));
   return aiParse(j.text,payload.json!==false);
 }
-function aiParse(text,json){ const s=String(text||'').replace(/^```(?:json)?\s*|\s*```$/g,'').trim(); if(!json) return s; try{ return JSON.parse(s); }catch(e){ const m=s.match(/\{[\s\S]*\}/); if(m) try{ return JSON.parse(m[0]); }catch(x){} throw new Error('Gemini sent back something I couldn’t read. Try again.'); } }
+function aiParse(text,json){ const s=String(text||'').replace(/^```(?:json)?\s*|\s*```$/g,'').trim(); if(!json) return s; try{ return JSON.parse(s); }catch(e){ const m=s.match(/\{[\s\S]*\}/); if(m) try{ return JSON.parse(m[0]); }catch(x){} throw new Error('The AI sent back something I couldn’t read. Try again.'); } }
 async function aiDirect(key,payload,onText,tried){
   tried=tried||{};
   const json=payload.json!==false, parts=[{text:String(payload.prompt||'').slice(0,120000)}];
@@ -284,6 +289,42 @@ async function aiDirect(key,payload,onText,tried){
       try{ const j=JSON.parse(line.slice(5)); const ps=(((j.candidates||[])[0]||{}).content||{}).parts||[]; const add=ps.map(p=>p.text||'').join(''); if(add){ text+=add; if(onText) onText(text); else aiProgress(text); } }catch(e){} } }
   if(buf.trim().startsWith('data:')) try{ const j=JSON.parse(buf.trim().slice(5)); const add=((((j.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||'').join(''); if(add){ text+=add; if(onText) onText(text); } }catch(e){}
   if(!text) throw new Error('Gemini sent nothing back. Try again.');
+  return aiParse(text,json);
+}
+
+/* ---- Claude (Anthropic). Same payload as Gemini; the family picks the model and how hard it thinks. ---- */
+const CLAUDE_MODELS=[['claude-haiku-5-5','Haiku 5.5','fastest, costs least'],['claude-sonnet-5-5','Sonnet 5.5','quick and clever'],['claude-opus-5-5','Opus 5.5','smartest for hard jobs'],['claude-fable-5-2','Fable 5.2','deepest, slowest, costs most']];
+const AI_EFFORTS=[['low','Low','quickest'],['medium','Medium','balanced'],['high','High','most careful']];
+const claudeModel=()=>CLAUDE_MODELS.some(m=>m[0]===S.aiClaudeModel)?S.aiClaudeModel:'claude-sonnet-5-5';
+const aiEffort=()=>AI_EFFORTS.some(e=>e[0]===S.aiEffort)?S.aiEffort:'low';
+const aiUsing=()=>S.aiProv==='claude'&&S.claudeKey?'claude':'gemini';
+const aiLabel=()=>aiUsing()==='claude'?'Claude · '+CLAUDE_MODELS.find(m=>m[0]===claudeModel())[1]+' · '+aiEffort():(S.aiKey||(S.linkHelper&&S.linkHelper.url)?'Gemini':'not set up');
+async function aiClaude(key,payload,onText,tried){
+  tried=tried||{};
+  const json=payload.json!==false, content=[];
+  if(payload.file&&payload.file.data){ const mime=payload.file.mime||'image/jpeg';
+    content.push(mime==='application/pdf'?{type:'document',source:{type:'base64',media_type:mime,data:payload.file.data}}:{type:'image',source:{type:'base64',media_type:mime,data:payload.file.data}}); }
+  content.push({type:'text',text:String(payload.prompt||'').slice(0,120000)+(payload.url?'\n\nWeb page (you cannot open it; say so if you need its contents): '+payload.url:'')+(json?'\n\nReply with the JSON only: no other words, no code fence.':'')});
+  const body={model:claudeModel(),max_tokens:16000,stream:true,messages:[{role:'user',content}]}; if(!tried.effort) body.output_config={effort:aiEffort()};
+  const fail=(msg,fb)=>{ const e=new Error(msg); e.fallback=fb!==false; return e; };
+  const ctl=new AbortController(); payload.abort=ctl;
+  let r; try{ r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(body),signal:ctl.signal}); }
+  catch(e){ if(e.name==='AbortError') throw new Error('quiet'); throw fail('Could not reach Claude. Check the internet and try again.'); }
+  if(!r.ok){ const t=await r.text().catch(()=>''); let msg=''; try{ msg=JSON.parse(t).error.message; }catch(e){}
+    if(r.status===400&&/effort|output_config/i.test(msg)&&!tried.effort){ tried.effort=true; return aiClaude(key,payload,onText,tried); }
+    if(r.status===401) throw fail('Claude didn’t accept the key. Check it under ⚙️ → ✨ AI.');
+    if(/credit balance/i.test(msg)) throw fail('This month’s Claude credits are used up.');
+    if(r.status===404) throw fail('That Claude model isn’t available on this key. Pick another under ⚙️ → ✨ AI.');
+    if(r.status===429||r.status===529) throw fail('Claude is busy right now.');
+    throw fail('Claude said: '+String(msg||r.status).slice(0,160)); }
+  let text='', buf=''; const rd=r.body.getReader(), dec=new TextDecoder();
+  const take=line=>{ if(!line.startsWith('data:')) return; let j; try{ j=JSON.parse(line.slice(5)); }catch(e){ return; }
+    if(j.type==='content_block_delta'&&j.delta&&j.delta.type==='text_delta'){ text+=j.delta.text; if(onText) onText(text); else aiProgress(text); }
+    if(j.type==='error') throw fail('Claude said: '+String((j.error||{}).message||'something went wrong').slice(0,160)); };
+  while(true){ const {done,value}=await rd.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf('\n'))>=0){ const line=buf.slice(0,i).trim(); buf=buf.slice(i+1); take(line); } }
+  if(buf.trim()) take(buf.trim());
+  if(!text) throw fail('Claude sent nothing back. Try again.');
   return aiParse(text,json);
 }
 
@@ -382,11 +423,12 @@ function askContext(){
 let askLog=[], askCur=null;
 function openAsk(seed){
   modal((m,close)=>{ m.classList.add('wide','tvsheet');
-    m.innerHTML=`<div class="tvhead"><h2>💬 Ask</h2><button class="save" id="x">Done</button></div>
+    m.innerHTML=`<div class="tvhead"><h2>💬 Ask</h2><button class="xbtn" id="aiw" style="margin-left:auto;margin-right:8px;font-size:13px">✨ ${esc(aiLabel())}</button><button class="save" id="x">Done</button></div>
       <div class="asklog" id="log"></div>
       <div class="askchips" id="chips"></div>
       <form class="addrow" id="af"><input id="aq" placeholder="e.g. What’s on tomorrow? When is Mummy home? What do we need for Thursday’s dinner?" autocomplete="off" enterkeyhint="send"><button aria-label="Ask">➤</button></form>`;
     const log=m.querySelector('#log'), qi=m.querySelector('#aq');
+    m.querySelector('#aiw').onclick=()=>{ close(); requirePin(()=>aiSetup()); };
     const chips=['What’s on this week?','When is Mummy home?','What should I cook tonight?','What bills are due?','What jobs are mine?'];
     const drawLog=()=>{ log.innerHTML=askLog.map(x=>`<div class="ask ${x.who}">${x.who==='you'?esc(x.text):mdLite(x.text)}</div>`).join('')||'<p class="note">Ask anything about the family’s week, meals, bills, jobs or what’s in memory. Answers come from what the app knows, not the internet.</p>'; log.scrollTop=log.scrollHeight;
       m.querySelector('#chips').innerHTML=askLog.length?'':chips.map(c=>`<button type="button" class="opt sm" data-c="${esc(c)}">${esc(c)}</button>`).join(''); m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>ask(b.dataset.c)); };
@@ -453,27 +495,51 @@ function showIdeas(rs,plan){
   }; draw(); });
 }
 function aiSetup(update){
-  const h=S.linkHelper, tail=S.aiKeyTail;
-  modal((m,close)=>{ const draw=(msg)=>{
-    m.innerHTML=`<h2>✨ AI: your Gemini key</h2>
-    <p class="note">Meal ideas, recipe reading, bills, family memory and Ask use your own Gemini key. Paste it here once. It's kept in the family database where only your family's signed-in Google accounts can reach it (never on GitHub or the website), so each phone and the fridge can talk to Gemini directly: that's what makes answers appear word by word. The Google helper gets a copy too, for reading bills.</p>
-    ${tail?`<p style="font-size:18px">✅ A key is saved (ends ••••${esc(tail)}${S.aiKeyAt?', '+fmtD(new Date(S.aiKeyAt),{day:'numeric',month:'short'}):''}). Paste a new one to replace it.</p>`:''}
-    <div class="step">Gemini API key <span style="font-weight:500">(from aistudio.google.com → Get API key)</span></div>
-    <input class="txt" id="k" type="password" autocomplete="off" placeholder="Paste the key">
+  const h=S.linkHelper;
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); let msg='', test='';
+    const draw=()=>{ const using=aiUsing(), want=S.aiProv==='claude'?'claude':'gemini';
+    m.innerHTML=`<div class="tvhead"><h2>✨ AI</h2><button class="save" id="c">Done</button></div>
+    <p class="note">Meal ideas, recipe reading, bills, family memory, Ask, Alexa and the wake-up song all use the AI you pick here. Switch any time: it changes for the whole family straight away.</p>
+    <div class="step">Which AI</div>
+    <div class="opts"><button class="opt ${want==='gemini'?'on':''}" data-prov="gemini">🔷 Gemini</button><button class="opt ${want==='claude'?'on':''}" data-prov="claude">🟠 Claude</button></div>
+    ${want==='claude'&&!S.claudeKey?'<p class="note" style="color:#b45309;font-weight:700">Claude needs its key (below). Until then the app keeps using Gemini.</p>':''}
+    ${want==='claude'?`<div class="step">Claude model</div>
+    <div class="opts">${CLAUDE_MODELS.map(([id,n,d])=>`<button class="opt ${claudeModel()===id?'on':''}" data-cm="${id}" style="flex-direction:column;align-items:flex-start"><b>${n}</b><small>${d}</small></button>`).join('')}</div>
+    <div class="step">Effort <span style="font-weight:500">(how hard it thinks before answering)</span></div>
+    <div class="opts">${AI_EFFORTS.map(([id,n,d])=>`<button class="opt ${aiEffort()===id?'on':''}" data-ef="${id}" style="flex-direction:column;align-items:flex-start"><b>${n}</b><small>${d}</small></button>`).join('')}</div>
+    <p class="note">Alexa and the wake-up song always use Haiku on low effort, so she answers inside her 8 seconds. Web links to recipes are still read by Gemini.</p>`:''}
+    <div class="row" style="margin-top:10px;gap:8px;align-items:center"><button class="xbtn" id="tst">▶️ Test it</button><span class="note" id="tout">${test?esc(test):'Now using: <b>'+esc(aiLabel())+'</b>'}</span></div>
+    <div class="srccard" style="margin-top:12px"><h4>🟠 Claude key ${S.claudeKey?`<span class="pill-ok">saved ••••${esc(S.claudeKeyTail||S.claudeKey.slice(-4))}</span>`:'<span class="pill-wait">not set</span>'}</h4>
+      <p class="note">From platform.claude.com → API keys → Create key. It starts with <b>sk-ant-</b>.</p>
+      <div class="row" style="gap:8px"><input class="txt" id="ck" type="password" autocomplete="off" placeholder="Paste the Claude key" style="flex:1"><button class="xbtn" id="cs">Save</button></div></div>
+    <div class="srccard" style="margin-top:10px"><h4>🔷 Gemini key ${S.aiKeyTail?`<span class="pill-ok">saved ••••${esc(S.aiKeyTail)}</span>`:'<span class="pill-wait">not set</span>'}</h4>
+      <p class="note">From aistudio.google.com → Get API key. Keep it saved even when using Claude: it is the backup, and it reads web links.</p>
+      <div class="row" style="gap:8px"><input class="txt" id="k" type="password" autocomplete="off" placeholder="Paste the Gemini key" style="flex:1"><button class="xbtn" id="s">Save</button></div>
+      ${!h||!h.url?`<p class="note">Meal ideas also need the calendar helper (⚙️ → 🔗 Connect calendars).</p>`:update?`<p class="note">Your calendar helper is older than this feature. Copy its new code, paste it over the old code at script.google.com, then Deploy → Manage deployments → ✏️ → New version, and save the key again.</p>`:''}
+      ${h&&h.url?'<button class="xbtn" id="cp" style="margin-top:6px">Copy calendar helper code</button>':''}</div>
     ${msg?`<p class="note" style="color:#b45309;font-weight:700">${esc(msg)}</p>`:''}
-    ${!h||!h.url?`<p class="note">Meal ideas also need the calendar helper (⚙️ → 🔗 Connect calendars). Set that up and paste the key here again.</p>`:update?`<p class="note">Your calendar helper is older than this feature. Copy its new code (button below), paste it over the old code at script.google.com, then Deploy → Manage deployments → ✏️ → New version, and save the key again.</p>`:''}
-    <div class="mact">${h&&h.url?'<button class="cancel" id="cp">Copy calendar helper code</button>':''}<button class="cancel" id="c">Close</button><button class="save" id="s">Save key</button></div>`;
+    <p class="note" style="margin-top:10px">Both keys are kept in the family database where only your family's signed-in Google accounts can reach them, never on GitHub or the website. Alexa and bills need the Reminder helper on version 13 to use Claude.</p>`;
     m.querySelector('#c').onclick=close;
+    m.querySelectorAll('[data-prov]').forEach(b=>b.onclick=()=>{ S.aiProv=b.dataset.prov==='claude'?'claude':''; save(); test=''; draw(); });
+    m.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{ S.aiClaudeModel=b.dataset.cm; save(); test=''; draw(); });
+    m.querySelectorAll('[data-ef]').forEach(b=>b.onclick=()=>{ S.aiEffort=b.dataset.ef; save(); test=''; draw(); });
+    m.querySelector('#tst').onclick=async()=>{ const out=m.querySelector('#tout'), t0=Date.now(); out.textContent='Asking '+aiLabel()+'…';
+      try{ const a=await aiAsk({prompt:'Say good morning to a New Zealand family in one short, cheerful sentence.',json:false},()=>{}); test='✅ '+aiLabel()+' answered in '+((Date.now()-t0)/1000).toFixed(1)+'s: “'+String(a).trim().slice(0,120)+'”'; }
+      catch(e){ test=e.message==='quiet'?'':'⚠️ '+e.message; } const o=m.querySelector('#tout'); if(o) o.textContent=test; };
     const cp=m.querySelector('#cp'); if(cp) cp.onclick=()=>{ try{ navigator.clipboard.writeText(HELPER_CODE(h.key)).then(()=>toast('Helper code copied')); }catch(e){ toast('Copy failed'); } };
+    m.querySelector('#cs').onclick=async()=>{ const k=m.querySelector('#ck').value.trim();
+      if(!/^sk-ant-[A-Za-z0-9_\-]{20,300}$/.test(k)){ msg='That doesn’t look like a Claude key. It starts with sk-ant- and has no spaces.'; draw(); return; }
+      msg=''; if(!LOCAL){ try{ await SYNC.saveSecret({claude:k,claudeAt:Date.now(),by:SYNC.me()}); }catch(e){ msg='Couldn’t save the key to the family database. Check the internet and try again.'; draw(); return; } } else S.claudeKey=k;
+      S.claudeKeyTail=k.slice(-4); S.aiProv='claude'; save(); toast('🟠 Claude key saved. Claude is on.'); draw(); };
     m.querySelector('#s').onclick=async()=>{ const k=m.querySelector('#k').value.trim();
-      if(!/^[A-Za-z0-9_.\-]{20,300}$/.test(k)){ draw('That doesn’t look like a Gemini key. It’s a long code with no spaces.'); return; }
+      if(!/^[A-Za-z0-9_.\-]{20,300}$/.test(k)){ msg='That doesn’t look like a Gemini key. It’s a long code with no spaces.'; draw(); return; }
       const sb=m.querySelector('#s'); sb.disabled=true; sb.textContent='Saving…'; let helperOk=false, note='';
       if(!LOCAL){ try{ await SYNC.saveSecret({gemini:k,at:Date.now(),by:SYNC.me()}); }catch(e){ note='The database rules need updating before the key can be saved there (the helper does this automatically once it’s on version 8). '; } }
       if(h&&h.url){ let t=''; try{ const r=await fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'setkey',gemini:k}),redirect:'follow'}); t=await r.text(); const j=JSON.parse(t); if(j.ok) helperOk=true; else note+=(j.error||'')+' '; }
         catch(e){ note+=!t?'The app couldn’t reach the calendar helper at all ('+(e.message||'blocked')+'). ':/doPost/.test(t)?'The calendar helper is still running its OLD version: the new code is saved but not published. In Apps Script: Deploy → Manage deployments → ✏️ → Version: New version → Deploy. ':'The calendar helper answered with a page instead of data: '+t.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,140)+'. '; } }
       S.aiKeyTail=k.slice(-4); S.aiKeyAt=Date.now(); save();
-      if(helperOk||(!h||!h.url)){ close(); toast(helperOk?'✨ Key saved. Meal ideas are ready.':'Key saved'); if(note) setTimeout(()=>toast(note.trim()),2700); }
-      else draw('Saved for the family helper, but the calendar helper didn’t take it: '+note.trim()+' Update the calendar helper (copy its code below) and save again.');
+      msg=helperOk||(!h||!h.url)?note.trim():'Saved for the family, but the calendar helper didn’t take it: '+note.trim()+' Update the calendar helper (copy its code) and save again.';
+      toast(helperOk?'✨ Gemini key saved':'Key saved'); draw();
     };
   }; draw(); });
 }
@@ -838,7 +904,7 @@ function openAlexa(){
       <div class="srccard"><h4>Step 1 · Open the reminder helper as a web address</h4>
         <p class="dirn">📋 Everything here is copied <b>from this app</b> and pasted <b>into Google and Amazon</b>. Do it all on a computer.</p>
         <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.6">
-          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v12</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
+          <li>⚙️ → 🧰 Helpers → <b>Reminder helper</b>: it must say <b>running v13</b>. If it doesn't, do that card's steps first (copy the helper code and the settings file into Apps Script).</li>
           <li>In script.google.com open the <b>Family Screen Helper</b> project — the reminder one, <b>not</b> the calendar helper. Press <b>Deploy</b> → <b>New deployment</b> → gear icon → <b>Web app</b>.</li>
           <li>Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Press <b>Deploy</b>, approve, then <b>copy the web app URL</b> (it ends in <code>/exec</code>).</li>
         </ol>
@@ -877,9 +943,9 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=12 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 12 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 12), then Deploy → New version.'
+          : j.ok&&j.version>=13 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 13 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 13), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
@@ -925,7 +991,7 @@ function openWake(pid){
     const fetchSong=async()=>{ if(busy) return; if(!S.voiceUrl){ err='Set up 🔊 Alexa first (More → Alexa, Step 1). The song comes from the same helper.'; draw(); return; }
       busy=true; err=''; song=null; draw();
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'wake',person:nm(who),style:S.wakeStyle||'funny'}),redirect:'follow'}); const j=await r.json();
-        if(j&&j.verse&&j.verse.length){ song=j; } else err=/not allowed/.test(j.error||'')?'The helper didn’t accept the voice key. Open More → Alexa → Test it.':(j.ask?'The helper doesn’t know '+nm(who)+' yet.':'The Reminder helper needs updating to version 12 (⚙️ → 🧰 Helpers), then Deploy → Manage deployments → New version.'); }
+        if(j&&j.verse&&j.verse.length){ song=j; } else err=/not allowed/.test(j.error||'')?'The helper didn’t accept the voice key. Open More → Alexa → Test it.':(j.ask?'The helper doesn’t know '+nm(who)+' yet.':'The Reminder helper needs updating to version 13 (⚙️ → 🧰 Helpers), then Deploy → Manage deployments → New version.'); }
       catch(e){ err='Couldn’t reach the helper. Check the internet and try again.'; }
       busy=false; draw(); if(song) play(); };
     const draw=()=>{ m.innerHTML=`<div class="tvhead"><h2>🎵 Wake-up song</h2><button class="save" id="x">Done</button></div>

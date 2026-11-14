@@ -24,5 +24,5 @@ export function writeBatch(){ const ops=[]; return { set(r,v){ops.push(['s',r,v]
   async commit(){ const d=load(); for(const [k,r,v] of ops){ if(!memberOf(d,r.path)){ const e=new Error('denied'); e.code='permission-denied'; throw e; } if(k==='s') d[r.path]=JSON.parse(JSON.stringify(v)); else if(k==='u') d[r.path]=applyUpdate(d[r.path],v); else delete d[r.path]; } store(d); fire(); } }; }
 
 export async function getDoc(ref){ const d=load(); const v=d[ref.path]; return {exists:()=>!!v,data:()=>v,id:ref.id}; }
-export async function setDoc(ref,data){ const d=load(); d[ref.path]=JSON.parse(JSON.stringify(data)); store(d); fire(); }
+export async function setDoc(ref,data,opt){ const d=load(), v=JSON.parse(JSON.stringify(data)); d[ref.path]=opt&&opt.merge?Object.assign({},d[ref.path]||{},v):v; store(d); fire(); }
 export async function deleteDoc(ref){ const d=load(); delete d[ref.path]; store(d); fire(); }

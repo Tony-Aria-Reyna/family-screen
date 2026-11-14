@@ -2705,6 +2705,7 @@ function moreTiles(){ return [
   ['💳','Loyalty cards',()=>openCards(),()=>(S.cards||[]).length?(S.cards||[]).length+' cards':''],
   ['🎁','Gift ideas',()=>openGifts(),()=>'🔒 PIN'],
   ['🌟',(()=>{ const k=typeof kidWho==='function'&&kidWho(); return k?nm(k)+'’s corner':'Kids’ corner'; })(),()=>openKids(),()=>''],
+  ['✨','AI',()=>requirePin(()=>aiSetup()),()=>typeof aiLabel==='function'?aiLabel():''],
   ['👪','Who’s who',()=>requirePin(()=>openWhosWho()),()=>eaters().some(p=>p.role)?'relationships & nicknames':'tell the app who’s who'],
   ['🎵','Wake-up song',()=>typeof openWake==='function'?openWake():toast('Coming soon'),()=>'a new rhyme each day'],
   ['🧠','Family memory',()=>typeof openMemory==='function'?openMemory():toast('Coming soon'),()=>(S.memory||[]).length?(S.memory||[]).length+' notes':''],
