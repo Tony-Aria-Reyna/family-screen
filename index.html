@@ -5301,7 +5301,7 @@ function openHelpers(){
     <p class="note">Two small helpers run free in your own Google account (script.google.com). Their latest code always lives here, so there are no documents to keep.</p>
     <div class="srccard"><h4>🤖 Reminder helper ${running?`<span class="pill-ok">✓ running v${nt.version||'?'}</span>`:'<span class="pill-wait">not running</span>'} ${running&&needUpd?`<span class="pill-wait">⬆️ v${latestV} available</span>`:running?'<span class="pill-ok">up to date</span>':''}</h4>
       <p class="note">Reminders, flight tracking, renewals, bills by email, and keeping the database rules up to date.</p>
-      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}${nt&&nt.update?(nt.update.ok?`<p class="note">🔄 Updates itself: on${nt.update.at?' · last updated '+new Date(nt.update.at).toLocaleString():''}</p>`:`<p class="note" style="color:var(--danger)">🔄 Can’t update itself yet: ${esc(nt.update.error)}${/usersettings/.test(nt.update.error)?' — open <a href="https://script.google.com/home/usersettings" target="_blank">script.google.com/home/usersettings</a> and switch the Google Apps Script API on.':''}</p>`):''}${S.voiceUrl&&S.voiceKey?`<button class="ghost" id="hupd">🔄 Check for an update now</button>`:''}
+      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}${nt&&nt.update?(nt.update.ok?`<p class="note">🔄 Updates itself: on${nt.update.at?' · last updated '+new Date(nt.update.at).toLocaleString():''}</p>`:`<p class="note" style="color:var(--danger)">🔄 Can’t update itself yet: ${esc(nt.update.error)}${/usersettings/.test(nt.update.error)?' — open <a href="https://script.google.com/home/usersettings" target="_blank">script.google.com/home/usersettings</a> and switch the Google Apps Script API on.':''}</p>`):''}${nt&&(nt.version||0)>=16?(S.voiceUrl&&S.voiceKey?`<button class="ghost" id="hupd">🔄 Check for an update now</button>`:''):`<p class="dirn">🔄 From version 16 this helper updates itself. Paste it in once by hand with the steps below, and you won’t need to again.</p>`}
       <p class="dirn">📋 You copy <b>from here</b> and paste <b>into Google</b> — never the other way. Do it on a computer, with this app open in one tab and script.google.com in another.</p>
       <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55">
         <li>Press <b>📋 Copy helper code</b> below. That puts the newest code on your clipboard.</li>
@@ -5977,7 +5977,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwgv61an';
+const FS_VERSION='fs-mwgveb1s';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
