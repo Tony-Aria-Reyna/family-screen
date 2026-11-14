@@ -493,13 +493,24 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .pinpad .pk-s{font-size:17px;font-weight:600;background:transparent}
 .codebox{white-space:pre-wrap;word-break:break-word;font-size:12px;max-height:280px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;user-select:text;-webkit-user-select:text}
 .tabbar{display:none}
+#phome{display:none;padding:10px 12px 20px}
+.hcard{display:block;width:100%;text-align:left;font:inherit;color:#fff;border-radius:24px;padding:18px 18px 16px;background:linear-gradient(135deg,#5fb3a6,#4a8fc4);box-shadow:0 6px 18px rgba(60,110,140,.25)}
+.hcard.tm{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none;margin-top:10px;padding:14px 18px}
+.hcard h2{font-size:26px;margin:0 0 10px}.hcard.tm h2{font-size:17px;margin:0 0 6px;color:var(--muted)}
+.hln{padding:5px 0 5px 10px;border-left:4px solid rgba(255,255,255,.75);margin:6px 0;font-size:18px;font-weight:700}
+.hcard.tm .hln{font-size:16px;font-weight:600;margin:3px 0}
+.hnone{font-size:17px;opacity:.9;margin:4px 0}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.hgrid .tile{min-height:96px}.hgrid .tile small{font-size:14px}
+.hmore{margin:18px 2px 8px;font-size:15px;font-weight:800;color:var(--muted)}
 @media (max-width:900px){
   body{font-size:18px}
   .app{display:block;height:auto;min-height:100vh;padding:0 0 calc(76px + env(safe-area-inset-bottom))}
   .leftcol{display:block}
   .top,#bar,#calWrap{display:none!important}
   .right{display:block;padding:10px}
-  body[data-tab="cal"] .right{display:none}
+  body[data-tab="cal"] .right,body[data-tab="home"] .right{display:none}
+  body[data-tab="home"] #phome{display:block}
   body[data-tab="todo"] #shopPanel,body[data-tab="shop"] #todoPanel{display:none}
   body[data-tab="where"] .right,body[data-tab="meals"] .right{display:none}
   .right .panel{min-height:calc(100vh - 170px)}
@@ -688,6 +699,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 <body>
 <div class="app">
   <header id="phoneTop"></header>
+  <section id="phome"></section>
   <section id="pcal"></section>
   <div class="leftcol">
     <div class="top">
@@ -712,7 +724,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   <div class="dock" id="dock"></div>
 </div>
 <button class="pc-fab" id="pcFab"></button>
-<nav class="tabbar"><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="meals">🍽️<span>Meals</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button><button data-tab="more" id="tabMore">🧩<span>More</span></button></nav>
+<nav class="tabbar"><button data-tab="home">🏠<span>Home</span></button><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="meals">🍽️<span>Meals</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button></nav>
 <div id="gate" hidden></div>
 <div id="layer"></div>
 <div id="spaceLayer"></div>
@@ -2191,7 +2203,7 @@ function openGlobe_(){
     m.querySelector('#mX').onclick=close;
     m.querySelector('#mSet').onclick=()=>{ close(); requirePin(()=>openWhere(()=>{ openGlobe(); })); };
     m.querySelector('#mPdf').onclick=()=>{ close(); requirePin(()=>{ pickRosterPdf(); }); }; });
-  $('#gClose').onclick=()=>{ closeGlobe(); if(isPhone()) setTab('cal'); };
+  $('#gClose').onclick=()=>{ closeGlobe(); if(isPhone()) setTab('home'); };
 }
 
 /*@HOME@*/
@@ -2849,7 +2861,7 @@ function showInstall(){
 }
 
 /* ================= phone layout: one section at a time ================= */
-function setTab(t,silent){ const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
+function setTab(t,silent){ const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); if(t==='home') renderHome(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
 
 /* ================= sign-in gate (synced mode) ================= */
 const GOOGLE_G='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -2918,6 +2930,41 @@ function renderPhoneTop(){
   el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div>${AWAY_TZ?`<div class="pt-nz">🇳🇿 NZ time · you ${fmtTime(now,DEVICE_TZ)}</div>`:''}</div>
     <button class="pt-mum" id="ptMum" style="background:${bg}">${mum}</button><button class="pt-set" id="ptAsk" aria-label="Ask">💬</button><button class="pt-set" id="ptSet" aria-label="Settings">⚙️</button>`;
   $('#ptSet').onclick=()=>requirePin(openSettings); $('#ptAsk').onclick=()=>openAsk(); const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
+}
+/* ================= phone home: today on top, a live tile for each part of the app ================= */
+function renderHome(){
+  const el=$('#phome'); if(!el||!isPhone()||document.body.dataset.tab!=='home') return;
+  const now=new Date(), tk=dk(now), mk=dk(addDays(now,1)), hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const rows=(key,max)=>{ const ls=dayLines(key);
+    const all=itemsForDay(key).map((it,i)=>({s:String(it.sort||''),t:ls[i]?ls[i].t:'',c:ls[i]?ls[i].c:'#fff',past:key===tk&&it.k==='ev'&&!!it.e.time&&it.e.time<hhmm})).sort((x,y)=>x.s.localeCompare(y.s));
+    const left=all.filter(x=>!x.past); return {all,show:(left.length?left:[]).slice(0,max),more:Math.max(0,left.length-max),done:all.length-left.length}; };
+  const T=rows(tk,4), M=rows(mk,3);
+  const line=x=>`<div class="hln" style="border-left-color:${x.c}">${esc(x.t)}</div>`;
+  const me=mePerson(), open=S.todos.filter(t=>!t.done&&vis(t)), mine=me?open.filter(t=>t.who===me):[];
+  const shop=S.groceries.filter(x=>!x.done).length;
+  let week=0; for(let i=0;i<7;i++) week+=itemsForDay(dk(addDays(now,i))).filter(it=>it.k==='ev').length;
+  const dn=(typeof mealsOn==='function'?mealsOn(tk,'dinner'):[])[0], dr=dn&&dn.rid&&typeof recipeById==='function'?recipeById(dn.rid):null, dinner=dn?(dr?dr.name:(dn.note||'')):'';
+  const tp=traveller(), r=tp?travellerNow(now):null, where=!tp?'':r&&r.air?'In the air → '+(r.a?r.a[0]:''):r&&r.a?'In '+r.a[0]:'At home';
+  const chk=(S.bills||[]).filter(b=>b.status==='check').length, due=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=7).length;
+  const tiles=[
+    ['📅','Calendar',week?week+(week===1?' thing':' things')+' this week':'Nothing this week',()=>setTab('cal')],
+    ['✅','To do',me&&mine.length?mine.length+' for you · '+open.length+' in all':open.length?open.length+' to do':'All done',()=>setTab('todo')],
+    ['🛒','Shopping',shop?shop+(shop===1?' item':' items'):'List is empty',()=>setTab('shop')],
+    ['🍽️','Meals',dinner?'Dinner: '+dinner:'No dinner planned',()=>setTab('meals')],
+    ['🌏',tp?'Where’s '+tName(tp)+'?':'Our travels',where,()=>setTab('where')],
+    ['🧾','Bills',chk?chk+' to check':due?due+' due this week':'Nothing due',()=>openBills()],
+  ];
+  const skip=['Bills','Our travels'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1]));
+  el.innerHTML=`<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
+      ${T.show.length?T.show.map(line).join('')+(T.more?`<div class="hnone">+ ${T.more} more</div>`:''):`<div class="hnone">${T.done?'That’s everything for today ✓':'Nothing on today'}</div>`}</button>
+    <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
+    <div class="hgrid">${tiles.map((t,i)=>`<button class="tile" data-ht="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[2]||'')}</small></button>`).join('')}</div>
+    <div class="hmore">Everything else</div>
+    <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
+  const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
+  $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
+  el.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>tiles[+b.dataset.ht][3]());
+  el.querySelectorAll('[data-hm]').forEach(b=>b.onclick=()=>moreTiles()[+b.dataset.hm][2]());
 }
 /* ================= phone calendar: month grid with a sliding day sheet ================= */
 let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
@@ -3094,11 +3141,12 @@ window.addEventListener('popstate',()=>{
   if(quitAsk){ quitAsk=false; history.back(); return; }
   if($('#layer').innerHTML){ closeModal(); reguard(); return; }
   if($('#cookmode')){ $('#cookmode').remove(); reguard(); return; }
-  if($('#mealLayer').innerHTML){ closeMeals(); if(isPhone()) setTab('cal',true); reguard(); return; }
-  if(document.body.dataset.tab==='where'||$('#spaceLayer').innerHTML){ closeGlobe(); if(isPhone()) setTab('cal',true); reguard(); return; }
-  if(isPhone()&&document.body.dataset.tab&&document.body.dataset.tab!=='cal'){ setTab('cal',true); reguard(); return; }
+  if($('#mealLayer').innerHTML){ closeMeals(); if(isPhone()) setTab('home',true); reguard(); return; }
+  if(document.body.dataset.tab==='where'||$('#spaceLayer').innerHTML){ closeGlobe(); if(isPhone()) setTab('home',true); reguard(); return; }
+  if(isPhone()&&document.body.dataset.tab&&!['cal','home'].includes(document.body.dataset.tab)){ setTab('home',true); reguard(); return; }
   if(isPhone()&&pView==='week'&&pwSnap!=='low'){ pwSnap='low'; lsSet('fs.pwsnap','low'); renderPCal(); reguard(); return; }
   if(isPhone()&&pView==='month'&&pMode==='month'){ setPMode('split'); reguard(); return; }
+  if(isPhone()&&document.body.dataset.tab==='cal'){ setTab('home',true); reguard(); return; }
   askQuit();   // no guard now: one more back closes the app
 });
 
@@ -3146,17 +3194,17 @@ let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
-function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
+function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
 $('#mealBtn').onclick=openMeals;
-$('#tabMore').onclick=e=>{ e.stopPropagation(); openMore(); };
+
 $('#moreBtn').onclick=openMore;
 $('#askBtn').onclick=()=>openAsk();
 $('#homeClock').onclick=openGlobe;
-document.querySelectorAll('.tabbar [data-tab]').forEach(b=>{ if(b.dataset.tab!=='more') b.onclick=()=>setTab(b.dataset.tab); });
-setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'cal'; }catch(e){ return 'cal'; } })());
+document.querySelectorAll('.tabbar [data-tab]').forEach(b=>{ b.onclick=()=>setTab(b.dataset.tab); });
+setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'home'; }catch(e){ return 'home'; } })());
 initSplits();
 if(LOCAL){ gate(null); renderAll(); save(); setTimeout(()=>refreshLinks(false),2000); }
 else {
