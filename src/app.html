@@ -48,7 +48,7 @@ input,select{font:inherit;color:inherit}
 .cc.night{background:linear-gradient(160deg,#2f3571,#4d509a);color:#fff}
 .cc.dawn .hill{background:#f3b9a6}.cc.day .hill{background:#b9e2c6}.cc.dusk .hill{background:#c4a9e6}.cc.night .hill{background:#262a5c}
 .cc .badge{position:absolute;right:12px;top:10px;z-index:3;font-size:13px;font-weight:700;background:rgba(255,255,255,.7);color:var(--ink);border-radius:999px;padding:3px 9px}
-.globebtn{width:92px;height:112px;border-radius:24px;flex:none;background:radial-gradient(circle at 35% 30%,#d6f0ff,#9ccfe8 55%,#7fb6d6);font-size:42px;display:grid;place-items:center;box-shadow:0 2px 0 rgba(0,0,0,.05);position:relative}
+.globebtn{width:78px;height:112px;border-radius:24px;flex:none;background:radial-gradient(circle at 35% 30%,#d6f0ff,#9ccfe8 55%,#7fb6d6);font-size:38px;display:grid;place-items:center;box-shadow:0 2px 0 rgba(0,0,0,.05);position:relative}
 .globebtn span{position:absolute;bottom:7px;left:3px;right:3px;text-align:center;line-height:1.1;font-size:10px;font-weight:800;color:#1f4d66;letter-spacing:.04em}
 .spacer{flex:1}
 .iconbtn{background:var(--card);border-radius:16px;padding:14px 14px;font-size:24px;flex:none;box-shadow:0 1px 0 var(--line)}
@@ -502,6 +502,35 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .hnone{font-size:17px;opacity:.9;margin:4px 0}
 .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .hgrid .tile{min-height:96px}.hgrid .tile small{font-size:14px}
+.tile.hot{border-color:#f0a35e;background:#fff6ea}
+.mdot{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#e5484d;color:#fff;font-size:13px;font-weight:800;font-style:normal}
+.msgbtn{position:relative}.msgbtn .mdot{position:absolute;top:-6px;right:-6px}
+.modal.msgm{width:min(560px,97vw);display:flex;flex-direction:column;max-height:92vh}
+.mlist{display:flex;flex-direction:column;gap:6px;overflow:auto}
+.msgm{min-height:min(640px,86vh)}
+.msgm button.cancel,.msgm button.save,.ibcard button,.ibset button,#hupd{border-radius:14px;padding:8px 14px;font-weight:700;font-size:16px}
+.ibset input{font:inherit;font-size:17px;border:2px solid var(--line);border-radius:12px;padding:10px 12px}.ibset label small{font-weight:500;color:var(--muted)}
+.mrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:12px 14px;color:var(--ink)}
+.mrow b{font-size:19px}.mrow.unread small{font-weight:800;color:var(--ink)}
+.mmid{flex:1;min-width:0;display:flex;flex-direction:column}.mmid small{color:var(--muted);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mend{display:flex;flex-direction:column;align-items:flex-end;gap:4px}.mend small{color:var(--muted);font-size:12px;white-space:nowrap}
+.mface{flex:0 0 46px;width:46px;height:46px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#3a3a3a}
+.mas{font-size:15px;color:var(--muted);font-weight:700;cursor:pointer}
+.mhead{justify-content:flex-start}.mhead h2{flex:1}.mhead #bk{font-size:26px;padding:2px 14px;flex:0 0 auto}.mhead .cancel{flex:0 0 auto}
+.mbubs{flex:1;min-height:200px;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:6px 2px}
+.mb{display:flex;flex-direction:column;align-items:flex-start;max-width:82%}.mb.me{align-self:flex-end;align-items:flex-end}
+.mtxt{background:#eee;border-radius:20px 20px 20px 6px;padding:9px 14px;font-size:18px;line-height:1.3;white-space:pre-wrap;overflow-wrap:anywhere}
+.mb.me .mtxt{background:#3b82f6;color:#fff;border-radius:20px 20px 6px 20px}
+.mat{font-size:11px;color:var(--muted);margin:1px 6px}.mfrom{font-size:12px;font-weight:800;margin:0 8px}
+.mday{align-self:center;font-size:12px;color:var(--muted);font-weight:700;margin:8px 0 2px}
+.mquick{display:flex;gap:6px;overflow-x:auto;padding:8px 0 6px;flex:0 0 auto}.mquick button{white-space:nowrap;flex:0 0 auto;font-size:15px;padding:7px 12px}
+.msend{display:flex;gap:8px;flex:0 0 auto}.msend input{flex:1;min-width:0;font:inherit;font-size:18px;border:2px solid var(--line);border-radius:999px;padding:10px 16px}.msend button{border-radius:999px;padding:8px 16px;font-size:20px}
+.ibcard{border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin:10px 0;background:var(--card)}.ibcard.old{opacity:.6}
+.ibtop{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}.ibtop b{font-size:18px}.ibtop small{color:var(--muted)}
+.ibit{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}.ibit.skipped .ibmid{text-decoration:line-through;opacity:.6}
+.ibic{font-size:22px}.ibmid{flex:1;min-width:150px;display:flex;flex-direction:column}.ibmid b{font-size:17px}.ibmid small{color:var(--muted);font-size:14px}
+.ibit select{font:inherit;font-size:15px;padding:6px;border-radius:10px;border:1px solid var(--line);max-width:120px}.ibit button{padding:7px 14px}
+.ibst{color:var(--muted);font-weight:700}.ibact{margin-top:8px;gap:8px;flex-wrap:wrap}.ibact a{text-decoration:none;display:inline-flex;align-items:center;border-radius:14px;padding:8px 14px;color:var(--ink);font-weight:700}
 .hmore{margin:18px 2px 8px;font-size:15px;font-weight:800;color:var(--muted)}
 @media (max-width:900px){
   body{font-size:18px}
@@ -708,6 +737,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
       <button class="globebtn" id="globeBtn" aria-label="Where is everyone">🌏<span id="globeLbl">WHERE?</span></button>
       <button class="globebtn mealbtn" id="mealBtn" aria-label="Meals">🍽️<span>MEALS</span></button>
       <button class="globebtn morebtn" id="moreBtn" aria-label="More">🧩<span>MORE</span></button>
+      <button class="globebtn msgbtn" id="msgBtn" aria-label="Messages">✉️<span>MSGS</span><i class="mdot" id="msgBadge" style="display:none"></i></button>
       <button class="globebtn askbtn" id="askBtn" aria-label="Ask">💬<span>ASK</span></button>
       <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
       <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
@@ -917,7 +947,7 @@ function migrate(s){
 }
 function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
 let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
-['recipes','meals','renewals','gifts','bills','memory','kids'].forEach(k=>S[k]=S[k]||[]);
+['recipes','meals','renewals','gifts','bills','memory','kids','inbox','msgs'].forEach(k=>S[k]=S[k]||[]);
 (()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
 let weekOff=0, monthOff=0;
 
@@ -2502,7 +2532,7 @@ function openHelpers(){
     <p class="note">Two small helpers run free in your own Google account (script.google.com). Their latest code always lives here, so there are no documents to keep.</p>
     <div class="srccard"><h4>🤖 Reminder helper ${running?`<span class="pill-ok">✓ running v${nt.version||'?'}</span>`:'<span class="pill-wait">not running</span>'} ${running&&needUpd?`<span class="pill-wait">⬆️ v${latestV} available</span>`:running?'<span class="pill-ok">up to date</span>':''}</h4>
       <p class="note">Reminders, flight tracking, renewals, bills by email, and keeping the database rules up to date.</p>
-      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}${nt&&nt.update?(nt.update.ok?`<p class="note">🔄 Updates itself: on${nt.update.at?' · last updated '+new Date(nt.update.at).toLocaleString():''}</p>`:`<p class="note" style="color:var(--danger)">🔄 Can’t update itself yet: ${esc(nt.update.error)}${/usersettings/.test(nt.update.error)?' — open <a href="https://script.google.com/home/usersettings" target="_blank">script.google.com/home/usersettings</a> and switch the Google Apps Script API on.':''}</p>`):''}${nt&&(nt.version||0)>=16?(S.voiceUrl&&S.voiceKey?`<button class="ghost" id="hupd">🔄 Check for an update now</button>`:''):`<p class="dirn">🔄 From version 16 this helper updates itself. Paste it in once by hand with the steps below, and you won’t need to again.</p>`}
+      ${nt&&nt.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(nt.error)}</p>`:''}${nt&&nt.rules&&!nt.rules.ok?`<p class="note" style="color:var(--danger)">🛡️ ${esc(nt.rules.error)}</p>`:''}${S.billsHelper&&S.billsHelper.error?`<p class="note" style="color:var(--danger)">🧾 ${esc(S.billsHelper.error)}</p>`:''}${nt&&nt.update?(nt.update.ok?`<p class="note">🔄 Updates itself: on${nt.update.at?' · last updated '+new Date(nt.update.at).toLocaleString():''}</p>`:`<p class="note" style="color:var(--danger)">🔄 Can’t update itself yet: ${esc(nt.update.error)}${/usersettings/.test(nt.update.error)?' — open <a href="https://script.google.com/home/usersettings" target="_blank">script.google.com/home/usersettings</a> and switch the Google Apps Script API on.':''}</p>`):''}${nt&&(nt.version||0)>=16?(S.voiceUrl&&S.voiceKey?`<button class="cancel" id="hupd">🔄 Check for an update now</button>`:''):`<p class="dirn">🔄 From version 16 this helper updates itself. Paste it in once by hand with the steps below, and you won’t need to again.</p>`}
       <p class="dirn">📋 You copy <b>from here</b> and paste <b>into Google</b> — never the other way. Do it on a computer, with this app open in one tab and script.google.com in another.</p>
       <ol class="note" style="margin:6px 0 8px 18px;padding:0;font-size:15px;line-height:1.55">
         <li>Press <b>📋 Copy helper code</b> below. That puts the newest code on your clipboard.</li>
@@ -2710,6 +2740,8 @@ function openSync(){
 /* ================= settings ================= */
 // Everything that isn't on the front screen, as big tiles
 function moreTiles(){ return [
+  ['✉️','Messages',()=>openMsgs(),()=>{ const n=typeof msgUnreadAll==='function'?msgUnreadAll():0; return n?n+' new':'chat with the family'; }],
+  ['📥','Inbox',()=>openInbox(),()=>{ const n=typeof inboxNew==='function'?inboxNew():0; return n?n+' to check':S.inboxEmail?'nothing new':'forward emails here'; }],
   ['❓','What can I say?',()=>openHelp(),()=>'Alexa phrases'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
@@ -2946,6 +2978,7 @@ function renderHome(){
   const dn=(typeof mealsOn==='function'?mealsOn(tk,'dinner'):[])[0], dr=dn&&dn.rid&&typeof recipeById==='function'?recipeById(dn.rid):null, dinner=dn?(dr?dr.name:(dn.note||'')):'';
   const tp=traveller(), r=tp?travellerNow(now):null, where=!tp?'':r&&r.air?'In the air → '+(r.a?r.a[0]:''):r&&r.a?'In '+r.a[0]:'At home';
   const chk=(S.bills||[]).filter(b=>b.status==='check').length, due=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=7).length;
+  const mun=typeof msgUnreadAll==='function'?msgUnreadAll():0, inb=typeof inboxNew==='function'?inboxNew():0;
   const tiles=[
     ['📅','Calendar',week?week+(week===1?' thing':' things')+' this week':'Nothing this week',()=>setTab('cal')],
     ['✅','To do',me&&mine.length?mine.length+' for you · '+open.length+' in all':open.length?open.length+' to do':'All done',()=>setTab('todo')],
@@ -2953,12 +2986,14 @@ function renderHome(){
     ['🍽️','Meals',dinner?'Dinner: '+dinner:'No dinner planned',()=>setTab('meals')],
     ['🌏',tp?'Where’s '+tName(tp)+'?':'Our travels',where,()=>setTab('where')],
     ['🧾','Bills',chk?chk+' to check':due?due+' due this week':'Nothing due',()=>openBills()],
+    ['✉️','Messages',mun?mun+' new':'Chat with the family',()=>openMsgs(),mun],
+    ['📥','Inbox',inb?inb+' to check':S.inboxEmail?'Nothing new':'Forward emails here',()=>openInbox(),inb],
   ];
-  const skip=['Bills','Our travels'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1]));
+  const skip=['Bills','Our travels','Messages','Inbox'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1]));
   el.innerHTML=`<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
       ${T.show.length?T.show.map(line).join('')+(T.more?`<div class="hnone">+ ${T.more} more</div>`:''):`<div class="hnone">${T.done?'That’s everything for today ✓':'Nothing on today'}</div>`}</button>
     <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
-    <div class="hgrid">${tiles.map((t,i)=>`<button class="tile" data-ht="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[2]||'')}</small></button>`).join('')}</div>
+    <div class="hgrid">${tiles.map((t,i)=>`<button class="tile ${t[4]?'hot':''}" data-ht="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[2]||'')}</small></button>`).join('')}</div>
     <div class="hmore">Everything else</div>
     <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
   const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
@@ -3194,14 +3229,14 @@ let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
-function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
+function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
 $('#mealBtn').onclick=openMeals;
 
 $('#moreBtn').onclick=openMore;
-$('#askBtn').onclick=()=>openAsk();
+$('#askBtn').onclick=()=>openAsk(); $('#msgBtn').onclick=()=>openMsgs();
 $('#homeClock').onclick=openGlobe;
 document.querySelectorAll('.tabbar [data-tab]').forEach(b=>{ b.onclick=()=>setTab(b.dataset.tab); });
 setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'home'; }catch(e){ return 'home'; } })());

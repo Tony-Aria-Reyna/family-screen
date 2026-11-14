@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 16;
+const HELPER_VERSION = 17;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -42,7 +42,10 @@ function tick() {
       for (const who of (h.members || [])) for (const c of ['events', 'todos']) {
         try { listDocs('households/' + h._id + '/private/' + encodeURIComponent(who) + '/' + c).forEach(x => { x._owner = who; data[c].push(x); }); } catch (e) {}
       }
+      let inboxNew = []; try { inboxNew = inboxTick(h, props, now); } catch (e) { Logger.log('Inbox: ' + e); }
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
+      inboxArrivals(h, inboxNew, msgs);
+      try { msgPush(h); } catch (e) { Logger.log('Messages: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
@@ -391,6 +394,93 @@ function send(h, hash, title, body, tag) {
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
 }
+/* ================= Family inbox =================
+   One address for everything the family gets sent (a plus address of THIS Gmail account, set in the app: 📥 Inbox → Setup):
+   the teacher's weekly note, a party invitation, a club newsletter, an appointment confirmation. Forward it there and the AI
+   pulls out the dates and the things to do. They show in the app as suggestions: nothing goes on the calendar until someone taps Add.
+   A bill sent here is passed on to the bills address, so one address really does do the lot. */
+function inboxTick(h, props, now, force) {
+  const addr = String(h.inboxEmail || '').toLowerCase().trim(), fresh = [];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return fresh;
+  const lastKey = 'INBOX_MAIL_' + h._id, prev = h.inboxHelper || {};
+  if (!force && now.getTime() - Number(props.getProperty(lastKey) || 0) < 9.5 * 60e3) return fresh;
+  props.setProperty(lastKey, String(now.getTime()));
+  let err = '', added = 0;
+  try {
+    const path = 'households/' + h._id + '/inbox', seen = {}; listDocs(path).forEach(function (d) { seen[d._id] = 1; });
+    const threads = GmailApp.search('to:' + addr + ' newer_than:14d', 0, 15);
+    if (threads.length && !aiReady(h)) throw new Error('No AI key yet: add it in the app (More → ✨ AI)');
+    const label = GmailApp.getUserLabelByName('Family Screen inbox') || GmailApp.createLabel('Family Screen inbox');
+    const today = keyOf(now), bills = String(h.billEmail || '').toLowerCase().trim();
+    for (const t of threads) {
+      for (const msg of t.getMessages()) {
+        const id = 'email-' + msg.getId(); if (seen[id]) continue;
+        if ((msg.getTo() + ' ' + msg.getCc()).toLowerCase().indexOf(addr) < 0) continue;
+        const atts = msg.getAttachments({ includeInlineImages: false }).filter(function (a) { return /pdf|image\//i.test(a.getContentType()) && a.getSize() < 5e6; }).slice(0, 3);
+        let text = String(msg.getPlainBody() || ''); if (text.trim().length < 40) text = String(msg.getBody() || '').replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+        const prompt = 'You read an email a New Zealand family forwarded to their family inbox (often a teacher\'s weekly note, a school or club newsletter, an invitation or an appointment). ' +
+          'Pull out what the family needs to put on the calendar and what they need to do. Return JSON only: ' +
+          '{"kind":"school|club|invitation|appointment|bill|other","from":"who it is really from, short (e.g. Room 5, Mrs Patel)","summary":"one or two plain sentences on what this email is about",' +
+          '"events":[{"title":"short, e.g. Swimming sports","date":"YYYY-MM-DD","time":"HH:MM 24-hour, or empty for all day","end":"HH:MM or empty","who":"first name of the family member it is for, or empty for everyone","note":"where, or what to bring, short"}],' +
+          '"todos":[{"title":"starts with a verb, e.g. Return the camp permission slip","due":"YYYY-MM-DD or empty","who":"first name of who should do it, or empty","note":"short detail, or empty"}]}. ' +
+          'Today is ' + today + ' (' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()] + ', Pacific/Auckland). Work out real dates from words like "this Friday" or "Week 6 Tuesday" only when the email makes the date certain; if a date is not certain, make it a to-do without a date and say so in the note. ' +
+          'Things to bring, pay, sign, return, wear or book are to-dos. Events are things that happen at a time or on a day. School events are for the child; to-dos are usually for a parent. ' +
+          'Leave out general news, thank-yous and anything already past. Never invent anything. At most 12 events and 12 to-dos. If it is a bill or invoice to pay, kind is "bill" and both lists are empty.\n\n' +
+          vWho(h) + '\n\nFrom: ' + msg.getFrom() + '\nSubject: ' + msg.getSubject() + '\nSent: ' + msg.getDate() + '\n\n' + text.slice(0, 12000);
+        const parts = [{ text: prompt }].concat(atts.map(function (a) { return { inline_data: { mime_type: a.getContentType().split(';')[0], data: Utilities.base64Encode(a.getBytes()) } }; }));
+        const fromEmail = { from: String(msg.getFrom()).slice(0, 160), subject: String(msg.getSubject() || '').slice(0, 160), at: msg.getDate().getTime(), link: 'https://mail.google.com/mail/u/0/#all/' + msg.getId() };
+        let d; try { const raw = String(aiCall(h, parts) || '{}'); d = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)); }
+        catch (e) { if (e.gemini) throw e; d = { kind: 'other', summary: 'Couldn\'t read this one: open the email.', events: [], todos: [] }; }
+        if (d.kind === 'bill' && bills && bills !== addr) {
+          try { msg.forward(bills); patch(path + '/' + id, { status: 'done', kind: 'bill', at: fromEmail.at, fromEmail: fromEmail, summary: 'This is a bill, so it was passed to Bills.', items: [] }); seen[id] = 1; continue; } catch (e) {}
+        }
+        const okDate = function (k) { return /^\d{4}-\d{2}-\d{2}$/.test(k || '') && Math.abs((at(k, '12:00') - now) / 864e5) < 400 ? k : ''; };
+        const okTime = function (x) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(x || '') ? x : ''; };
+        const whoId = function (n) { const p = n ? vFind(h, n) : null; return p ? p.id : ''; };
+        const items = [];
+        (d.events || []).slice(0, 12).forEach(function (e, i) { const dt = okDate(e.date); if (!e.title) return;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(e.date || '') && e.date < today) return;
+          if (!dt) { items.push({ id: 't' + i + 'e', type: 'todo', title: String(e.title).slice(0, 90), due: '', who: whoId(e.who), note: String(e.note || 'Date not clear in the email').slice(0, 160), state: 'new' }); return; }
+          if (dt < today) return;
+          items.push({ id: 'e' + i, type: 'event', title: String(e.title).slice(0, 90), date: dt, time: okTime(e.time), end: okTime(e.end), who: whoId(e.who), note: String(e.note || '').slice(0, 160), state: 'new' }); });
+        (d.todos || []).slice(0, 12).forEach(function (x, i) { if (!x.title) return;
+          items.push({ id: 't' + i, type: 'todo', title: String(x.title).slice(0, 90), due: okDate(x.due), who: whoId(x.who), note: String(x.note || '').slice(0, 160), state: 'new' }); });
+        const doc = { status: items.length ? 'new' : 'none', kind: String(d.kind || 'other').slice(0, 20), sender: String(d.from || '').slice(0, 60), summary: String(d.summary || '').slice(0, 300), at: fromEmail.at, fromEmail: fromEmail, items: items };
+        patch(path + '/' + id, doc); seen[id] = 1; added++; doc._id = id; if (items.length) fresh.push(doc);
+      }
+      t.addLabel(label);
+    }
+  } catch (e) { err = String(e && e.message || e).slice(0, 240); if (/permission|authori[sz]/i.test(err)) err = 'The helper needs permission for Gmail: run inboxCheckNow once in the helper (⚙️ → 🧰 Helpers).'; }
+  patch('households/' + h._id, { inboxHelper: { lastRun: now.getTime(), error: err, added: (prev.added || 0) + added, version: HELPER_VERSION } });
+  return fresh;
+}
+function inboxArrivals(h, fresh, msgs) {
+  if (!fresh.length) return; const devices = h.devices || {};
+  fresh.forEach(function (d) { const n = d.items.length;
+    Object.keys(devices).forEach(function (hash) { if (!devices[hash] || !devices[hash].token) return;
+      msgs.push({ device: hash, key: 'inbox|' + d._id + '|' + hash, tag: 'inbox', title: '📥 ' + (d.sender || d.fromEmail.subject || 'Family inbox'), body: n + (n === 1 ? ' thing' : ' things') + ' to check: ' + d.items.slice(0, 3).map(function (i) { return i.title; }).join(', ') }); }); });
+}
+/* run this by hand in the editor to read the family inbox straight away (and to approve Gmail the first time) */
+function inboxCheckNow() { const props = PropertiesService.getScriptProperties();
+  for (const h of listDocs('households')) { const out = inboxTick(h, props, new Date(), true); Logger.log((h.inboxEmail || '(no inbox address set)') + ': ' + out.length + ' new emails with things in them. ' + ((getDoc('households/' + h._id).inboxHelper || {}).error || 'OK')); } }
+
+/* ================= Family messages =================
+   The app writes each message to households/{id}/msgs. This sends the notification: to the phones signed in as the person
+   it is for (or everyone else, for the family group). The app asks for this the moment a message is sent; the 5-minute tick is the backstop. */
+function msgPush(h) {
+  const path = 'households/' + h._id + '/msgs', devices = h.devices || {}, people = h.people || [], now = Date.now(); let n = 0;
+  const waiting = listDocs(path).filter(function (m) { return !m.pushed && m.at && now - m.at < 12 * 3600e3; }).sort(function (a, b) { return a.at - b.at; });
+  waiting.forEach(function (m) {
+    const from = people.find(function (p) { return p.id === m.from; }) || { name: 'Family' };
+    const to = m.th === 'fam' ? people.filter(function (p) { return p.id !== m.from && p.id !== 'all'; }) : people.filter(function (p) { return String(m.th).split('|').indexOf(p.id) >= 0 && p.id !== m.from; });
+    const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(Boolean);
+    Object.keys(devices).forEach(function (hash) { const dev = devices[hash]; if (!dev || !dev.token || !dev.email || emails.indexOf(String(dev.email).toLowerCase()) < 0) return;
+      try { send(h, hash, '💬 ' + from.name + (m.th === 'fam' ? ' → Family' : ''), String(m.text || '').slice(0, 180), 'msg-' + m.th); n++; } catch (e) {} });
+    patch(path + '/' + m._id, { pushed: now });
+  });
+  return n;
+}
+
 /* ================= Bills by email =================
    Bills sent (or forwarded) to the family's bills address (a plus address of THIS Gmail account, e.g. you+bills@gmail.com,
    set in the app: Bills → Setup) are read every 10 minutes. Gemini reads the email and any PDF, the PDF is saved to
@@ -645,6 +735,8 @@ function voiceDo(h, action, b) {
   const now = new Date(), hid = h._id, today = keyOf(now);
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
+  if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
+  if (action === 'inbox_check') { const fresh = inboxTick(h, PropertiesService.getScriptProperties(), new Date(), true); return { ok: true, added: fresh.length, speech: fresh.length ? fresh.length + ' new' : 'Nothing new' }; }
   if (action === 'ping') return { ok: true, version: HELPER_VERSION, people: vPeople(h).map(function (p) { return p.name; }) };
 
   if (action === 'shop_add') {

@@ -1033,3 +1033,109 @@ function openHelp(){
     m.querySelector('#x').onclick=close;
   });
 }
+
+/* ================= Family messages: a thread for each person, plus the family group ================= */
+const MSG_QUICK=['I’m home 🏠','Can you call me? 📞','I’m hungry 😋','Love you ❤️','Goodnight 🌙','👍'];
+let msgAs='', msgOpen=null, msgSeenAt=Date.now(), msgCtx=null;
+const msgFolk=()=>S.people.filter(p=>p.id!=='all');
+// who can write from this device: on a phone it is you; on the shared screen it is the people with no sign-in of their own (the kids)
+function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me];
+  const kids=msgFolk().filter(p=>!p.email).map(p=>p.id); if(!isPhone()&&kids.length) return kids;
+  return me?[me]:msgFolk().map(p=>p.id); }
+const msgThread=(a,b)=>b==='fam'?'fam':[a,b].sort().join('|');
+const msgIn=th=>(S.msgs||[]).filter(m=>m.th===th).sort((a,b)=>a.at-b.at);
+const msgUnread=(me,th)=>(S.msgs||[]).filter(m=>(th?m.th===th:(m.th==='fam'||String(m.th).split('|').includes(me)))&&m.from!==me&&!(m.seen||[]).includes(me)).length;
+const msgUnreadAll=()=>msgWho().reduce((n,id)=>n+msgUnread(id),0);
+function msgChime(){ try{ msgCtx=msgCtx||new (window.AudioContext||window.webkitAudioContext)(); const t=msgCtx.currentTime; [660,880].forEach((f,i)=>{ const o=msgCtx.createOscillator(), g=msgCtx.createGain(); o.frequency.value=f; o.connect(g); g.connect(msgCtx.destination); g.gain.setValueAtTime(.0001,t+i*.13); g.gain.exponentialRampToValueAtTime(.12,t+i*.13+.02); g.gain.exponentialRampToValueAtTime(.0001,t+i*.13+.3); o.start(t+i*.13); o.stop(t+i*.13+.32); }); }catch(e){} }
+function msgSend(me,th,text){ text=String(text||'').trim().slice(0,600); if(!text) return;
+  S.msgs=S.msgs||[]; S.msgs.push({id:uid(),th,from:me,text,at:Date.now(),seen:[me]});
+  if(S.msgs.length>600) S.msgs=S.msgs.sort((a,b)=>a.at-b.at).slice(-500);
+  save();
+  // ask the helper to send the phone notification straight away (the 5-minute check is the backstop)
+  if(S.voiceUrl&&S.voiceKey) setTimeout(()=>{ fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'msg_push'}),redirect:'follow'}).catch(()=>{}); },1500); }
+function msgMarkSeen(me,th){ let ch=false; (S.msgs||[]).forEach(m=>{ if(m.th===th&&m.from!==me&&!(m.seen||[]).includes(me)){ m.seen=(m.seen||[]).concat(me); ch=true; } }); if(ch) save(); }
+const msgTime=t=>{ const d=new Date(t), today=dk(d)===dk(new Date()); return (today?'':fmtD(d,{weekday:'short',day:'numeric',month:'short'})+' ')+t12(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')); };
+const msgFace=id=>id==='fam'?`<span class="mface" style="background:#ffe9b8">👪</span>`:`<span class="mface" style="background:${col(id)}">${esc((nm(id)||'?').charAt(0))}</span>`;
+function openMsgs(th){
+  const who=msgWho(); if(!msgAs||!who.includes(msgAs)) msgAs=who.length===1?who[0]:'';
+  msgOpen={th:th||null};
+  modal((m,close)=>{ m.classList.add('msgm'); m.id='msgBox';
+    const shut=()=>{ msgOpen=null; close(); renderAll(); };
+    const draw=()=>{
+      if(!msgAs){ m.innerHTML=`<div class="tvhead"><h2>✉️ Messages</h2><button class="cancel" id="x">Close</button></div><p class="note">Who’s writing?</p><div class="mlist">${who.map(id=>`<button class="mrow" data-as="${id}">${msgFace(id)}<b>${esc(nm(id))}</b>${msgUnread(id)?`<i class="mdot">${msgUnread(id)}</i>`:''}</button>`).join('')}</div>`;
+        m.querySelector('#x').onclick=shut; m.querySelectorAll('[data-as]').forEach(b=>b.onclick=()=>{ msgAs=b.dataset.as; draw(); }); return; }
+      const me=msgAs;
+      if(!msgOpen.th){
+        const rows=['fam'].concat(msgFolk().filter(p=>p.id!==me).map(p=>p.id)).map(o=>{ const t=msgThread(me,o), ms=msgIn(t), last=ms[ms.length-1], n=msgUnread(me,t); return {o,t,last,n}; })
+          .sort((a,b)=>(b.last?b.last.at:0)-(a.last?a.last.at:0));
+        m.innerHTML=`<div class="tvhead"><h2>✉️ Messages${who.length>1?` <small class="mas" id="sw">${esc(nm(me))} ▾</small>`:''}</h2><button class="cancel" id="x">Close</button></div>
+          <div class="mlist">${rows.map(r=>`<button class="mrow ${r.n?'unread':''}" data-th="${r.t}">${msgFace(r.o)}<span class="mmid"><b>${r.o==='fam'?'Family':esc(nm(r.o))}</b><small>${r.last?esc((r.last.from===me?'You: ':r.o==='fam'?nm(r.last.from)+': ':'')+r.last.text):'Say hello 👋'}</small></span><span class="mend">${r.last?`<small>${msgTime(r.last.at)}</small>`:''}${r.n?`<i class="mdot">${r.n}</i>`:''}</span></button>`).join('')}</div>`;
+        m.querySelector('#x').onclick=shut; const sw=m.querySelector('#sw'); if(sw) sw.onclick=()=>{ msgAs=''; draw(); };
+        m.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ msgOpen.th=b.dataset.th; draw(); }); return; }
+      const t=msgOpen.th, other=t==='fam'?'fam':t.split('|').find(x=>x!==me)||me, ms=msgIn(t); msgMarkSeen(me,t);
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let lastDay='';
+      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${other==='fam'?'Family':esc(nm(other))}</h2><button class="cancel" id="x">Close</button></div>
+        <div class="mbubs" id="mb">${ms.length?ms.map(x=>{ const d=dk(new Date(x.at)), sep=d!==lastDay?`<div class="mday">${d===dk(new Date())?'Today':fmtD(new Date(x.at),{weekday:'long',day:'numeric',month:'short'})}</div>`:''; lastDay=d; const mine=x.from===me;
+          return sep+`<div class="mb ${mine?'me':''}">${!mine&&t==='fam'?`<small class="mfrom" style="color:${col(x.from)};filter:brightness(.6)">${esc(nm(x.from))}</small>`:''}<span class="mtxt" ${mine?'':`style="background:${col(x.from)}"`}>${esc(x.text)}</span><small class="mat">${msgTime(x.at).replace(/^.* /,'')}${mine&&t!=='fam'&&(x.seen||[]).includes(other)?' · Seen':''}</small></div>`; }).join(''):'<p class="note" style="text-align:center;margin-top:30px">No messages yet. Say hello 👋</p>'}</div>
+        <div class="mquick">${MSG_QUICK.map((q,i)=>`<button class="cancel" data-q="${i}">${esc(q)}</button>`).join('')}</div>
+        <form class="msend" id="mf"><input id="mi" placeholder="Message" autocomplete="off" maxlength="600">${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
+      const box=m.querySelector('#mb'); box.scrollTop=box.scrollHeight;
+      m.querySelector('#x').onclick=shut; m.querySelector('#bk').onclick=()=>{ msgOpen.th=null; draw(); };
+      const inp=m.querySelector('#mi'), go=txt=>{ msgSend(me,t,txt); draw(); };
+      m.querySelector('#mf').onsubmit=e=>{ e.preventDefault(); if(inp.value.trim()) go(inp.value); };
+      m.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>go(MSG_QUICK[+b.dataset.q]));
+      const mic=m.querySelector('#mic'); if(mic) mic.onclick=()=>{ try{ const r=new SR(); r.lang='en-NZ'; r.interimResults=false; mic.textContent='👂'; r.onresult=e=>{ inp.value=(inp.value+' '+e.results[0][0].transcript).trim(); }; r.onend=()=>{ mic.textContent='🎤'; inp.focus(); }; r.onerror=()=>{ mic.textContent='🎤'; toast('Couldn’t hear that. Try again, or type it.'); }; r.start(); }catch(e){ toast('Voice typing isn’t available on this device'); } };
+    };
+    msgOpen.draw=draw; draw();
+  });
+}
+// called whenever anything syncs: keeps an open chat fresh, updates the badges and announces a new message
+function msgRefresh(){
+  if(msgOpen&&!document.querySelector('#msgBox')) msgOpen=null;
+  const who=msgWho(), fresh=(S.msgs||[]).filter(m=>m.at>msgSeenAt&&!who.includes(m.from)&&(m.th==='fam'||who.some(id=>String(m.th).split('|').includes(id)))&&!who.every(id=>(m.seen||[]).includes(id))).sort((a,b)=>a.at-b.at);
+  if(fresh.length){ const last=fresh[fresh.length-1]; msgSeenAt=last.at;
+    if(!(msgOpen&&msgOpen.th===last.th)){ msgChime(); toast('💬 '+nm(last.from)+': '+last.text.slice(0,80)); } }
+  if(msgOpen&&msgOpen.draw){ const i=document.querySelector('#msgBox #mi'), v=i?i.value:'', f=i&&document.activeElement===i; msgOpen.draw(); const j=document.querySelector('#msgBox #mi'); if(j&&v){ j.value=v; } if(j&&f) j.focus(); }
+  const n=msgUnreadAll(), b=document.querySelector('#msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; }
+}
+
+/* ================= Family inbox: forwarded emails become suggested events and to-dos ================= */
+const inboxNew=()=>(S.inbox||[]).filter(d=>d.status==='new').reduce((n,d)=>n+(d.items||[]).filter(i=>i.state==='new').length,0);
+function inboxAdd(d,it){
+  const who=it.who&&person(it.who)?it.who:'', note=it.note&&it.note.length<=40?' ('+it.note+')':'';
+  if(it.type==='event'){ let dur=0; if(it.time){ dur=60; if(it.end){ const mins=x=>(+x.slice(0,2))*60+(+x.slice(3)), g=mins(it.end)-mins(it.time); if(g>0) dur=g; } }
+    S.events.push({id:uid(),whos:[who||(person('all')?'all':S.people[0].id)],title:(it.title+note).slice(0,110),addr:'',date:it.date,time:it.time||'',dur,from:'inbox'}); }
+  else { const by=it.due?' (by '+fmtD(kd(it.due),{weekday:'short',day:'numeric',month:'short'})+')':''; S.todos.unshift({id:uid(),title:(it.title+by+note).slice(0,130),who,done:false,at:Date.now(),from:'inbox'}); }
+  it.state='added'; if(!(d.items||[]).some(i=>i.state==='new')) d.status='done';
+}
+function openInbox(){
+  const cut=Date.now()-45*864e5; if((S.inbox||[]).some(d=>d.at<cut)){ S.inbox=S.inbox.filter(d=>d.at>=cut); save(); }
+  let setup=!S.inboxEmail;
+  modal((m,close)=>{ m.classList.add('wide');
+    const draw=()=>{
+      const docs=(S.inbox||[]).filter(d=>d.status==='new'||d.status==='done'||d.status==='none').sort((a,b)=>(a.status==='new'?0:1)-(b.status==='new'?0:1)||b.at-a.at).slice(0,25), ih=S.inboxHelper;
+      const when=it=>it.type==='event'?fmtD(kd(it.date),{weekday:'short',day:'numeric',month:'short'})+(it.time?' · '+t12(it.time):''):it.due?'by '+fmtD(kd(it.due),{weekday:'short',day:'numeric',month:'short'}):'';
+      m.innerHTML=`<div class="tvhead"><h2>📥 Family inbox</h2><span><button class="cancel" id="st">⚙️ Setup</button> <button class="cancel" id="x">Close</button></span></div>
+        ${setup?`<div class="rform ibset"><label>Family inbox address <small>(a “+” version of the Gmail that runs your Reminder helper, e.g. yourname+family@gmail.com. Forward anything here: the teacher’s weekly note, invitations, club newsletters, appointments. Bills sent here are passed on to Bills.)</small><input id="ia" type="email" value="${esc(S.inboxEmail||'')}" placeholder="yourname+family@gmail.com"></label><div class="row"><button class="save" id="isv">Save</button>${S.voiceUrl&&S.voiceKey&&S.inboxEmail?'<button class="cancel" id="ick">🔄 Check for new emails now</button>':''}</div>
+          <p class="note">The helper checks every 10 minutes. Nothing goes on the calendar until someone taps Add. ${ih&&ih.lastRun?'Last checked '+new Date(ih.lastRun).toLocaleString()+'.':'Needs the Reminder helper on version 17 or later.'}</p></div>`:''}
+        ${ih&&ih.error?`<p class="note" style="color:var(--danger)">📥 ${esc(ih.error)}</p>`:''}
+        ${docs.length?docs.map(d=>{ const its=d.items||[], open=its.filter(i=>i.state==='new');
+          return `<div class="ibcard ${d.status==='new'?'':'old'}"><div class="ibtop"><b>${esc(d.sender||d.fromEmail&&d.fromEmail.from||'Email')}</b><small>${esc(d.fromEmail&&d.fromEmail.subject||'')} · ${fmtD(new Date(d.at),{day:'numeric',month:'short'})}</small></div>
+            <p class="note">${esc(d.summary||'')}</p>
+            ${its.map(it=>`<div class="ibit ${it.state}"><span class="ibic">${it.type==='event'?'📅':'✅'}</span><span class="ibmid"><b>${esc(it.title)}</b><small>${esc([when(it),it.note].filter(Boolean).join(' · '))}</small></span>
+              ${it.state==='new'?`<select data-who="${d.id}|${it.id}" aria-label="Who">${it.type==='event'?'':'<option value="">Anyone</option>'}${S.people.filter(p=>it.type==='event'||p.id!=='all').map(p=>`<option value="${p.id}" ${p.id===(it.who||(it.type==='event'?'all':''))?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class="save" data-add="${d.id}|${it.id}">Add</button><button class="cancel" data-skip="${d.id}|${it.id}" aria-label="Skip">✕</button>`:`<small class="ibst">${it.state==='added'?'Added ✓':'Skipped'}</small>`}</div>`).join('')}
+            <div class="row ibact">${open.length>1?`<button class="save" data-all="${d.id}">Add all ${open.length}</button>`:''}${d.fromEmail&&d.fromEmail.link?`<a class="cancel alink" href="${esc(d.fromEmail.link)}" target="_blank" rel="noopener">Open the email</a>`:''}${d.status==='new'?`<button class="cancel" data-done="${d.id}">Done with this one</button>`:''}</div></div>`; }).join('')
+          :`<p class="note" style="margin-top:14px">${S.inboxEmail?'Nothing yet. Forward an email to <b>'+esc(S.inboxEmail)+'</b> and it shows up here within 10 minutes.':'Set the address above to get started.'}</p>`}`;
+      m.querySelector('#x').onclick=close; m.querySelector('#st').onclick=()=>{ setup=!setup; draw(); };
+      const sv=m.querySelector('#isv'); if(sv) sv.onclick=()=>{ const e=m.querySelector('#ia').value.trim().toLowerCase(); if(e&&!/^[^\s@]+\+[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('Use a “+” address, like yourname+family@gmail.com'); return; } if(e&&e===String(S.billEmail||'').toLowerCase()){ toast('Use a different address from the bills one'); return; } S.inboxEmail=e; save(); toast(e?'Saved. The helper checks every 10 minutes.':'Inbox turned off'); setup=!e; draw(); };
+      const ck=m.querySelector('#ick'); if(ck) ck.onclick=async()=>{ ck.disabled=true; ck.textContent='🔄 Checking…'; try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'inbox_check'}),redirect:'follow'}); const j=await r.json(); toast(j.speech||j.error||'Done'); }catch(e){ toast('The helper didn’t answer'); } setup=false; draw(); };
+      const find=k=>{ const [di,ii]=k.split('|'), d=(S.inbox||[]).find(x=>x.id===di); return [d,d&&(d.items||[]).find(i=>i.id===ii)]; };
+      m.querySelectorAll('[data-who]').forEach(s=>s.onchange=()=>{ const [d,it]=find(s.dataset.who); if(it){ it.who=s.value==='all'?'':s.value; save(); } });
+      m.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{ const [d,it]=find(b.dataset.add); if(!it) return; inboxAdd(d,it); save(); renderAll(); draw(); toast(it.type==='event'?'On the calendar ✓':'On the to-do list ✓'); });
+      m.querySelectorAll('[data-skip]').forEach(b=>b.onclick=()=>{ const [d,it]=find(b.dataset.skip); if(!it) return; it.state='skipped'; if(!d.items.some(i=>i.state==='new')) d.status='done'; save(); draw(); });
+      m.querySelectorAll('[data-all]').forEach(b=>b.onclick=()=>{ const d=(S.inbox||[]).find(x=>x.id===b.dataset.all); if(!d) return; const n=d.items.filter(i=>i.state==='new'); n.forEach(it=>inboxAdd(d,it)); save(); renderAll(); draw(); toast(n.length+' added ✓'); });
+      m.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ const d=(S.inbox||[]).find(x=>x.id===b.dataset.done); if(d){ d.status='done'; save(); draw(); } });
+    };
+    draw();
+  });
+}
