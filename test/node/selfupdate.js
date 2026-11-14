@@ -1,0 +1,28 @@
+const fs=require('fs');
+const code=fs.readFileSync('notifier/Code.gs','utf8').replace("'__PROJECT_ID__'","'ross-family-planner'").replace("'__APP_URL__'","'https://tony-aria-reyna.github.io/family-screen/index.html'");
+const remote=fs.readFileSync('dist/helper.gs','utf8').replace('HELPER_VERSION = 16','HELPER_VERSION = 17');
+const man=fs.readFileSync('notifier/appsscript.json','utf8');
+let manRemote=man, apiOn=true; const log=[]; const PP={};
+let files=[{name:'Code',type:'SERVER_JS',source:code},{name:'appsscript',type:'JSON',source:man}];
+const resp=(c,t)=>({getResponseCode:()=>c,getContentText:()=>t});
+global.UrlFetchApp={fetch:(u,o={})=>{ const m=(o.method||'get').toUpperCase(); log.push(m+' '+u.replace(/\?t=\d+/,''));
+  if(/helper\.gs/.test(u)) return resp(200,remote); if(/helper-manifest/.test(u)) return resp(200,manRemote);
+  if(!apiOn) return resp(403,'{"error":{"message":"User has not enabled the Apps Script API"}}');
+  if(/\/content$/.test(u)&&m==='GET') return resp(200,JSON.stringify({files}));
+  if(/\/content$/.test(u)&&m==='PUT'){ files=JSON.parse(o.payload).files; return resp(200,'{}'); }
+  if(/\/versions$/.test(u)) return resp(200,'{"versionNumber":42}');
+  if(/\/deployments$/.test(u)) return resp(200,JSON.stringify({deployments:[{deploymentId:'HEADID',deploymentConfig:{}},{deploymentId:'WEB1',deploymentConfig:{versionNumber:7},entryPoints:[{entryPointType:'WEB_APP'}]}]}));
+  if(/\/deployments\/WEB1$/.test(u)) return resp(200,JSON.stringify(JSON.parse(o.payload)));
+  return resp(404,'?'); }};
+global.PropertiesService={getScriptProperties:()=>({getProperty:k=>PP[k]||null,setProperty:(k,v)=>{PP[k]=v}})};
+global.ScriptApp={getScriptId:()=>'SID',getOAuthToken:()=>'TOK'};
+global.Logger={log:console.log};
+eval("const HELPER_VERSION=16, PROJECT_ID='ross-family-planner', APP_URL='https://tony-aria-reyna.github.io/family-screen/index.html';"+code.match(/function selfUpdate[\s\S]*?\n}\n/)[0]+';global.selfUpdate=selfUpdate;');
+const P=PropertiesService.getScriptProperties();
+apiOn=false; console.log('API off:',JSON.stringify(selfUpdate(P,new Date(),true)));
+apiOn=true; manRemote=man.replace('"V8"','"V8"').replace('script.deployments"','script.deployments",\n "https://www.googleapis.com/auth/calendar"'); log.length=0;
+console.log('new scope:',selfUpdate(P,new Date(),true).needsYou, '| writes:',log.filter(l=>/PUT|POST/.test(l)).length);
+manRemote=man; log.length=0; const r=selfUpdate(P,new Date(),true); console.log('ok:',r.ok,r.from,'->',r.to,'deps',r.deployments); console.log(log.join('\n'));
+const c=files.find(f=>f.name==='Code').source; console.log('installed v17:',/HELPER_VERSION = 17/.test(c),'| ids filled:',/'ross-family-planner'/.test(c)&&/github\.io/.test(c),'| no placeholders:',!/__PROJECT_ID__|__APP_URL__|@TZ@/.test(c));
+console.log('throttled:',JSON.stringify(selfUpdate(P,new Date(),false))===JSON.stringify(JSON.parse(PP.UPDATE_STATE).report));
+console.log(c.split('\n').slice(9,11).join(' | '), '| TZ filled:', !/\{\/\*@TZ@\*\/\}/.test(c));

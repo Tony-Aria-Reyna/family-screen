@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 15;
+const HELPER_VERSION = 16;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -30,6 +30,7 @@ function tick() {
   const now = new Date();
   const flightNote = { key: !!props.getProperty('AERODATABOX_KEY'), used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: '' };
   const rules = syncRules(props, now);
+  let upd = null; try { upd = selfUpdate(props, now, false); } catch (e) { Logger.log('Self-update: ' + e); }
   for (const h of listDocs('households')) {
     let err = '';
     try {
@@ -47,12 +48,69 @@ function tick() {
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
-    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, rules: rules, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
+    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, rules: rules, update: upd, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
   }
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
   Object.keys(sent).forEach(k => { if (+sent[k] > 1 && +sent[k] < cutoff) props.deleteProperty(k); });
 }
+
+/* ---------- keeping itself up to date ----------
+   Every 15 minutes the helper reads helper.gs from the app's site. If that copy has a higher HELPER_VERSION, it saves it
+   over this file, makes a new version and points the web app (the Alexa / wake-up song address) at it. The address stays the same.
+   One-time switch it needs: script.google.com/home/usersettings → Google Apps Script API → On.
+   If a new copy ever needs extra permissions, it does not install itself: the app says so and you paste it once by hand. */
+function selfUpdate(props, now, force) {
+  const last = JSON.parse(props.getProperty('UPDATE_STATE') || '{}');
+  if (!force && last.checked && now.getTime() - last.checked < 14 * 60e3) return last.report || null;
+  const report = { checked: now.getTime(), ok: true, at: last.report && last.report.at || 0, error: '', latest: HELPER_VERSION, needsYou: '' };
+  try {
+    const site = APP_URL.replace(/[^/]*$/, ''), t = '?t=' + now.getTime();
+    const r = UrlFetchApp.fetch(site + 'helper.gs' + t, { muteHttpExceptions: true, followRedirects: true });
+    if (r.getResponseCode() !== 200) throw new Error('Could not read helper.gs from the app site (' + r.getResponseCode() + ')');
+    const code = r.getContentText(), v = +((code.match(/const HELPER_VERSION = (\d+);/) || [])[1] || 0);
+    report.latest = v || HELPER_VERSION;
+    if (v > HELPER_VERSION) {
+      if (!/function tick\(/.test(code) || !/function doPost\(/.test(code) || !/function selfUpdate\(/.test(code)) throw new Error('The new helper.gs does not look right, so it was not installed');
+      const src = code.replace("'__PROJECT_ID__'", "'" + PROJECT_ID + "'").replace("'__APP_URL__'", "'" + APP_URL + "'");
+      const api = 'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId(), H = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+      const call = function (method, url, body) {
+        const x = UrlFetchApp.fetch(url, { method: method, contentType: 'application/json', headers: H, muteHttpExceptions: true, payload: body ? JSON.stringify(body) : undefined });
+        const txt = x.getContentText();
+        if (x.getResponseCode() !== 200) {
+          if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(txt)) throw new Error('Turn on the Google Apps Script API: script.google.com/home/usersettings');
+          throw new Error('Apps Script ' + x.getResponseCode() + ': ' + txt.slice(0, 200));
+        }
+        return JSON.parse(txt || '{}');
+      };
+      const cur = call('get', api + '/content');
+      const mf = cur.files.filter(function (f) { return f.type === 'JSON' && f.name === 'appsscript'; })[0];
+      // new permissions need a person to say yes, so leave those for a hand install
+      const m = UrlFetchApp.fetch(site + 'helper-manifest.json' + t, { muteHttpExceptions: true, followRedirects: true });
+      if (m.getResponseCode() === 200 && mf) {
+        const want = JSON.parse(m.getContentText()).oauthScopes || [], have = JSON.parse(mf.source).oauthScopes || [];
+        const extra = want.filter(function (x) { return have.indexOf(x) < 0; });
+        if (extra.length) { report.needsYou = 'Version ' + v + ' needs new permissions, so paste it in by hand once (⚙️ → 🧰 Helpers).'; throw new Error(report.needsYou); }
+      }
+      let done = false;
+      cur.files.forEach(function (f) { if (f.type === 'SERVER_JS' && /function tick\(/.test(f.source || '')) { f.source = src; done = true; } });
+      if (!done) throw new Error('Could not find the helper file in this project');
+      call('put', api + '/content', { files: cur.files.map(function (f) { return { name: f.name, type: f.type, source: f.source }; }) });
+      const ver = call('post', api + '/versions', { description: 'Family Screen helper v' + v + ' (updated itself)' });
+      const deps = (call('get', api + '/deployments').deployments || []).filter(function (d) {
+        return d.deploymentConfig && d.deploymentConfig.versionNumber && (d.entryPoints || []).some(function (e) { return e.entryPointType === 'WEB_APP'; }); });
+      deps.forEach(function (d) {
+        call('put', api + '/deployments/' + d.deploymentId, { deploymentConfig: { scriptId: ScriptApp.getScriptId(), versionNumber: ver.versionNumber, manifestFileName: 'appsscript', description: 'Family Screen helper v' + v } });
+      });
+      report.at = now.getTime(); report.from = HELPER_VERSION; report.to = v; report.deployments = deps.length;
+    }
+  } catch (e) { report.ok = false; report.error = String(e && e.message || e).slice(0, 240); }
+  last.checked = now.getTime(); last.report = report;
+  props.setProperty('UPDATE_STATE', JSON.stringify(last));
+  return report;
+}
+/* run this by hand in the editor to check for an update straight away */
+function updateNow() { Logger.log(JSON.stringify(selfUpdate(PropertiesService.getScriptProperties(), new Date(), true))); }
 
 /* ---------- database rules: kept in step with the app automatically ----------
    The app's site publishes firestore.rules next to the app. Every 15 minutes this reads it, and if it has changed
@@ -586,6 +644,7 @@ function vSay(e, h) {
 function voiceDo(h, action, b) {
   const now = new Date(), hid = h._id, today = keyOf(now);
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
+  if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'ping') return { ok: true, version: HELPER_VERSION, people: vPeople(h).map(function (p) { return p.name; }) };
 
   if (action === 'shop_add') {

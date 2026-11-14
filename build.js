@@ -27,6 +27,8 @@ fs.writeFileSync(path.join(out, 'index.html'), html);
 fs.mkdirSync(path.join(out, 'lib'), { recursive: true });
 fs.writeFileSync(path.join(out, LIBFILES.globe), globeLib); fs.writeFileSync(path.join(out, LIBFILES.cards), cardsLib);
 fs.writeFileSync(path.join(out, 'version.json'), JSON.stringify({ version }));
+// the Reminder helper reads these to update itself (it fills in the project id and app address on its side)
+fs.writeFileSync(path.join(out, 'helper.gs'), helperCode()); fs.writeFileSync(path.join(out, 'helper-manifest.json'), fs.readFileSync('notifier/appsscript.json', 'utf8'));
 fs.writeFileSync(path.join(out, 'sw.js'), fs.readFileSync('src/sw.js', 'utf8').replace('__VERSION__', version).replace('__LIBS__', JSON.stringify(Object.values(LIBFILES))));
 for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'privacy.html', 'earth-day.jpg', 'earth-night.jpg']) fs.copyFileSync(path.join('src', f), path.join(out, f));
 fs.mkdirSync(path.join(out, 'lib'), { recursive: true });

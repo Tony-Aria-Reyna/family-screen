@@ -518,7 +518,7 @@ function aiSetup(update){
       ${!h||!h.url?`<p class="note">Meal ideas also need the calendar helper (⚙️ → 🔗 Connect calendars).</p>`:update?`<p class="note">Your calendar helper is older than this feature. Copy its new code, paste it over the old code at script.google.com, then Deploy → Manage deployments → ✏️ → New version, and save the key again.</p>`:''}
       ${h&&h.url?'<button class="xbtn" id="cp" style="margin-top:6px">Copy calendar helper code</button>':''}</div>
     ${msg?`<p class="note" style="color:#b45309;font-weight:700">${esc(msg)}</p>`:''}
-    <p class="note" style="margin-top:10px">Both keys are kept in the family database where only your family's signed-in Google accounts can reach them, never on GitHub or the website. Alexa and bills need the Reminder helper on version 13 to use Claude.</p>`;
+    <p class="note" style="margin-top:10px">Both keys are kept in the family database where only your family's signed-in Google accounts can reach them, never on GitHub or the website. Alexa and bills need the Reminder helper on version 16 to use Claude.</p>`;
     m.querySelector('#c').onclick=close;
     m.querySelectorAll('[data-prov]').forEach(b=>b.onclick=()=>{ S.aiProv=b.dataset.prov==='claude'?'claude':''; save(); test=''; draw(); });
     m.querySelectorAll('[data-cm]').forEach(b=>b.onclick=()=>{ S.aiClaudeModel=b.dataset.cm; save(); test=''; draw(); });
@@ -943,9 +943,9 @@ function openAlexa(){
       try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'ping'}),redirect:'follow'}); const t=await r.text(); let j={}; try{ j=JSON.parse(t); }catch(e){ j={}; }
         test = (j.helper===2||/helper key ends/.test(j.error||''))
             ? '⚠️ That’s the Calendar & AI helper. You need the web app address of the OTHER project — Family Screen Helper (the reminder one).'
-          : j.ok&&j.version>=15 ? '✅ Reminder helper answered (version '+j.version+')'
-          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 15 first, then deploy a new version.'
-          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 15), then Deploy → New version.'
+          : j.ok&&j.version>=16 ? '✅ Reminder helper answered (version '+j.version+')'
+          : j.ok ? '⚠️ That helper is on version '+(j.version||'?')+'. Update the Reminder helper to version 16 first, then deploy a new version.'
+          : /not allowed/.test(j.error||'') ? '⚠️ It answered, but didn’t accept this key. Paste the helper code again (it must be version 16), then Deploy → New version.'
           : /doPost|not found|Script function/i.test(t) ? '⚠️ That project has no voice endpoint yet: it’s the wrong project, or still on an older version.'
           : '⚠️ '+(j.error||'Unexpected answer. Check you pasted the /exec address.'); }
       catch(e){ test='⚠️ Couldn’t reach it. Check the address and that access is set to Anyone.'; } draw(); };
