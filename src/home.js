@@ -240,10 +240,12 @@ const RECIPE_RULES=`Rules for every recipe: metric units only (g, ml, tsp, tbsp,
 /* ---- talking to Gemini. With the family's key in hand the app calls Gemini itself, word by word (fast); otherwise it
    goes through the Google helper. Thinking is kept low: these are quick jobs. ---- */
 const AI_MODEL_DEFAULT='gemini-3.6-flash';
+// models that hung recently are skipped for 12 hours (the newest one is sometimes overloaded on the free tier)
+function aiBad(){ const b=lsGet('fs.aiBad',{})||{}, now=Date.now(); Object.keys(b).forEach(k=>{ if(now-b[k]>12*3600e3) delete b[k]; }); return b; }
 async function aiModel(key,force){
-  const saved=lsGet('fs.aiModel',''); if(saved&&!force) return saved;
+  const bad=aiBad(), saved=lsGet('fs.aiModel',''); if(saved&&!force&&!bad[saved]) return saved;
   try{ const c=new AbortController(), tm=setTimeout(()=>c.abort(),8000); const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':key},signal:c.signal}); const j=await r.json(); clearTimeout(tm);
-    const ok=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/gemini-[\d.]+-flash$/.test(m.name)).map(m=>m.name.replace('models/','')).sort((a,b)=>parseFloat(b.split('-')[1])-parseFloat(a.split('-')[1]));
+    const ok=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/gemini-[\d.]+-flash$/.test(m.name)).map(m=>m.name.replace('models/','')).sort((a,b)=>parseFloat(b.split('-')[1])-parseFloat(a.split('-')[1])).filter(m=>!bad[m]);
     if(ok.length){ lsSet('fs.aiModel',ok[0]); return ok[0]; } }catch(e){}
   return AI_MODEL_DEFAULT;
 }
@@ -274,11 +276,13 @@ async function aiDirect(key,payload,onText,tried){
   const body={contents:[{role:'user',parts}],generationConfig:gc}; if(payload.url&&!tried.url) body.tools=[{url_context:{}}];
   const model=await aiModel(key);
   const ctl=new AbortController(); payload.abort=ctl;
-  // never wait for ever: give up if Gemini has not started answering in 25 seconds, or goes quiet for 30
-  let slow=false, timer=setTimeout(()=>{ slow=true; ctl.abort(); },25000); const kick=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ slow=true; ctl.abort(); },30000); };
+  // never wait for ever: if this model has not started answering in 15 seconds, set it aside and try the next one down (twice at most); give up if it goes quiet for 30
+  let slow=false, timer=setTimeout(()=>{ slow=true; ctl.abort(); },15000); const kick=()=>{ clearTimeout(timer); timer=setTimeout(()=>{ slow=true; ctl.abort(); },30000); };
   const tooSlow='Gemini took too long to answer. Try again, or switch to Claude in ✨ AI.';
   let r; try{ r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:ctl.signal}); }
-  catch(e){ clearTimeout(timer); if(slow) throw new Error(tooSlow); if(e.name==='AbortError') throw new Error('quiet'); throw new Error('Could not reach Gemini. Check the internet and try again.'); }
+  catch(e){ clearTimeout(timer);
+    if(slow&&(tried.slow||0)<2){ tried.slow=(tried.slow||0)+1; const b=aiBad(); b[model]=Date.now(); lsSet('fs.aiBad',b); await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
+    if(slow) throw new Error(tooSlow); if(e.name==='AbortError') throw new Error('quiet'); throw new Error('Could not reach Gemini. Check the internet and try again.'); }
   kick();
   if(!r.ok){ clearTimeout(timer); const t=await r.text().catch(()=>''); 
     if(r.status===404&&!tried.model){ tried.model=true; await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
