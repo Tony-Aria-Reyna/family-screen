@@ -281,10 +281,12 @@ async function aiDirect(key,payload,onText,tried){
   const tooSlow='Gemini took too long to answer. Try again, or switch to Claude in ✨ AI.';
   let r; try{ r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:ctl.signal}); }
   catch(e){ clearTimeout(timer);
-    if(slow&&(tried.slow||0)<2){ tried.slow=(tried.slow||0)+1; const b=aiBad(); b[model]=Date.now(); lsSet('fs.aiBad',b); await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
+    if(slow&&(tried.slow||0)<3){ tried.slow=(tried.slow||0)+1; const b=aiBad(); b[model]=Date.now(); lsSet('fs.aiBad',b); await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
     if(slow) throw new Error(tooSlow); if(e.name==='AbortError') throw new Error('quiet'); throw new Error('Could not reach Gemini. Check the internet and try again.'); }
   kick();
   if(!r.ok){ clearTimeout(timer); const t=await r.text().catch(()=>''); 
+    // overloaded ("high demand"): set this model aside for an hour and use the next one down
+    if((r.status===503||r.status===500||r.status===529)&&(tried.slow||0)<3){ tried.slow=(tried.slow||0)+1; const b=aiBad(); b[model]=Date.now()-11*3600e3; lsSet('fs.aiBad',b); await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
     if(r.status===404&&!tried.model){ tried.model=true; await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
     if(r.status===400&&/think/i.test(t)&&!tried.think){ tried.think=true; return aiDirect(key,payload,onText,tried); }
     if(r.status===400&&/url_context|tool/i.test(t)&&!tried.url){ tried.url=true; return aiDirect(key,payload,onText,tried); }
