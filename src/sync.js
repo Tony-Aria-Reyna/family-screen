@@ -13,7 +13,7 @@ const COLS = ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', '
 const SOFT = ['gifts'];
 // newer lists: if the database rules haven't been updated yet, they just don't sync (and we say so) rather than locking the app
 const NEWER = ['recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs'];
-let rulesOld = false;
+let rulesOld = false; const denied = new Set();   // a list the database rules don't allow yet is skipped on its own, so the others keep syncing
 export const needsRules = () => rulesOld;
 
 let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null, devices = {}, notifier = null;
@@ -72,6 +72,7 @@ export const removeMember = email => updateDoc(doc(db, 'households', hid), { mem
 
 export function start(householdId, state, changed) {
   stop(); hid = householdId; S = state; onChange = changed;
+  denied.clear(); rulesOld = false;
   synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
   privOk = true;
   unsub.push(onSnapshot(doc(db, 'households', hid), snap => {
@@ -93,7 +94,7 @@ export function start(householdId, state, changed) {
       mergeArray(S[c], list);
       const m = synced.cols[c]; m.clear(); S[c].forEach(x => { if (!(PRIV.includes(c) && x.priv)) m.set(x.id, JSON.stringify(clean(x))); });
       onChange(c);
-    }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { rulesOld = true; console.warn(c + ': database rules need updating'); onChange('rulesold'); } else onChange('error', err); }));
+    }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { denied.add(c); console.warn(c + ': database rules need updating'); onChange('rulesold', c); } else onChange('error', err); }));
   }
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
   if (me()) for (const c of PRIV) unsub.push(onSnapshot(collection(db, 'households', hid, 'private', me(), c), snap => {
@@ -142,7 +143,7 @@ export function push() {
   if (pops.length) { const b = writeBatch(db); pops.forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : b.delete(ref)); b.commit().catch(e => { privOk = false; onChange('privoff', e); }); }
   const nops = [];
   for (const c of COLS.concat(SOFT.filter(c => softOk[c]))) {
-    if (NEWER.includes(c) && rulesOld) continue;
+    if (NEWER.includes(c) && (rulesOld || denied.has(c))) continue;
     const ops0 = ops, ops1 = NEWER.includes(c) || SOFT.includes(c) ? nops : ops0;
     const m = synced.cols[c], seen = new Set();
     for (const x of (S[c] || [])) {

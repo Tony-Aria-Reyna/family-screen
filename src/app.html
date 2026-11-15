@@ -2942,7 +2942,7 @@ let privWarned=false, rulesWarned=false;
 let syncDead=false;
 function syncChanged(what,err){
   if(syncDead) return;   // once this device has been shut out, nothing else may hide that screen
-  if(what==='rulesold'){ if(!rulesWarned){ rulesWarned=true; toast('Meals and renewals can’t sync yet: update the reminder helper (⚙️ → 🔔 Notifications) and it fixes the database rules by itself'); } return; }
+  if(what==='rulesold'){ const nw=['inbox','msgs'].includes(err); if(!rulesWarned&&!nw){ rulesWarned=true; toast('Some lists can’t sync yet: the reminder helper updates the database rules by itself within 15 minutes'); } return; }
   if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: update the reminder helper (⚙️ → 🔔 Notifications) and it fixes the database rules by itself'); } return; }
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ syncDead=true; SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
