@@ -6142,8 +6142,10 @@ function initSplits(){
   addEventListener('resize',applyLayout); applyLayout();
 }
 // app shortcuts (long-press the app icon): ?open=cards|shop|add|where
-let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open'); if(v){ const q=new URLSearchParams(location.search); q.delete('open'); history.replaceState(history.state,'',location.pathname+(q.toString()?'?'+q:'')); } return v; }catch(e){ return null; } })();
-function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
+let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open'); if(v){ const q=new URLSearchParams(location.search); q.delete('open'); history.replaceState(history.state,'',location.pathname+(q.toString()?'?'+q:'')); sessionStorage.setItem('fs.open',v); }
+  // kept until it has been shown, so it survives the reload the app does when it finds a newer version of itself
+  return v||sessionStorage.getItem('fs.open'); }catch(e){ return null; } })();
+function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null; try{ sessionStorage.removeItem('fs.open'); }catch(e){}
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); }
     else if(a==='inbox') openInbox(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
@@ -6167,7 +6169,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwh5xoaj';
+const FS_VERSION='fs-mwh63uuk';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
