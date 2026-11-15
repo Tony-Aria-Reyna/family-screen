@@ -38,7 +38,9 @@ const asked = function (h, what) {
   a['asked_' + what] = 1; h.attributesManager.setSessionAttributes(a); return false;
 };
 const elicit = function (h, name, prompt) { return h.responseBuilder.speak(prompt).reprompt(prompt).addElicitSlotDirective(name).getResponse(); };
-const answer = function (h, r) { return h.responseBuilder.speak(r.ssml || r.speech).withSimpleCard('Family Screen', r.speech).getResponse(); };
+// Alexa reads speech as SSML, so a bare & or < ("Mummy & Daddy") breaks the whole reply: spell them out
+const safe = function (t) { return String(t || '').replace(/\s*&\s*/g, ' and ').replace(/[<>]/g, ' '); };
+const answer = function (h, r) { return h.responseBuilder.speak(r.ssml || safe(r.speech)).withSimpleCard('Family Screen', r.speech).getResponse(); };
 const run = function (h, body) { body.person_id = who(h); return post(body).then(function (r) { return answer(h, r.speech ? r : { speech: r.error === 'not allowed' ? 'The voice key does not match. Copy the skill code from the app again.' : 'Sorry, I could not reach the family screen.' }); }); };
 const named = function (h) { const p = slot(h, 'person'); return p; };
 const peopleList = PEOPLE.length < 2 ? '' : PEOPLE.slice(0, -1).join(', ') + ' or ' + PEOPLE[PEOPLE.length - 1];
@@ -109,7 +111,7 @@ H.AddEvent = {
     const body = { action: 'event_add', title: title, date: when, time: time, person: /everyone|all of us|all/i.test(person) ? '' : person };
     const a = h.attributesManager.getSessionAttributes() || {}; a.pending = body; h.attributesManager.setSessionAttributes(a);
     const said = title + (when ? ', ' + (when === todayKey() ? 'today' : when === todayKey(1) ? 'tomorrow' : 'on ' + when) : '') + (time ? ' at ' + sayTime(time) : '') + (body.person ? ', for ' + body.person : '');
-    return h.responseBuilder.speak(said + '. Shall I add that?').reprompt('Shall I add that? Say yes or no.').getResponse();
+    return h.responseBuilder.speak(safe(said) + '. Shall I add that?').reprompt('Shall I add that? Say yes or no.').getResponse();
   }
 };
 const todayKey = function (plus) { const d = new Date(Date.now() + (plus || 0) * 864e5 + 13 * 36e5); return d.toISOString().slice(0, 10); };

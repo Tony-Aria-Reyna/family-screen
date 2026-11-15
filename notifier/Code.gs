@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 18;
+const HELPER_VERSION = 19;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -805,7 +805,10 @@ function voiceDo(h, action, b) {
       for (let i = 0; i < 7; i++) { const k = keyOf(addDays(now, i)), e = vEventsOn(h, k); if (e.length) lines.push(vDay(k, now) + ', ' + vList(e.slice(0, 3).map(function (x) { return vSay(x, h); }))); }
       return { speech: lines.length ? 'This week: ' + lines.join('. ') + '.' : 'Nothing in the calendar for the next week.' };
     }
-    const key = vDate(b.date, now), evs = vEventsOn(h, key);
+    let key = vDate(b.date, now);
+    // Alexa works out "today" on the device's own clock; one set to an overseas time zone sends yesterday's date
+    if (key === keyOf(addDays(now, -1))) key = keyOf(now);
+    const evs = vEventsOn(h, key);
     if (!evs.length) return { speech: 'Nothing in the calendar for ' + vDay(key, now) + '.' };
     return { speech: vDay(key, now).charAt(0).toUpperCase() + vDay(key, now).slice(1) + ': ' + vList(evs.slice(0, 6).map(function (e) { return vSay(e, h); })) + '.' };
   }
