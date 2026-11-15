@@ -82,7 +82,7 @@ function selfUpdate(props, now, force) {
         const txt = x.getContentText();
         if (x.getResponseCode() !== 200) {
           if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(txt)) throw new Error('Turn on the Google Apps Script API: script.google.com/home/usersettings');
-          if (/insufficient authentication scopes/i.test(txt)) throw new Error('Not given permission yet: paste the settings file (appsscript.json), then run updateNow in the editor and press Allow');
+          if (/insufficient authentication scopes/i.test(txt)) throw new Error('Not given permission yet: run updateNow in the editor, click Review permissions, tick Select all, then Continue');
           throw new Error('Apps Script ' + x.getResponseCode() + ': ' + txt.slice(0, 200));
         }
         return JSON.parse(txt || '{}');
@@ -114,7 +114,10 @@ function selfUpdate(props, now, force) {
   return report;
 }
 /* run this by hand in the editor to check for an update straight away */
-function updateNow() { Logger.log(JSON.stringify(selfUpdate(PropertiesService.getScriptProperties(), new Date(), true))); }
+function updateNow() {
+  // Google's permission screen has a tick box for each permission. If one was left unticked, this asks again.
+  if (ScriptApp.requireAllScopes) ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
+  Logger.log(JSON.stringify(selfUpdate(PropertiesService.getScriptProperties(), new Date(), true))); }
 
 /* ---------- database rules: kept in step with the app automatically ----------
    The app's site publishes firestore.rules next to the app. Every 15 minutes this reads it, and if it has changed
