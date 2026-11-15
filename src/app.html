@@ -3228,7 +3228,8 @@ function initSplits(){
 let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open'); if(v){ const q=new URLSearchParams(location.search); q.delete('open'); history.replaceState(history.state,'',location.pathname+(q.toString()?'?'+q:'')); } return v; }catch(e){ return null; } })();
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null;
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
-    else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); } },300); }
+    else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); }
+    else if(a==='inbox') openInbox(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
 function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
 $('#addBtn').onclick=()=>openAdd(null);
 $('#setBtn').onclick=()=>requirePin(openSettings);
@@ -3266,6 +3267,8 @@ setInterval(checkUpdate,5*60e3); setTimeout(checkUpdate,20e3);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkUpdate(); });
 let lastDay=dk(new Date()); setInterval(()=>{ if(dk(new Date())!==lastDay){ lastDay=dk(new Date()); renderCal(); renderTodo(); } },60000);
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+// tapping a notification while the app is already open: the service worker tells us what to show
+if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',e=>{ if(e.data&&e.data.open){ launchAct=e.data.open; if(S.people.length) runLaunch(); } });
 </script>
 </body>
 </html>

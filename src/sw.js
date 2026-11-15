@@ -29,10 +29,14 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { data: { title: 'Family Screen', body: e.data ? e.data.text() : '' } }; }
   const m = Object.assign({}, d.notification || {}, d.data || {});
-  e.waitUntil(self.registration.showNotification(m.title || 'Family Screen', { body: m.body || '', tag: m.tag || undefined, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || './' }, renotify: !!m.tag }));
+  e.waitUntil(self.registration.showNotification(m.title || 'Family Screen', { body: m.body || '', tag: m.tag || undefined, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || './', open: /^msg-/.test(m.tag || '') ? 'msg:' + m.tag.slice(4) : m.tag === 'inbox' ? 'inbox' : '' }, renotify: !!m.tag }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || './';
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => { for (const c of cs) { if ('focus' in c) return c.focus(); } return self.clients.openWindow(url); }));
+  const d = e.notification.data || {}, open = d.open || '';
+  // a message or inbox notification opens that thing: tell the app if it is already running, otherwise start it there
+  const url = open ? './?open=' + encodeURIComponent(open) : (d.url || './');
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ('focus' in c) { if (open) c.postMessage({ open }); return c.focus(); } }
+    return self.clients.openWindow(url); }));
 });
