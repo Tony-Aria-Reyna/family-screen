@@ -1,6 +1,6 @@
 const fs=require('fs');
 const code=fs.readFileSync('notifier/Code.gs','utf8').replace("'__PROJECT_ID__'","'ross-family-planner'").replace("'__APP_URL__'","'https://tony-aria-reyna.github.io/family-screen/index.html'");
-const remote=fs.readFileSync('dist/helper.gs','utf8').replace('HELPER_VERSION = 16','HELPER_VERSION = 17');
+const remote=fs.readFileSync('dist/helper.gs','utf8').replace('HELPER_VERSION = 18','HELPER_VERSION = 19');
 const man=fs.readFileSync('notifier/appsscript.json','utf8');
 let manRemote=man, apiOn=true; const log=[]; const PP={};
 let files=[{name:'Code',type:'SERVER_JS',source:code},{name:'appsscript',type:'JSON',source:man}];
@@ -15,7 +15,7 @@ global.UrlFetchApp={fetch:(u,o={})=>{ const m=(o.method||'get').toUpperCase(); l
   if(/\/deployments\/WEB1$/.test(u)) return resp(200,JSON.stringify(JSON.parse(o.payload)));
   return resp(404,'?'); }};
 global.PropertiesService={getScriptProperties:()=>({getProperty:k=>PP[k]||null,setProperty:(k,v)=>{PP[k]=v}})};
-global.ScriptApp={getScriptId:()=>'SID',getOAuthToken:()=>'TOK'};
+global.headers=()=>({Authorization:'Bearer TOK'});global.ScriptApp={getScriptId:()=>'SID',getOAuthToken:()=>'TOK'};
 global.Logger={log:console.log};
 eval("const HELPER_VERSION=16, PROJECT_ID='ross-family-planner', APP_URL='https://tony-aria-reyna.github.io/family-screen/index.html';"+code.match(/function selfUpdate[\s\S]*?\n}\n/)[0]+';global.selfUpdate=selfUpdate;');
 const P=PropertiesService.getScriptProperties();

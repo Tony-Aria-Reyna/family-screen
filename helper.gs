@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 17;
+const HELPER_VERSION = 18;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -76,12 +76,12 @@ function selfUpdate(props, now, force) {
     if (v > HELPER_VERSION) {
       if (!/function tick\(/.test(code) || !/function doPost\(/.test(code) || !/function selfUpdate\(/.test(code)) throw new Error('The new helper.gs does not look right, so it was not installed');
       const src = code.replace("'__PROJECT_ID__'", "'" + PROJECT_ID + "'").replace("'__APP_URL__'", "'" + APP_URL + "'");
-      const api = 'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId(), H = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+      const api = 'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId(), H = headers();   // counted against the family's own Firebase project, where the Apps Script API is switched on
       const call = function (method, url, body) {
         const x = UrlFetchApp.fetch(url, { method: method, contentType: 'application/json', headers: H, muteHttpExceptions: true, payload: body ? JSON.stringify(body) : undefined });
         const txt = x.getContentText();
         if (x.getResponseCode() !== 200) {
-          if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(txt)) throw new Error('Turn on the Google Apps Script API: script.google.com/home/usersettings');
+          if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(txt)) throw new Error(/usersettings|User has not enabled/i.test(txt) ? 'Turn on the Google Apps Script API: script.google.com/home/usersettings' : 'Switch on the Apps Script API for the family project: console.cloud.google.com/apis/library/script.googleapis.com?project=' + PROJECT_ID);
           if (/insufficient authentication scopes/i.test(txt)) throw new Error('Not given permission yet: run updateNow in the editor, click Review permissions, tick Select all, then Continue');
           throw new Error('Apps Script ' + x.getResponseCode() + ': ' + txt.slice(0, 200));
         }
