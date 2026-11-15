@@ -711,21 +711,28 @@ function billReport(){
     <div class="step">By type</div>${cats.map(([c,v])=>`<div class="bcat"><span>${BILL_ICON[c]||'🧾'} ${esc(c)}</span><i style="width:${Math.round(v/(cats[0][1]||1)*100)}%"></i><b>${$m(v)}</b></div>`).join('')||'<p class="note">No bills this year yet.</p>'}
     <div class="step">Every bill in ${billYear}</div><table class="btab"><tr><th>Due</th><th>Biller</th><th>Amount</th><th>Status</th><th></th></tr>${bs.sort((a,b)=>(b.due||b.date).localeCompare(a.due||a.date)).map(b=>`<tr><td>${b.due?fmtD(kd(b.due),{day:'numeric',month:'short'}):''}</td><td>${billIcon(b)} ${esc(b.biller)}</td><td>${$m(b.amount)}</td><td>${b.status==='paid'?'✅ Paid':b.directDebit?'💳 Debit':'To pay'}</td><td>${b.pdf&&b.pdf.link?`<a href="${esc(b.pdf.link)}" target="_blank" rel="noopener">📄</a>`:''}</td></tr>`).join('')}</table>`;
 }
+/* ask the Reminder helper to do one thing now; null if it didn't answer */
+async function helperDo(action){ if(!(S.voiceUrl&&S.voiceKey)) return null;
+  try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action}),redirect:'follow'}); return await r.json(); }catch(e){ return null; } }
+let billsNudgeT=0;
+function billsNudge(){ clearTimeout(billsNudgeT); billsNudgeT=setTimeout(()=>{ helperDo('bills_tidy'); },4000); }
 function billSetupHTML(){
-  const hp=S.billsHelper, ok=hp&&hp.lastRun&&Date.now()-hp.lastRun<30*60e3;
+  const hp=S.billsHelper, ok=hp&&hp.lastRun&&Date.now()-hp.lastRun<26*3600e3;
   return `<div class="rform"><label>Bills email address <small>(a “+bills” version of the Gmail that runs your reminder helper, e.g. yourname+bills@gmail.com. Send or forward bills here.)</small><input class="txt" id="be" type="email" value="${esc(S.billEmail||'')}" placeholder="yourname+bills@gmail.com"></label>
     <label>Google Drive folder for bills <small>(made for you if it doesn't exist)</small><input class="txt" id="br" value="${esc(S.billsRoot||'Household Bills')}"></label>
     <div><button class="save" id="bs" style="border-radius:14px;padding:12px 20px;font-weight:800">Save</button></div></div>
-    <div class="srccard" style="margin-top:12px"><h4>🤖 Bills helper ${ok?`<span class="pill-ok">✓ checked ${fmtTime(new Date(hp.lastRun),'Pacific/Auckland')}</span>`:'<span class="pill-wait">waiting</span>'}</h4>
+    <div class="srccard" style="margin-top:12px"><h4>🤖 Bills helper ${ok?`<span class="pill-ok">✓ checked ${new Date(hp.lastRun).toLocaleString('en-NZ',{weekday:'short',hour:'numeric',minute:'2-digit'})}</span>`:'<span class="pill-wait">waiting</span>'}</h4>
       ${hp&&hp.error?`<p class="note" style="color:var(--danger)">⚠️ ${esc(hp.error)}</p>`:''}
       <p class="note">Bills are read by your reminder helper (version 9 or newer) in your Google account. ⚙️ → 🧰 Helpers has the code and the one-off steps.${S.aiKeyTail?'':' It also needs your Gemini key (⚙️ → ✨ AI).'}</p>
-      <button class="xbtn" id="bh">🧰 Open Helpers</button></div>`;
+      <p class="note">New bills are read once a day, at about 6am. Sent one just now? Tap the button.</p>
+      ${S.voiceUrl&&S.voiceKey&&S.billEmail?'<button class="xbtn" id="bck">🔄 Check for new bills now</button> ':''}<button class="xbtn" id="bh">🧰 Open Helpers</button></div>`;
 }
 function wireBillSetup(m,draw){
   m.querySelector('#bs').onclick=()=>{ const e=m.querySelector('#be').value.trim().toLowerCase(), r=m.querySelector('#br').value.trim()||'Household Bills';
     if(e&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('That email address doesn’t look right'); return; }
     if(e&&!/\+/.test(e)&&!confirm('This address has no “+” part, so the helper will read every email sent to it as a possible bill. Use it anyway?')) return;
-    S.billEmail=e; S.billsRoot=r; save(); toast('Saved. The helper checks every 10 minutes.'); draw(); };
+    S.billEmail=e; S.billsRoot=r; save(); toast('Saved. The helper reads new bills once a day, or when you tap Check now.'); draw(); };
+  { const ck=m.querySelector('#bck'); if(ck) ck.onclick=async()=>{ ck.disabled=true; ck.textContent='🔄 Checking…'; const j=await helperDo('bills_check'); toast(j?(j.speech||j.error||'Done'):'The helper didn’t answer. Try again in a minute.'); draw(); }; }
   m.querySelector('#bh').onclick=()=>{ closeModal(); openHelpers(); };
 }
 // one bill: check it (and choose its folder), mark it paid, or fix the details
@@ -753,7 +760,7 @@ function openBill(b0){
     const grab=()=>{ const v=id=>m.querySelector(id).value; b.biller=v('#bb').trim(); b.amount=Math.round(parseFloat(v('#ba').replace(/[$,\s]/g,''))*100)||0; b.due=v('#bd'); b.category=v('#bc'); b.period=v('#bp').trim(); b.reference=v('#bref').trim(); b.directDebit=m.querySelector('#bdd').checked; };
     const keep=()=>{ grab(); if(!b.biller){ toast('Who is the bill from?'); return false; } if(!b.amount){ toast('Type the amount'); return false; } if(!b.due){ toast('Pick the due date'); return false; }
       if(b.pdf&&b.pdf.driveId&&folder) b.fileTo=folder.replace(/\/+$/,'');
-      S.bills=S.bills||[]; if(isNew) S.bills.push(Object.assign({id:'hand-'+uid(),at:Date.now(),date:dk(new Date())},b)); else Object.assign(b0,b); save(); renderAll(); return true; };
+      S.bills=S.bills||[]; if(isNew) S.bills.push(Object.assign({id:'hand-'+uid(),at:Date.now(),date:dk(new Date())},b)); else Object.assign(b0,b); save(); renderAll(); billsNudge(); return true; };
     m.querySelector('#bk').onclick=()=>{ close(); openBills(); };
     const fs=m.querySelector('#fs'); if(fs) fs.onclick=()=>{ grab(); folder=suggestFolder(b); pickF=false; draw(); };
     const fp=m.querySelector('#fp'); if(fp) fp.onclick=()=>{ grab(); pickF=!pickF; draw(); };
@@ -764,7 +771,7 @@ function openBill(b0){
     const sv=m.querySelector('#bsv'); if(sv) sv.onclick=()=>{ if(keep()){ close(); toast('Saved'); if(isNew) openBills('due'); } };
     const un=m.querySelector('#bun'); if(un) un.onclick=()=>{ b0.status='due'; delete b0.paidAt; delete b0.paidHow; delete b0.paidBy; save(); close(); renderAll(); openBills('due'); };
     const pd=m.querySelector('#bpd'); if(pd) pd.onclick=()=>{ if(!keep()) return; close(); modal((m2,c2)=>{ m2.innerHTML=`<h2>✅ ${esc(b0.biller)} ${$m(b0.amount)} paid</h2><div class="step">How?</div><div class="opts">${PAY_HOW.map(h=>`<button class="opt" data-h="${h}">${h}</button>`).join('')}</div><div class="mact"><button class="cancel" id="c">Cancel</button></div>`;
-      m2.querySelector('#c').onclick=c2; m2.querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>{ b0.status='paid'; b0.paidAt=Date.now(); b0.paidHow=x.dataset.h; b0.paidBy=mePerson()||SYNC.me&&SYNC.me()||''; save(); c2(); renderAll(); toast('Marked paid'); openBills('due'); }); }); };
+      m2.querySelector('#c').onclick=c2; m2.querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>{ b0.status='paid'; b0.paidAt=Date.now(); b0.paidHow=x.dataset.h; b0.paidBy=mePerson()||SYNC.me&&SYNC.me()||''; save(); billsNudge(); c2(); renderAll(); toast('Marked paid'); openBills('due'); }); }); };
   }; draw(); });
 }
 
@@ -1127,19 +1134,20 @@ function openInbox(){
       const docs=(S.inbox||[]).filter(d=>d.status==='new'||d.status==='done'||d.status==='none').sort((a,b)=>(a.status==='new'?0:1)-(b.status==='new'?0:1)||b.at-a.at).slice(0,25), ih=S.inboxHelper;
       const when=it=>it.type==='event'?fmtD(kd(it.date),{weekday:'short',day:'numeric',month:'short'})+(it.time?' · '+t12(it.time):''):it.due?'by '+fmtD(kd(it.due),{weekday:'short',day:'numeric',month:'short'}):'';
       m.innerHTML=`<div class="tvhead"><h2>📥 Family inbox</h2><span><button class="cancel" id="st">⚙️ Setup</button> <button class="cancel" id="x">Close</button></span></div>
-        ${setup?`<div class="rform ibset"><label>Family inbox address <small>(a “+” version of the Gmail that runs your Reminder helper, e.g. yourname+family@gmail.com. Forward anything here: the teacher’s weekly note, invitations, club newsletters, appointments. Bills sent here are passed on to Bills.)</small><input id="ia" type="email" value="${esc(S.inboxEmail||'')}" placeholder="yourname+family@gmail.com"></label><div class="row"><button class="save" id="isv">Save</button>${S.voiceUrl&&S.voiceKey&&S.inboxEmail?'<button class="cancel" id="ick">🔄 Check for new emails now</button>':''}</div>
-          <p class="note">The helper checks every 10 minutes. Nothing goes on the calendar until someone taps Add. ${ih&&ih.lastRun?'Last checked '+new Date(ih.lastRun).toLocaleString()+'.':'Needs the Reminder helper on version 17 or later.'}</p></div>`:''}
+        ${setup?`<div class="rform ibset"><label>Family inbox address <small>(a “+” version of the Gmail that runs your Reminder helper, e.g. yourname+family@gmail.com. Forward anything here: the teacher’s weekly note, invitations, club newsletters, appointments. Bills sent here are passed on to Bills.)</small><input id="ia" type="email" value="${esc(S.inboxEmail||'')}" placeholder="yourname+family@gmail.com"></label><div class="row"><button class="save" id="isv">Save</button></div>
+          <p class="note">The helper reads new emails once a day, at about 6am, or straight away when you tap Check now. Nothing goes on the calendar until someone taps Add. ${ih&&ih.lastRun?'Last checked '+new Date(ih.lastRun).toLocaleString()+'.':'Needs the Reminder helper on version 17 or later.'}</p></div>`:''}
         ${ih&&ih.error?`<p class="note" style="color:var(--danger)">📥 ${esc(ih.error)}</p>`:''}
+        ${S.voiceUrl&&S.voiceKey&&S.inboxEmail?'<div class="row" style="margin:10px 0"><button class="cancel" id="ick">🔄 Check for new emails now</button></div>':''}
         ${docs.length?docs.map(d=>{ const its=d.items||[], open=its.filter(i=>i.state==='new');
           return `<div class="ibcard ${d.status==='new'?'':'old'}"><div class="ibtop"><b>${esc(d.sender||d.fromEmail&&d.fromEmail.from||'Email')}</b><small>${esc(d.fromEmail&&d.fromEmail.subject||'')} · ${fmtD(new Date(d.at),{day:'numeric',month:'short'})}</small></div>
             <p class="note">${esc(d.summary||'')}</p>
             ${its.map(it=>`<div class="ibit ${it.state}"><span class="ibic">${it.type==='event'?'📅':'✅'}</span><span class="ibmid"><b>${esc(it.title)}</b><small>${esc([when(it),it.note].filter(Boolean).join(' · '))}</small></span>
               ${it.state==='new'?`<select data-who="${d.id}|${it.id}" aria-label="Who">${it.type==='event'?'':'<option value="">Anyone</option>'}${S.people.filter(p=>it.type==='event'||p.id!=='all').map(p=>`<option value="${p.id}" ${p.id===(it.who||(it.type==='event'?'all':''))?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class="save" data-add="${d.id}|${it.id}">Add</button><button class="cancel" data-skip="${d.id}|${it.id}" aria-label="Skip">✕</button>`:`<small class="ibst">${it.state==='added'?'Added ✓':'Skipped'}</small>`}</div>`).join('')}
             <div class="row ibact">${open.length>1?`<button class="save" data-all="${d.id}">Add all ${open.length}</button>`:''}${d.fromEmail&&d.fromEmail.link?`<a class="cancel alink" href="${esc(d.fromEmail.link)}" target="_blank" rel="noopener">Open the email</a>`:''}${d.status==='new'?`<button class="cancel" data-done="${d.id}">Done with this one</button>`:''}</div></div>`; }).join('')
-          :`<p class="note" style="margin-top:14px">${S.inboxEmail?'Nothing yet. Forward an email to <b>'+esc(S.inboxEmail)+'</b> and it shows up here within 10 minutes.':'Set the address above to get started.'}</p>`}`;
+          :`<p class="note" style="margin-top:14px">${S.inboxEmail?'Nothing yet. Forward an email to <b>'+esc(S.inboxEmail)+'</b> and tap Check now. Otherwise it shows up after the 6am read.':'Set the address above to get started.'}</p>`}`;
       m.querySelector('#x').onclick=close; m.querySelector('#st').onclick=()=>{ setup=!setup; draw(); };
-      const sv=m.querySelector('#isv'); if(sv) sv.onclick=()=>{ const e=m.querySelector('#ia').value.trim().toLowerCase(); if(e&&!/^[^\s@]+\+[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('Use a “+” address, like yourname+family@gmail.com'); return; } if(e&&e===String(S.billEmail||'').toLowerCase()){ toast('Use a different address from the bills one'); return; } S.inboxEmail=e; save(); toast(e?'Saved. The helper checks every 10 minutes.':'Inbox turned off'); setup=!e; draw(); };
-      const ck=m.querySelector('#ick'); if(ck) ck.onclick=async()=>{ ck.disabled=true; ck.textContent='🔄 Checking…'; try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'inbox_check'}),redirect:'follow'}); const j=await r.json(); toast(j.speech||j.error||'Done'); }catch(e){ toast('The helper didn’t answer'); } setup=false; draw(); };
+      const sv=m.querySelector('#isv'); if(sv) sv.onclick=()=>{ const e=m.querySelector('#ia').value.trim().toLowerCase(); if(e&&!/^[^\s@]+\+[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('Use a “+” address, like yourname+family@gmail.com'); return; } if(e&&e===String(S.billEmail||'').toLowerCase()){ toast('Use a different address from the bills one'); return; } S.inboxEmail=e; save(); toast(e?'Saved. Forward an email, then tap Check now.':'Inbox turned off'); setup=!e; draw(); };
+      const ck=m.querySelector('#ick'); if(ck) ck.onclick=async()=>{ ck.disabled=true; ck.textContent='🔄 Checking…'; const j=await helperDo('inbox_check'); toast(j?(j.speech||j.error||'Done'):'The helper didn’t answer. Try again in a minute.'); setup=false; draw(); };
       const find=k=>{ const [di,ii]=k.split('|'), d=(S.inbox||[]).find(x=>x.id===di); return [d,d&&(d.items||[]).find(i=>i.id===ii)]; };
       m.querySelectorAll('[data-who]').forEach(s=>s.onchange=()=>{ const [d,it]=find(s.dataset.who); if(it){ it.who=s.value==='all'?'':s.value; save(); } });
       m.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{ const [d,it]=find(b.dataset.add); if(!it) return; inboxAdd(d,it); save(); renderAll(); draw(); toast(it.type==='event'?'On the calendar ✓':'On the to-do list ✓'); });

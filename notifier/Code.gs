@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 19;
+const HELPER_VERSION = 20;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -34,15 +34,20 @@ function tick() {
   for (const h of listDocs('households')) {
     let err = '';
     try {
-      const data = { events: listDocs('households/' + h._id + '/events'), todos: listDocs('households/' + h._id + '/todos'), flights: listDocs('households/' + h._id + '/flights'), renewals: [] };
-      try { data.renewals = listDocs('households/' + h._id + '/renewals'); } catch (e) {}
-      data.bills = [];
-      try { data.bills = billsTick(h, props, now); } catch (e) { Logger.log('Bills: ' + e); }
+      // Only what this run needs is read (v20): the entries near today, never the whole history. See "what a run reads" below.
+      const hp = 'households/' + h._id, seven = now.getHours() === 7 && now.getMinutes() < 15, nine = now.getHours() === 9 && now.getMinutes() < 15;
+      const data = { events: nearEvents(hp, now), todos: [], flights: [], renewals: [], bills: [] };
       // private entries: each member's own corner. Reminders for these go only to that member's own phones.
-      for (const who of (h.members || [])) for (const c of ['events', 'todos']) {
-        try { listDocs('households/' + h._id + '/private/' + encodeURIComponent(who) + '/' + c).forEach(x => { x._owner = who; data[c].push(x); }); } catch (e) {}
+      for (const who of (h.members || [])) {
+        try { nearEvents(hp + '/private/' + encodeURIComponent(who), now).forEach(x => { x._owner = who; data.events.push(x); }); } catch (e) {}
       }
-      let inboxNew = []; try { inboxNew = inboxTick(h, props, now); } catch (e) { Logger.log('Inbox: ' + e); }
+      data.todos = jobTodos(hp, data.events, now);
+      if (seven || props.getProperty('AERODATABOX_KEY')) data.flights = recentFlights(hp, now);
+      if (nine) { try { data.renewals = listDocs(hp + '/renewals'); } catch (e) {} }
+      // emails are read once a day (and whenever the app's "check now" button asks)
+      if (mailDue(props, 'BILL', h, now)) { try { data.bills = billsTick(h, props, now, true); } catch (e) { Logger.log('Bills: ' + e); } }
+      else if (nine) { try { data.bills = runQuery(hp, 'bills', fOp('status', 'EQUAL', 'due')); } catch (e) { Logger.log('Bills: ' + e); } }
+      let inboxNew = []; if (mailDue(props, 'INBOX', h, now)) { try { inboxNew = inboxTick(h, props, now, true); } catch (e) { Logger.log('Inbox: ' + e); } }
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
       inboxArrivals(h, inboxNew, msgs);
       try { msgPush(h); } catch (e) { Logger.log('Messages: ' + e); }
@@ -151,6 +156,45 @@ function syncRules(props, now) {
 }
 // run by hand from the script editor to publish the rules straight away
 function publishRulesNow() { const p = PropertiesService.getScriptProperties(); p.deleteProperty('RULES_STATE'); Logger.log(JSON.stringify(syncRules(p, new Date()))); }
+
+/* ---------- what a run reads (v20) ----------
+   The free database plan allows 50,000 reads a day, and a run happens 288 times a day, so a run must never read a whole list.
+   - calendar: entries dated from 3 days ago to tomorrow, plus the repeating ones
+   - booked jobs: only the to-dos those entries point at
+   - flights: the ones not long over, remembered for 30 minutes
+   - messages: only those newer than the last one handled
+   - renewals and bills: at 9am only; emails (bills and the family inbox): once a day */
+function nearEvents(parent, now) {
+  const seen = {}, out = [];
+  const add = d => { if (!seen[d._id]) { seen[d._id] = 1; out.push(d); } };
+  runQuery(parent, 'events', fAnd([fOp('date', 'GREATER_THAN_OR_EQUAL', keyOf(addDays(now, -3))), fOp('date', 'LESS_THAN_OR_EQUAL', keyOf(addDays(now, 1)))])).forEach(add);
+  runQuery(parent, 'events', fOp('rpt.f', 'IN', ['D', 'W', 'M', 'Y'])).forEach(add);
+  return out;
+}
+// "did it get done?" only ever asks about a to-do booked onto the calendar in the last few days
+function jobTodos(hp, events, now) {
+  const out = [], today = keyOf(now), from = keyOf(addDays(now, -3));
+  events.forEach(e => {
+    if (!e.todoId || e.done || !e.date || e.date < from || e.date > today) return;
+    try { const t = getDoc((e._owner ? hp + '/private/' + encodeURIComponent(e._owner) : hp) + '/todos/' + e.todoId);
+      if (t) { if (!t.id) t.id = t._id; if (e._owner) t._owner = e._owner; out.push(t); } } catch (x) {}
+  });
+  return out;
+}
+function recentFlights(hp, now) {
+  const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null, ck = 'fl|' + hp;
+  if (cache) { try { const c = cache.get(ck); if (c) return JSON.parse(c); } catch (e) {} }
+  const fl = runQuery(hp, 'flights', fOp('end', 'GREATER_THAN_OR_EQUAL', new Date(now.getTime() - 3 * 864e5).toISOString()));
+  if (cache) { try { const j = JSON.stringify(fl); if (j.length < 90000) cache.put(ck, j, 1800); } catch (e) {} }
+  return fl;
+}
+// emails are read once a day, from 6am (or the first run after it). If that read fails, it is tried again each hour.
+function mailDue(props, kind, h, now) {
+  const addr = String((kind === 'BILL' ? h.billEmail : h.inboxEmail) || '').trim(); if (!addr || now.getHours() < 6) return false;
+  const v = String(props.getProperty(kind + '_DAY_' + h._id) || '').split('|');
+  return v[0] !== keyOf(now) || (v.length > 1 && now.getHours() > Number(v[1]));
+}
+function mailDone(props, kind, h, now, err) { props.setProperty(kind + '_DAY_' + h._id, keyOf(now) + (err ? '|' + now.getHours() : '')); }
 
 /* ---------- what to send (pure logic, no network) ---------- */
 function planNotifications(h, all, now, already) {
@@ -382,6 +426,17 @@ function listDocs(path) {
   } while (token);
   return out;
 }
+// a filtered read: only the documents that match are counted against the daily allowance
+function fOp(field, op, val) { return { fieldFilter: { field: { fieldPath: field }, op: op, value: enc(val) } }; }
+function fAnd(list) { return { compositeFilter: { op: 'AND', filters: list } }; }
+function runQuery(parent, col, where) {
+  const r = UrlFetchApp.fetch(BASE + (parent ? '/' + parent : '') + ':runQuery', { method: 'post', contentType: 'application/json', headers: headers(), muteHttpExceptions: true,
+    payload: JSON.stringify({ structuredQuery: { from: [{ collectionId: col }], where: where } }) });
+  if (r.getResponseCode() !== 200) throw new Error('Reading ' + col + ': ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 200));
+  const out = [];
+  JSON.parse(r.getContentText()).forEach(x => { const d = x.document; if (!d) return; const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; out.push(o); });
+  return out;
+}
 function patch(path, fields) {
   const mask = Object.keys(fields).map(k => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
   const body = { fields: {} }; Object.keys(fields).forEach(k => { if (fields[k] !== undefined) body.fields[k] = enc(fields[k]); });
@@ -406,13 +461,12 @@ function send(h, hash, title, body, tag) {
 function inboxTick(h, props, now, force) {
   const addr = String(h.inboxEmail || '').toLowerCase().trim(), fresh = [];
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return fresh;
-  const lastKey = 'INBOX_MAIL_' + h._id, prev = h.inboxHelper || {};
-  if (!force && now.getTime() - Number(props.getProperty(lastKey) || 0) < 9.5 * 60e3) return fresh;
-  props.setProperty(lastKey, String(now.getTime()));
+  const prev = h.inboxHelper || {};
+  if (!force && !mailDue(props, 'INBOX', h, now)) return fresh;
   let err = '', added = 0;
   try {
-    const path = 'households/' + h._id + '/inbox', seen = {}; listDocs(path).forEach(function (d) { seen[d._id] = 1; });
     const threads = GmailApp.search('to:' + addr + ' newer_than:14d', 0, 15);
+    const path = 'households/' + h._id + '/inbox', seen = {}; if (threads.length) listDocs(path).forEach(function (d) { seen[d._id] = 1; });
     if (threads.length && !aiReady(h)) throw new Error('No AI key yet: add it in the app (More → ✨ AI)');
     const label = GmailApp.getUserLabelByName('Family Screen inbox') || GmailApp.createLabel('Family Screen inbox');
     const today = keyOf(now), bills = String(h.billEmail || '').toLowerCase().trim();
@@ -455,6 +509,7 @@ function inboxTick(h, props, now, force) {
       t.addLabel(label);
     }
   } catch (e) { err = String(e && e.message || e).slice(0, 240); if (/permission|authori[sz]/i.test(err)) err = 'The helper needs permission for Gmail: run inboxCheckNow once in the helper (⚙️ → 🧰 Helpers).'; }
+  mailDone(props, 'INBOX', h, now, err);
   patch('households/' + h._id, { inboxHelper: { lastRun: now.getTime(), error: err, added: (prev.added || 0) + added, version: HELPER_VERSION } });
   return fresh;
 }
@@ -473,7 +528,12 @@ function inboxCheckNow() { const props = PropertiesService.getScriptProperties()
    it is for (or everyone else, for the family group). The app asks for this the moment a message is sent; the 5-minute tick is the backstop. */
 function msgPush(h) {
   const path = 'households/' + h._id + '/msgs', devices = h.devices || {}, people = h.people || [], now = Date.now(); let n = 0;
-  const waiting = listDocs(path).filter(function (m) { return !m.pushed && m.at && now - m.at < 12 * 3600e3; }).sort(function (a, b) { return a.at - b.at; });
+  // only messages newer than the last one handled are read (10 minutes of overlap covers a phone whose clock is a little off)
+  const props = PropertiesService.getScriptProperties(), ck = 'MSG_AT_' + h._id, last = Number(props.getProperty(ck) || 0);
+  const recent = runQuery('households/' + h._id, 'msgs', fOp('at', 'GREATER_THAN', Math.max(last - 10 * 60e3, now - 12 * 3600e3)));
+  const newest = recent.reduce(function (t, m) { return Math.max(t, Number(m.at) || 0); }, last);
+  if (newest > last) props.setProperty(ck, String(Math.min(newest, now)));
+  const waiting = recent.filter(function (m) { return !m.pushed && m.at && now - m.at < 12 * 3600e3; }).sort(function (a, b) { return a.at - b.at; });
   waiting.forEach(function (m) {
     const from = people.find(function (p) { return p.id === m.from; }) || { name: 'Family' };
     const to = m.th === 'fam' ? people.filter(function (p) { return p.id !== m.from && p.id !== 'all'; }) : people.filter(function (p) { return String(m.th).split('|').indexOf(p.id) >= 0 && p.id !== m.from; });
@@ -487,7 +547,7 @@ function msgPush(h) {
 
 /* ================= Bills by email =================
    Bills sent (or forwarded) to the family's bills address (a plus address of THIS Gmail account, e.g. you+bills@gmail.com,
-   set in the app: Bills → Setup) are read every 10 minutes. Gemini reads the email and any PDF, the PDF is saved to
+   set in the app: Bills → Setup) are read once a day (and when the app asks). Gemini reads the email and any PDF, the PDF is saved to
    Google Drive (“Household Bills/_To file”), and the bill appears in the app as “check it”. When you confirm it there,
    the app says which folder it goes in and this moves and renames the file. A Google Sheet register is kept up to date. */
 const BILL_CATS = ['Power', 'Gas', 'Internet', 'Phone', 'Water', 'Rates', 'Insurance', 'Car', 'Mortgage', 'Rent', 'Subscriptions', 'Medical', 'School', 'Childcare', 'Credit card', 'Other'];
@@ -563,7 +623,7 @@ function billsTick(h, props, now, force) {
   const addr = String(h.billEmail || '').toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return [];
   const path = 'households/' + h._id + '/bills', prev = h.billsHelper || {};
-  let bills = listDocs(path), err = '', added = 0; const fresh = [];
+  let bills = listDocs(path), err = '', added = 0, mail = false; const fresh = [];
   try {
     const root = billsRoot(h), today = keyOf(now);
     // 1) file the ones you've confirmed into the folder you chose (creating folders as needed), and rename them
@@ -576,10 +636,9 @@ function billsTick(h, props, now, force) {
     }
     // 2) direct debits come out on the day: mark them paid the day after
     for (const b of bills) if (b.status === 'due' && b.directDebit && b.due && b.due < today) { b.status = 'paid'; b.paidAt = at(b.due, '12:00').getTime(); b.paidHow = 'Direct debit'; b.paidBy = 'auto'; patch(path + '/' + b._id, { status: 'paid', paidAt: b.paidAt, paidHow: b.paidHow, paidBy: 'auto' }); }
-    // 3) new emails, every 10 minutes
-    const lastKey = 'BILL_MAIL_' + h._id;
-    if (force || now.getTime() - Number(props.getProperty(lastKey) || 0) > 9.5 * 60e3) {
-      props.setProperty(lastKey, String(now.getTime()));
+    // 3) new emails, once a day (or when the app asks)
+    if (force || mailDue(props, 'BILL', h, now)) {
+      mail = true;
       const seen = {}; bills.forEach(b => seen[b._id] = 1);
       const key = aiReady(h);
       const threads = GmailApp.search('to:' + addr + ' newer_than:30d', 0, 20);
@@ -632,6 +691,7 @@ function billsTick(h, props, now, force) {
     const sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(live.map(b => [b._id, b.status, b.biller, b.amount, b.due, b.paidAt, b.paidHow, b.category, b.pdf && b.pdf.link, b.directDebit]))));
     if (sig !== props.getProperty('BILL_SHEET_SIG_' + h._id)) { const url = writeRegister(h, root, live, props); props.setProperty('BILL_SHEET_SIG_' + h._id, sig); if (url !== h.billSheet) patch('households/' + h._id, { billSheet: url }); }
   } catch (e) { err = String(e && e.message || e).slice(0, 240); if (/permission|authori[sz]/i.test(err)) err = 'The helper needs permission for Gmail, Drive and Sheets: update appsscript.json and run billsCheckNow once (⚙️ → 🧰 Helpers). ' + err; }
+  if (mail) mailDone(props, 'BILL', h, now, err);
   patch('households/' + h._id, { billsHelper: { lastRun: now.getTime(), error: err, added: (prev.added || 0) + added, version: HELPER_VERSION } });
   bills.forEach(b => { if (fresh.indexOf(b) >= 0) b._new = true; });
   return bills;
@@ -670,7 +730,8 @@ function doPost(e) {
   const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
   let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
   const key = String(b.key || ''); if (key.length < 12) return out({ error: 'not allowed' });
-  const h = listDocs('households').filter(x => String(x.voiceKey || '') === key)[0];
+  let h; try { h = listDocs('households').filter(x => String(x.voiceKey || '') === key)[0]; }
+  catch (err) { const full = /429|quota/i.test(String(err)), say = full ? 'The family database has reached its free limit for today. Try again later.' : 'I can’t reach the family database right now. Try again in a minute.'; return out({ error: say, speech: say }); }
   if (!h) return out({ error: 'not allowed' });
   try { return out(voiceDo(h, String(b.action || ''), b)); }
   catch (err) { return out({ speech: 'Sorry, something went wrong at my end. ' + String(err && err.message || err).slice(0, 80) }); }
@@ -740,6 +801,7 @@ function voiceDo(h, action, b) {
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
+  if (action === 'bills_tidy' || action === 'bills_check') { const bl0 = billsTick(h, PropertiesService.getScriptProperties(), new Date(), action === 'bills_check'), nw = bl0.filter(function (x) { return x._new; }).length; return { ok: true, added: nw, speech: action === 'bills_check' ? (nw ? nw + ' new' : 'Nothing new') : 'Done' }; }
   if (action === 'inbox_check') { const fresh = inboxTick(h, PropertiesService.getScriptProperties(), new Date(), true); return { ok: true, added: fresh.length, speech: fresh.length ? fresh.length + ' new' : 'Nothing new' }; }
   if (action === 'ping') return { ok: true, version: HELPER_VERSION, people: vPeople(h).map(function (p) { return p.name; }) };
 
@@ -983,4 +1045,4 @@ function billsCheckNow() {
   for (const h of listDocs('households')) { const out = billsTick(h, props, now, true); Logger.log((h.billEmail || '(no bills address set)') + ': ' + out.length + ' bills. ' + ((getDoc('households/' + h._id).billsHelper || {}).error || 'OK')); }
 }
 
-if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn, checkEvery, parseFlight, flightAlerts, trackFlights };
+if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn, checkEvery, parseFlight, flightAlerts, trackFlights, tick, nearEvents, jobTodos, mailDue };

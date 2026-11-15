@@ -8,7 +8,7 @@ const mails=[mk('m1','Week 6 notices','Swimming sports Friday, bring togs. Retur
 const ctx=`const HELPER_VERSION=17, normB=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const pad=n=>(n<10?'0':'')+n; ${grab('keyOf')} ${grab('at')} ${grab('vPeople')} ${grab('vAka')} ${grab('vFind')} ${grab('only')} ${grab('vDist')} ${grab('vSound')}
 const vWho=()=>"WHO", aiReady=()=>'k', Logger={log(){}};
-const listDocs=p=>docs[p.split('/').pop()]||[]; const patch=(p,f)=>{ patches.push([p,f]); const c=p.split('/'); if(c.length===4){ const L=docs[c[2]]; const ex=L.find(x=>x._id===c[3]); if(ex) Object.assign(ex,f); else L.push(Object.assign({_id:c[3]},f)); } };
+const listDocs=p=>docs[p.split('/').pop()]||[]; const runQuery=(par,col,w)=>(docs[col]||[]).filter(d=>d.at>w.fieldFilter.value.integerValue); const fOp=(f,op,v)=>({fieldFilter:{field:{fieldPath:f},op,value:{integerValue:v}}}); const PropertiesService={getScriptProperties:()=>props}; const mailDue=()=>true, mailDone=()=>{}; const patch=(p,f)=>{ patches.push([p,f]); const c=p.split('/'); if(c.length===4){ const L=docs[c[2]]; const ex=L.find(x=>x._id===c[3]); if(ex) Object.assign(ex,f); else L.push(Object.assign({_id:c[3]},f)); } };
 const GmailApp={search:()=>[{getMessages:()=>mails,addLabel(){}}],getUserLabelByName:()=>({}),createLabel:()=>({})};
 const Utilities={base64Encode:()=>''}; const send=(h,hash,t,b,tag)=>sent.push([hash,t,b,tag]);
 const fri=keyOf(new Date(Date.now()+5*864e5));
@@ -19,7 +19,7 @@ const fresh=inboxTick(h,props,new Date());
 console.log('fresh',fresh.length,'| items',JSON.stringify(fresh[0].items.map(i=>[i.type,i.title,i.time||i.due||'',i.who])));
 console.log('bill forwarded to',fwd,'| bill doc',docs.inbox.find(d=>d._id==='email-m2').status);
 console.log('helper note',JSON.stringify(patches[patches.length-1][1].inboxHelper.error),'added',patches[patches.length-1][1].inboxHelper.added);
-console.log('again (throttled)',inboxTick(h,props,new Date()).length,'| forced, nothing new',inboxTick(h,props,new Date(),true).length);
+console.log('again, nothing new',inboxTick(h,props,new Date()).length,'| forced, nothing new',inboxTick(h,props,new Date(),true).length);
 const msgs=[]; inboxArrivals(h,fresh,msgs); console.log('pushes',msgs.length,msgs[0].title,'|',msgs[0].body);
 docs.msgs.push({_id:'a',th:'p2|p3',from:'p3',text:'I am home',at:Date.now()},{_id:'b',th:'fam',from:'p3',text:'Hi all',at:Date.now()},{_id:'c',th:'p1|p3',from:'p1',text:'ok',at:Date.now()},{_id:'d',th:'fam',from:'p1',text:'old',at:Date.now()-2*864e5});
 console.log('msg pushes',msgPush(h),JSON.stringify(sent.map(s=>s[0]+':'+s[1])),'| second run',msgPush(h));
