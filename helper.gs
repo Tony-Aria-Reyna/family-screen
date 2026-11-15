@@ -82,6 +82,7 @@ function selfUpdate(props, now, force) {
         const txt = x.getContentText();
         if (x.getResponseCode() !== 200) {
           if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(txt)) throw new Error('Turn on the Google Apps Script API: script.google.com/home/usersettings');
+          if (/insufficient authentication scopes/i.test(txt)) throw new Error('Not given permission yet: paste the settings file (appsscript.json), then run updateNow in the editor and press Allow');
           throw new Error('Apps Script ' + x.getResponseCode() + ': ' + txt.slice(0, 200));
         }
         return JSON.parse(txt || '{}');
