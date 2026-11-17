@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 22;
+const HELPER_VERSION = 23;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -1031,7 +1031,7 @@ function wakePrep(h, props, now) {
     return !(have && have.day === today && !have.used); });
   if (!todo.length || !aiReady(h)) return 0; let made = 0;
   for (const p of todo) {
-    const song = wakeSong(h, p, now, {});
+    const song = wakeSong(h, p, now, { slow: true });
     if (song.aiNote) { Logger.log('Wake verse for ' + p.name + ' not stored: ' + song.aiNote); continue; }   // a built-in rhyme is not kept: try again next run
     props.setProperty('WAKEV|' + h._id + '|' + p.id, JSON.stringify({ day: today, at: now.getTime(), song: { speech: song.speech, ssml: song.ssml, verse: song.verse, then: song.then, name: song.name, style: song.style } })); made++;
   }
@@ -1085,7 +1085,7 @@ function wakeSong(h, p, now, b) {
         + 'Be surprising: do not open with "wakey wakey" or "rise and shine", and avoid the rhymes eyes/rise and day/play/way. '
         + (past.length ? 'These were used on recent mornings. Do not reuse their opening, their rhymes or their jokes:\n' + past.map(function (x) { return '- ' + x; }).join('\n') + '\n' : '')
         + 'Plain words only: no emoji, no markdown, no stage directions.\n\n' + facts + '\n\nReturn JSON only: {"lines":["...","...","...","..."]}';
-      const raw = String(aiCall(h, [{ text: prompt }], true)), cut = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+      const raw = String(aiCall(h, [{ text: prompt }], !b.slow)), cut = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);   // written ahead (slow) = your chosen AI; on the spot = the fast one
       const j = JSON.parse(cut);
       const ls = (j.lines || []).map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 6);
       if (ls.length >= 2) verse = ls; else aiNote = 'The AI sent back an empty song, so this is a built-in rhyme.';
