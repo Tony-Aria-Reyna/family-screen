@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 21;
+const HELPER_VERSION = 22;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -51,6 +51,7 @@ function tick() {
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
       inboxArrivals(h, inboxNew, msgs);
       try { msgPush(h); } catch (e) { Logger.log('Messages: ' + e); }
+      try { wakePrep(h, props, now); } catch (e) { Logger.log('Wake: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
@@ -462,6 +463,23 @@ function runQuery(parent, col, where) {
   JSON.parse(r.getContentText()).forEach(x => { const d = x.document; if (!d) return; const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; out.push(o); });
   return out;
 }
+function mkDoc(d) { const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; return o; }
+// several reads at once (Apps Script otherwise waits about a second for each): [{kind:'query'|'doc'|'list', ...}] in, an array of results out
+function fetchMany(specs) {
+  const reqs = specs.map(function (s) {
+    if (s.kind === 'query') return { url: BASE + (s.parent ? '/' + s.parent : '') + ':runQuery', method: 'post', contentType: 'application/json', headers: headers(), muteHttpExceptions: true, payload: JSON.stringify({ structuredQuery: { from: [{ collectionId: s.col }], where: s.where } }) };
+    return { url: BASE + '/' + s.path + (s.kind === 'list' ? '?pageSize=300' : ''), headers: headers(), muteHttpExceptions: true };
+  });
+  return UrlFetchApp.fetchAll(reqs).map(function (r, i) {
+    const s = specs[i], code = r.getResponseCode(), what = s.path || s.col;
+    if (s.kind === 'doc' && code === 404) return null;
+    if (code !== 200) throw new Error('Reading ' + what + ': ' + code + ' ' + r.getContentText().slice(0, 120));
+    const j = JSON.parse(r.getContentText());
+    if (s.kind === 'doc') return mkDoc(j);
+    if (s.kind === 'query') return j.filter(function (x) { return x.document; }).map(function (x) { return mkDoc(x.document); });
+    return j.nextPageToken ? listDocs(s.path) : (j.documents || []).map(mkDoc);
+  });
+}
 function patch(path, fields) {
   const mask = Object.keys(fields).map(k => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
   const body = { fields: {} }; Object.keys(fields).forEach(k => { if (fields[k] !== undefined) body.fields[k] = enc(fields[k]); });
@@ -587,7 +605,8 @@ function getDoc(path) {
 function geminiKey(h) { const s = getDoc('households/' + h._id + '/secrets/ai'); return (s && s.gemini) || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || ''; }
 /* The family picks the AI in the app (⚙️ → ✨ AI): Gemini or Claude, plus Claude's model and effort. Both keys live in the
    family's secrets doc. aiCall is the one door every feature uses; if Claude fails and a Gemini key exists, Gemini answers. */
-function aiKeys(h) { if (!h._keys) { const s = getDoc('households/' + h._id + '/secrets/ai') || {}; h._keys = { gemini: s.gemini || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || '', claude: s.claude || '' }; } return h._keys; }
+function setKeys(h, s) { s = s || {}; h._keys = { gemini: s.gemini || PropertiesService.getScriptProperties().getProperty('GEMINI_KEY') || '', claude: s.claude || '' }; }
+function aiKeys(h) { if (!h._keys) setKeys(h, getDoc('households/' + h._id + '/secrets/ai')); return h._keys; }
 function aiReady(h) { const k = aiKeys(h); return !!(k.gemini || (h.aiProv === 'claude' && k.claude)); }
 function aiCall(h, parts, quick) {
   const k = aiKeys(h);
@@ -815,8 +834,25 @@ function vDate(raw, now) {                                 // Alexa sends 2026-1
   return keyOf(now);
 }
 const vWeek = function (raw) { return /^\d{4}-(W\d{2}(-WE)?|\d{2})$/.test(String(raw || '').trim()); };   // "this week", "next week", "in November"
+/* One voice request reads the calendar once, together with whatever else it needs, instead of the whole list for every day it looks at.
+   vPrep loads the entries dated fromKey..toKey plus the repeating ones, and the AI keys, in parallel with any extra reads asked for. */
+function vPrep(h, fromKey, toKey, extra) {
+  const hp = 'households/' + h._id, x = h._ex || (h._ex = { rep: null, by: {} });
+  const specs = [{ kind: 'query', parent: hp, col: 'events', where: fAnd([fOp('date', 'GREATER_THAN_OR_EQUAL', fromKey), fOp('date', 'LESS_THAN_OR_EQUAL', toKey)]) }];
+  const wantRep = !x.rep, wantKeys = !h._keys;
+  if (wantRep) specs.push({ kind: 'query', parent: hp, col: 'events', where: fOp('rpt.f', 'IN', ['D', 'W', 'M', 'Y']) });
+  if (wantKeys) specs.push({ kind: 'doc', path: hp + '/secrets/ai' });
+  const nx = specs.length; (extra || []).forEach(function (e) { specs.push(e); });
+  const r = fetchMany(specs);
+  for (let d = kd(fromKey); keyOf(d) <= toKey; d = addDays(d, 1)) x.by[keyOf(d)] = [];
+  r[0].forEach(function (e) { if (x.by[e.date]) x.by[e.date].push(e); });
+  let i = 1; if (wantRep) x.rep = r[i++]; if (wantKeys) setKeys(h, r[i]);
+  return r.slice(nx);
+}
 function vEventsOn(h, key) {
-  const evs = listDocs('households/' + h._id + '/events').filter(e => !e.priv && occursOn(e, key));
+  if (!h._ex || !(key in h._ex.by)) vPrep(h, key, keyOf(addDays(kd(key), 9)));
+  const seen = {}, evs = [];
+  (h._ex.by[key] || []).concat(h._ex.rep || []).forEach(function (e) { if (seen[e._id] || e.priv || !occursOn(e, key)) return; seen[e._id] = 1; evs.push(e); });
   return evs.sort(function (a, c) { return String(a.time || '00:00').localeCompare(String(c.time || '00:00')); });
 }
 function vSay(e, h) {
@@ -906,7 +942,7 @@ function voiceDo(h, action, b) {
     const asked = vFind(h, b.person);
     if (asked && tp && asked.id !== tp.id) return { speech: 'Only ' + tp.name + "'s flights are tracked, so I can't say where " + asked.name + ' is.' };
     const nm = tp ? tp.name : 'She';
-    const fl = listDocs('households/' + hid + '/flights').filter(function (f) { return !tp || f.who === tp.id; });
+    const fl = (h._fl || recentFlights('households/' + hid, now)).filter(function (f) { return !tp || f.who === tp.id; });
     const live = h.live || {};
     const lv = function (f) { const l = live[f.id]; return l && !/ancel/i.test(l.status || '') ? l : null; };
     const ms = function (f) { const l = lv(f); return Date.parse((l && l.dep) || f.start); };
@@ -948,6 +984,9 @@ function voiceDo(h, action, b) {
     const ppl = vPeople(h);
     const p = /^(me|myself)$/i.test(String(b.person || '').trim()) ? vMe(h, b) : (vFind(h, b.person) || (ppl.length === 1 ? ppl[0] : null));
     if (!p) return { speech: 'Who am I waking up? ' + vList(ppl.map(function (x) { return x.name; })) + '?', ask: 'person' };
+    const wk = 'WAKEV|' + hid + '|' + p.id, props = PropertiesService.getScriptProperties(), styleWanted = WAKE_STYLES[b.style] ? b.style : (WAKE_STYLES[h.wakeStyle] ? h.wakeStyle : 'funny');
+    if (!b.fresh) { let ready = null; try { ready = JSON.parse(props.getProperty(wk) || 'null'); } catch (e) {}
+      if (ready && ready.day === today && ready.song && ready.song.style === styleWanted) { props.setProperty(wk, JSON.stringify({ day: today, used: true })); return ready.song; } }
     return wakeSong(h, p, now, b);
   }
   if (action === 'remember') {
@@ -984,9 +1023,25 @@ function wakeWeather(h) {
   } catch (e) { return ''; }
 }
 const xmlSafe = function (t) { return String(t || '').replace(/[#*`<>]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ').trim(); };
+/* Alexa gives a skill about 8 seconds and a freshly written verse can take longer, so each person's next verse is written ahead of time
+   (from 4am, and again a few minutes after one is used) and played at once when asked. If none is ready it is written on the spot. */
+function wakePrep(h, props, now) {
+  if (now.getHours() < 4) return 0; const today = keyOf(now), todo = vPeople(h).filter(function (p) {
+    let have = null; try { have = JSON.parse(props.getProperty('WAKEV|' + h._id + '|' + p.id) || 'null'); } catch (e) {}
+    return !(have && have.day === today && !have.used); });
+  if (!todo.length || !aiReady(h)) return 0; let made = 0;
+  for (const p of todo) {
+    const song = wakeSong(h, p, now, {});
+    if (song.aiNote) { Logger.log('Wake verse for ' + p.name + ' not stored: ' + song.aiNote); continue; }   // a built-in rhyme is not kept: try again next run
+    props.setProperty('WAKEV|' + h._id + '|' + p.id, JSON.stringify({ day: today, at: now.getTime(), song: { speech: song.speech, ssml: song.ssml, verse: song.verse, then: song.then, name: song.name, style: song.style } })); made++;
+  }
+  return made;
+}
 function wakeSong(h, p, now, b) {
   const hid = h._id, today = keyOf(now);
   const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+  const tomorrowK = keyOf(addDays(now, 1)), tp0 = vPeople(h).filter(function (x) { return x.traveller; })[0];
+  h._fl = vPrep(h, today, tomorrowK, tp0 ? [{ kind: 'query', parent: 'households/' + hid, col: 'flights', where: fOp('end', 'GREATER_THAN_OR_EQUAL', new Date(now.getTime() - 3 * 864e5).toISOString()) }] : [])[0] || [];
   const all = vEventsOn(h, today), mine = all.filter(function (e) { return vInvolves(e, p); });
   const others = all.filter(function (e) { return mine.indexOf(e) < 0; }), tmrw = vEventsOn(h, keyOf(addDays(now, 1)));
   const line = function (e) { return vSay(e, h); };
@@ -1048,22 +1103,27 @@ function wakeSong(h, p, now, b) {
 function voiceContext(h, now) {
   const hid = h._id, out = [], today = keyOf(now);
   const nameOf = function (id) { const p = vPeople(h).filter(function (x) { return x.id === id; })[0]; return p ? p.name : ''; };
+  const pre = vPrep(h, today, keyOf(addDays(now, 8)), [
+    { kind: 'list', path: 'households/' + hid + '/todos' }, { kind: 'list', path: 'households/' + hid + '/groceries' }, { kind: 'list', path: 'households/' + hid + '/meals' },
+    { kind: 'query', parent: 'households/' + hid, col: 'bills', where: fOp('status', 'IN', ['due', 'check']) }, { kind: 'list', path: 'households/' + hid + '/renewals' }, { kind: 'list', path: 'households/' + hid + '/memory' },
+    { kind: 'query', parent: 'households/' + hid, col: 'flights', where: fOp('end', 'GREATER_THAN_OR_EQUAL', new Date(now.getTime() - 3 * 864e5).toISOString()) }]);
+  h._fl = pre[6];
   out.push(vWho(h));
   try { out.push('WHERE: ' + voiceDo(h, 'where', {}).speech); } catch (e) {}
   const lines = [];
   for (let i = 0; i < 8; i++) { const k = keyOf(addDays(now, i)), evs = vEventsOn(h, k); if (evs.length) lines.push(vDay(k, now) + ' (' + k + '): ' + evs.map(function (e) { return vSay(e, h); }).join('; ')); }
   if (lines.length) out.push('CALENDAR:\n' + lines.join('\n'));
-  const t = listDocs('households/' + hid + '/todos').filter(function (x) { return !x.done && !x.priv; });
+  const t = pre[0].filter(function (x) { return !x.done && !x.priv; });
   if (t.length) out.push('JOBS: ' + t.slice(0, 25).map(function (x) { return x.title + (x.who ? ' (' + nameOf(x.who) + ')' : ''); }).join('; '));
-  const g = listDocs('households/' + hid + '/groceries').filter(function (x) { return !x.done; });
+  const g = pre[1].filter(function (x) { return !x.done; });
   if (g.length) out.push('SHOPPING LIST: ' + g.slice(0, 50).map(function (x) { return x.name; }).join(', '));
-  const meals = listDocs('households/' + hid + '/meals').filter(function (m) { return m.date >= today && m.date <= keyOf(addDays(now, 8)); });
+  const meals = pre[2].filter(function (m) { return m.date >= today && m.date <= keyOf(addDays(now, 8)); });
   if (meals.length) out.push('MEAL PLAN: ' + meals.map(function (m) { const r = m.rid ? getDoc('households/' + hid + '/recipes/' + m.rid) : null; return vDay(m.date, now) + ' ' + m.slot + ': ' + (m.note || (r ? r.name : '')); }).join('; '));
-  const bills = listDocs('households/' + hid + '/bills').filter(function (x) { return x.status === 'due' || x.status === 'check'; });
+  const bills = pre[3].filter(function (x) { return x.status === 'due' || x.status === 'check'; });
   if (bills.length) out.push('BILLS: ' + bills.map(function (x) { return (x.biller || 'Bill') + ' ' + money(x.amount) + (x.due ? ' due ' + x.due : '') + (x.status === 'check' ? ' (to check)' : '') + (x.directDebit ? ' (direct debit)' : ''); }).join('; '));
-  const rn = listDocs('households/' + hid + '/renewals').filter(function (x) { return x.due; });
+  const rn = pre[4].filter(function (x) { return x.due; });
   if (rn.length) out.push('RENEWALS: ' + rn.map(function (x) { return x.what + (x.item ? ' ' + x.item : '') + ' due ' + x.due; }).join('; '));
-  const mem = listDocs('households/' + hid + '/memory');
+  const mem = pre[5];
   if (mem.length) out.push('FAMILY NOTES:\n' + mem.slice(0, 30).map(function (x) { return '- ' + (x.title ? x.title + ': ' : '') + String(x.text).replace(/\s+/g, ' ').slice(0, 300); }).join('\n'));
   return out.join('\n\n');
 }

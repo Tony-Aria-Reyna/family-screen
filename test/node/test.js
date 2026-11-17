@@ -12,6 +12,8 @@ const DB={'households/h1':{voiceKey:'VK1234567890abc',people:[{id:'p1',name:'Ton
  'households/h1/kids/k2':{id:'k2',kind:'jar',person:'p1',name:'Paraglider',target:800000,log:[{amt:150000}]}};
 const ContentService={createTextOutput:t=>({t,setMimeType(){return this}}),MimeType:{JSON:1}};
 const mocks=`
+function recentFlights(hp){ return listDocs(hp+'/flights'); }
+function fetchMany(specs){ return specs.map(s=>{ if(s.kind==='doc') return DB[s.path]?Object.assign({},DB[s.path],{_id:s.path.split('/').pop()}):null; return listDocs(s.kind==='list'?s.path:s.parent+'/'+s.col); }); }
 function listDocs(p){ const pre=p+'/'; return Object.keys(DB).filter(k=>k.startsWith(pre)&&k.slice(pre.length).indexOf('/')<0).map(k=>Object.assign({},DB[k],{_id:k.split('/').pop()})); }
 function patch(p,f){ DB[p]=Object.assign({},DB[p]||{},JSON.parse(JSON.stringify(f))); }
 function getDoc(p){ return DB[p]?Object.assign({},DB[p],{_id:p.split('/').pop()}):null; }
