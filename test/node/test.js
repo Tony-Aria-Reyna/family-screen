@@ -1,6 +1,6 @@
 const fs=require('fs'), http=require('http');
 // 1) the helper, as a little local server (the same Code.gs, mocked Firestore/Gemini)
-let code=fs.readFileSync('/home/claude/fs-app/notifier/Code.gs','utf8').replace('__PROJECT_ID__','p').replace('__APP_URL__','x').replace('{/*@TZ@*/}','{AKL:["Pacific/Auckland","Auckland"],LAX:["America/Los_Angeles","Los Angeles"]}');
+let code=fs.readFileSync('/home/claude/family-screen/notifier/Code.gs','utf8').replace('__PROJECT_ID__','p').replace('__APP_URL__','x').replace('{/*@TZ@*/}','{AKL:["Pacific/Auckland","Auckland"],LAX:["America/Los_Angeles","Los Angeles"]}');
 const K=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const now=new Date(), tomorrow=K(new Date(now.getTime()+864e5));
 const DB={'households/h1':{voiceKey:'VK1234567890abc',people:[{id:'p1',name:'Tony'},{id:'p2',name:'Reyna',traveller:true},{id:'p3',name:'Aria'}],shops:[{id:'super',name:'Supermarket',aisles:true}],live:{}},
@@ -26,7 +26,7 @@ let LAST='{}';
 // 2) the skill code exactly as the app generates it, with https pointed at the local helper
 const PORT=18811;
 srv.listen(PORT);
-let skill=fs.readFileSync('/home/claude/fs-app/src/alexa-skill.js','utf8')
+let skill=fs.readFileSync('/home/claude/family-screen/src/alexa-skill.js','utf8')
   .replace('__URL__','http://127.0.0.1:'+PORT+'/exec').replace('__KEY__','VK1234567890abc').replace('__PEOPLE__',JSON.stringify(['Tony','Reyna','Aria']))
   .replace("const https = require('https');","const https = require('http');");
 fs.writeFileSync('/tmp/alexa/index.js',skill);

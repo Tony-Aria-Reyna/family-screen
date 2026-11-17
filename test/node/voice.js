@@ -1,5 +1,5 @@
 const fs=require('fs');
-let code=fs.readFileSync('/home/claude/fs-app/notifier/Code.gs','utf8').replace('__PROJECT_ID__','p').replace('__APP_URL__','https://x/').replace('{/*@TZ@*/}','{AKL:["Pacific/Auckland","Auckland"],LAX:["America/Los_Angeles","Los Angeles"],NRT:["Asia/Tokyo","Tokyo"]}');
+let code=fs.readFileSync('/home/claude/family-screen/notifier/Code.gs','utf8').replace('__PROJECT_ID__','p').replace('__APP_URL__','https://x/').replace('{/*@TZ@*/}','{AKL:["Pacific/Auckland","Auckland"],LAX:["America/Los_Angeles","Los Angeles"],NRT:["Asia/Tokyo","Tokyo"]}');
 const now=new Date('2026-11-12T10:00:00+13:00');
 const K=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const tomorrow=K(new Date(now.getTime()+864e5)), friday=K(new Date(now.getTime()+2*864e5));

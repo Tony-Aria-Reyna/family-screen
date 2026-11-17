@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 20;
+const HELPER_VERSION = 21;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -566,6 +566,8 @@ function aiKeys(h) { if (!h._keys) { const s = getDoc('households/' + h._id + '/
 function aiReady(h) { const k = aiKeys(h); return !!(k.gemini || (h.aiProv === 'claude' && k.claude)); }
 function aiCall(h, parts, quick) {
   const k = aiKeys(h);
+  // Alexa gives a skill about 8 seconds. Claude takes 10 to 16 s here, Gemini 2 to 5 s, so voice requests go to Gemini first when there is a key.
+  if (quick && k.gemini) { try { return gemini(k.gemini, parts, quick); } catch (e) { if (!(h.aiProv === 'claude' && k.claude)) throw e; console.log('Gemini failed for voice, using Claude: ' + e.message); } }
   if (h.aiProv === 'claude' && k.claude) { try { return claude(k.claude, h, parts, quick); } catch (e) { if (!k.gemini) throw e; console.log('Claude failed, using Gemini: ' + e.message); } }
   if (!k.gemini) { const e = new Error('No AI key is set up'); e.gemini = true; throw e; }
   return gemini(k.gemini, parts, quick);
