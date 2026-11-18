@@ -3110,7 +3110,7 @@ function renderPCal(){
     if(avail>=rows*ROW){ rowH=Math.min(avail/rows,160); } else { off=-Math.min(selRow*ROW,rows*ROW-avail); }
     [sheet,wrap,grid].forEach(x=>x.style.transition=anim?'all .26s ease':'none');
     sheet.style.top=y+'px'; wrap.style.height=avail+'px'; grid.style.transform=`translateY(${off}px)`;
-    grid.style.gridAutoRows=rowH+'px'; grid.classList.toggle('titles',rowH>=92);
+    grid.style.gridAutoRows=rowH+'px'; grid.classList.toggle('titles',rowH>=66);   // room for at least two titles (phones with larger text get shorter rows)
     el.querySelector('.pc-dow').style.opacity=y<=gridTop?0:1; };
   layout(pSnaps[pMode]??pSnaps.split,false);
   const sc=$('#psScroll'); sc.scrollTop=pScroll!=null?pScroll:T.scrollTo;
