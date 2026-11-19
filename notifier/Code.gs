@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 25;
+const HELPER_VERSION = 26;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -49,6 +49,7 @@ function tick() {
       inboxArrivals(h, inboxNew, msgs);
       try { msgPush(h, pre.msgs); } catch (e) { Logger.log('Messages: ' + e); }
       try { wakePrep(h, props, now); } catch (e) { Logger.log('Wake: ' + e); }
+      try { agendaPrep(h, props, now); } catch (e) { Logger.log('Agenda: ' + e); }
       try { weekAhead(h, props, now, pre); } catch (e) { Logger.log('Week ahead: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
@@ -1027,6 +1028,8 @@ function voiceDo(h, action, b) {
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
+  if (action === 'msg_send') return voiceMsgSend(h, b, now);
+  if (action === 'msg_read') return voiceMsgRead(h, b, now);
   if (action === 'health') { const pr = PropertiesService.getScriptProperties(), st = hRead(pr, h._id); st.readsAt = 0; hSave(pr, h._id, st); return { ok: true, health: healthAfterRun(h, pr, new Date(), '', {}) }; }
   if (action === 'bills_tidy' || action === 'bills_check') { const bl0 = billsTick(h, PropertiesService.getScriptProperties(), new Date(), action === 'bills_check'), nw = bl0.filter(function (x) { return x._new; }).length; return { ok: true, added: nw, speech: action === 'bills_check' ? (nw ? nw + ' new' : 'Nothing new') : 'Done' }; }
   if (action === 'inbox_check') { const fresh = inboxTick(h, PropertiesService.getScriptProperties(), new Date(), true); return { ok: true, added: fresh.length, speech: fresh.length ? fresh.length + ' new' : 'Nothing new' }; }
@@ -1086,9 +1089,13 @@ function voiceDo(h, action, b) {
     const key = vDate(b.date, now), time = /^\d{2}:\d{2}/.test(String(b.time || '')) ? String(b.time).slice(0, 5) : '';
     const p = vFind(h, b.person);
     patch('households/' + hid + '/events/' + newId(), { title: title.charAt(0).toUpperCase() + title.slice(1), date: key, time: time, dur: time ? 60 : 0, whos: p ? [p.id] : [], voice: true, at: now.getTime() });
+    try { PropertiesService.getScriptProperties().deleteProperty('AGENDA|' + hid); } catch (e) {}
     return { speech: 'Put ' + title + ' in the calendar for ' + vDay(key, now) + (time ? ' at ' + fmt12(time) : '') + (p ? ', for ' + p.name : '') + '.' };
   }
   if (action === 'agenda') {
+    // 2.5 worked out ahead on the last run, unless the calendar has changed since (the app stamps evAt when it does)
+    const ready = agendaReady(h, now), ak = vWeek(b.date) ? 'week' : vDate(b.date, now);
+    if (ready && ready[ak === keyOf(addDays(now, -1)) ? today : ak]) return { speech: ready[ak === keyOf(addDays(now, -1)) ? today : ak], ready: true };
     if (vWeek(b.date)) {                                   // "what's on this week"
       const lines = [];
       for (let i = 0; i < 7; i++) { const k = keyOf(addDays(now, i)), e = vEventsOn(h, k); if (e.length) lines.push(vDay(k, now) + ', ' + vList(e.slice(0, 3).map(function (x) { return vSay(x, h); }))); }
@@ -1172,6 +1179,57 @@ function voiceDo(h, action, b) {
     return { speech: String(sp || 'Sorry, I did not catch that.').replace(/[#*`]/g, '') };
   }
   return { speech: 'I am not sure what to do with that.' };
+}
+/* 2.5 "what's on today / tomorrow / this week" are worked out ahead, so Alexa answers at once. They are worked out again
+   when the day changes or the calendar changes (the app stamps evAt on the family's record whenever an entry changes,
+   and an entry added by voice clears them), so an answer is never older than the calendar. */
+function agendaSpeeches(h, now) {
+  const today = keyOf(now), tom = keyOf(addDays(now, 1)), out = { day: today, evAt: Number(h.evAt || 0), at: now.getTime() };
+  vPrep(h, today, keyOf(addDays(now, 7)));
+  [today, tom].forEach(function (k) { const evs = vEventsOn(h, k);
+    out[k] = evs.length ? vDay(k, now).charAt(0).toUpperCase() + vDay(k, now).slice(1) + ': ' + vList(evs.slice(0, 6).map(function (e) { return vSay(e, h); })) + '.' : 'Nothing in the calendar for ' + vDay(k, now) + '.'; });
+  const lines = []; for (let i = 0; i < 7; i++) { const k = keyOf(addDays(now, i)), e = vEventsOn(h, k); if (e.length) lines.push(vDay(k, now) + ', ' + vList(e.slice(0, 3).map(function (x) { return vSay(x, h); }))); }
+  out.week = lines.length ? 'This week: ' + lines.join('. ') + '.' : 'Nothing in the calendar for the next week.';
+  return out;
+}
+function agendaPrep(h, props, now) {
+  if (now.getHours() < 5) return false;
+  const k = 'AGENDA|' + h._id; let have = null; try { have = JSON.parse(props.getProperty(k) || 'null'); } catch (e) {}
+  if (have && have.day === keyOf(now) && Number(have.evAt || 0) === Number(h.evAt || 0)) return false;
+  const a = agendaSpeeches(h, now); const j = JSON.stringify(a); if (j.length < 8500) props.setProperty(k, j); return true;
+}
+function agendaReady(h, now) {
+  let a = null; try { a = JSON.parse(PropertiesService.getScriptProperties().getProperty('AGENDA|' + h._id) || 'null'); } catch (e) {}
+  return a && a.day === keyOf(now) && Number(a.evAt || 0) === Number(h.evAt || 0) ? a : null;
+}
+/* 3.2 messages by voice: "Alexa, ask big sis to tell Mummy I love you". The message is from whoever Alexa recognises,
+   else the person the family chose in the app (usually Aria). It is pushed to the phones at once. */
+function voiceMsgFrom(h, b, to) {
+  const ppl = vPeople(h), id = (h.voiceIds || {})[b.person_id];
+  const p = ppl.filter(function (x) { return x.id === id; })[0] || ppl.filter(function (x) { return x.id === h.alexaFrom; })[0] || ppl.filter(function (x) { return !x.email && x.id !== to; })[0] || ppl[0];
+  return p || null;
+}
+function voiceMsgSend(h, b, now) {
+  const text = String(b.text || '').replace(/^(that|to say|say)\s+/i, '').trim().slice(0, 600);
+  if (!text) return { speech: 'What should I say?', ask: 'msg' };
+  const ppl = vPeople(h), to = b.to === 'fam' ? null : ppl.filter(function (p) { return p.id === b.to; })[0] || vFind(h, b.to);
+  if (b.to !== 'fam' && !to) return { speech: 'I am not sure who that is for.' };
+  const from = voiceMsgFrom(h, b, to && to.id); if (!from) return { speech: 'Add the family in the app first.' };
+  const th = !to || to.id === from.id ? 'fam' : [from.id, to.id].sort().join('|');
+  const id = 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), m = { th: th, from: from.id, text: text.charAt(0).toUpperCase() + text.slice(1), at: now.getTime(), seen: [from.id], via: 'alexa' };
+  patch('households/' + h._id + '/msgs/' + id, m);
+  let sent = 0; try { m._id = id; sent = msgPush(h, [m]); } catch (e) { Logger.log('Voice message push: ' + e); }
+  return { speech: 'Sent to ' + (to ? (to.nick || to.name) : 'the family') + (sent ? '.' : '. It will be waiting in Family Screen.'), sent: sent };
+}
+function voiceMsgRead(h, b, now) {
+  const ppl = vPeople(h), named = b.person ? vFind(h, b.person) : null, me = named || voiceMsgFrom(h, b, '');
+  if (!me) return { speech: 'Add the family in the app first.' };
+  const list = runQuery('households/' + h._id, 'msgs', fOp('at', 'GREATER_THAN', now.getTime() - 2 * 864e5))
+    .filter(function (m) { return m.from !== me.id && (m.th === 'fam' || String(m.th).split('|').indexOf(me.id) >= 0); })
+    .sort(function (a, c) { return a.at - c.at; }).slice(-3);
+  if (!list.length) return { speech: 'No new messages for ' + me.name + ' in the last two days.' };
+  const nameOf = function (id) { const p = ppl.filter(function (x) { return x.id === id; })[0]; return p ? (p.nick || p.name) : 'Someone'; };
+  return { speech: 'For ' + me.name + ': ' + list.map(function (m) { return nameOf(m.from) + ' said, ' + xmlSafe(m.text).slice(0, 140) + (/[.!?]$/.test(m.text) ? '' : '.'); }).join(' ') };
 }
 /* ---------- the wake-up song: a fresh silly rhyme about that person's actual day ---------- */
 const WAKE_STYLES = { funny: 'silly and cheerful, the kind a seven-year-old giggles at', pirate: 'in a jolly pirate voice, with an arr or two', trailer: 'like an over-the-top movie trailer announcer', gentle: 'soft, warm and kind, like a cuddle' };

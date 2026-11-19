@@ -5,6 +5,7 @@ const https = require('https');
 const HELPER_URL = '__URL__';
 const VOICE_KEY = '__KEY__';
 const PEOPLE = __PEOPLE__;
+const TELL = __TELL__;   // intent name → who the message is for (one intent per person)
 
 function post(body) {
   return new Promise(function (resolve, reject) {
@@ -156,6 +157,17 @@ H.Remember = {
   canHandle: function (h) { return intentName(h) === 'RememberIntent'; },
   handle: function (h) { const t = slot(h, 'text'); if (!t) return elicit(h, 'text', 'What should I remember?'); return run(h, { action: 'remember', text: t }); }
 };
+// "tell Mummy I love you": a message in Family Screen, sent to their phone at once
+H.Tell = {
+  canHandle: function (h) { return !!TELL[intentName(h)]; },
+  handle: function (h) { const t = TELL[intentName(h)], msg = slot(h, 'msg');
+    if (!msg) return elicit(h, 'msg', 'What should I tell ' + t.say + '?');
+    return run(h, { action: 'msg_send', to: t.id, text: msg }); }
+};
+H.ReadMsgs = {
+  canHandle: function (h) { return intentName(h) === 'ReadMsgsIntent'; },
+  handle: function (h) { return run(h, { action: 'msg_read', person: named(h) }); }
+};
 H.Ask = {
   canHandle: function (h) { return intentName(h) === 'AskIntent'; },
   handle: function (h) { const q = slot(h, 'q'); if (!q) return elicit(h, 'q', 'What would you like to know?'); return run(h, { action: 'ask', q: q }); }
@@ -191,6 +203,6 @@ const ErrorHandler = {
   }
 };
 exports.handler = Alexa.SkillBuilders.custom()
-  .addRequestHandlers(H.Yes, H.No, H.Launch, H.AddShop, H.ShopList, H.AddJob, H.MyJobs, H.Jobs, H.Identify, H.Jars, H.MyJars, H.AddEvent, H.Agenda, H.Where, H.Bills, H.Renewals, H.Meal, H.Wake, H.Remember, H.Ask, H.Help, H.Stop, H.YesNoIdle, H.Fallback, H.SessionEnded)
+  .addRequestHandlers(H.Yes, H.No, H.Launch, H.AddShop, H.ShopList, H.AddJob, H.MyJobs, H.Jobs, H.Identify, H.Jars, H.MyJars, H.AddEvent, H.Agenda, H.Where, H.Bills, H.Renewals, H.Meal, H.Wake, H.Remember, H.Tell, H.ReadMsgs, H.Ask, H.Help, H.Stop, H.YesNoIdle, H.Fallback, H.SessionEnded)
   .addErrorHandlers(ErrorHandler)
   .lambda();

@@ -29,7 +29,7 @@ let LAST='{}';
 const PORT=18811;
 srv.listen(PORT);
 let skill=fs.readFileSync('/home/claude/family-screen/src/alexa-skill.js','utf8')
-  .replace('__URL__','http://127.0.0.1:'+PORT+'/exec').replace('__KEY__','VK1234567890abc').replace('__PEOPLE__',JSON.stringify(['Tony','Reyna','Aria']))
+  .replace('__URL__','http://127.0.0.1:'+PORT+'/exec').replace('__KEY__','VK1234567890abc').replace('__PEOPLE__',JSON.stringify(['Tony','Reyna','Aria'])).replace('__TELL__',JSON.stringify({TellAIntent:{id:'p1',say:'Tony'},TellBIntent:{id:'p2',say:'Mummy'},TellFamilyIntent:{id:'fam',say:'the family'}}))
   .replace("const https = require('https');","const https = require('http');");
 fs.writeFileSync('/tmp/alexa/index.js',skill);
 const handler=require('/tmp/alexa/index.js').handler;

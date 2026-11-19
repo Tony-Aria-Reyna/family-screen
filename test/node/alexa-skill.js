@@ -18,6 +18,9 @@ function listDocs(p){ const pre=p+'/'; return Object.keys(DB).filter(k=>k.starts
 function patch(p,f){ DB[p]=Object.assign({},DB[p]||{},JSON.parse(JSON.stringify(f))); }
 function getDoc(p){ return DB[p]?Object.assign({},DB[p],{_id:p.split('/').pop()}):null; }
 function gemini(k,parts,q){ return JSON.stringify({speech:'Dinner on Thursday is spaghetti; you still need mince.'}); }
+function runQuery(par,col){ return listDocs(par+'/'+col); } function headers(){ return {}; }
+const PP={}; const PropertiesService={getScriptProperties:()=>({getProperty:k=>PP[k]||null,setProperty:(k,v)=>{PP[k]=String(v);},deleteProperty:k=>{delete PP[k];},getProperties:()=>Object.assign({},PP)})};
+const UrlFetchApp={fetch:()=>({getResponseCode:()=>200,getContentText:()=>'{}'})}; const Logger={log(){}};
 `;
 const helper=new Function('DB','ContentService',code+mocks+'; return doPost;')(DB,ContentService);
 const srv=http.createServer((req,res)=>{ let b=''; req.on('data',c=>b+=c); req.on('end',()=>{
@@ -28,7 +31,7 @@ let LAST='{}';
 const PORT=18811;
 srv.listen(PORT);
 let skill=fs.readFileSync('/home/claude/family-screen/src/alexa-skill.js','utf8')
-  .replace('__URL__','http://127.0.0.1:'+PORT+'/exec').replace('__KEY__','VK1234567890abc').replace('__PEOPLE__',JSON.stringify(['Tony','Reyna','Aria']))
+  .replace('__URL__','http://127.0.0.1:'+PORT+'/exec').replace('__KEY__','VK1234567890abc').replace('__PEOPLE__',JSON.stringify(['Tony','Reyna','Aria'])).replace('__TELL__',JSON.stringify({TellAIntent:{id:'p1',say:'Tony'},TellBIntent:{id:'p2',say:'Mummy'},TellFamilyIntent:{id:'fam',say:'the family'}}))
   .replace("const https = require('https');","const https = require('http');");
 fs.writeFileSync('/tmp/alexa/index.js',skill);
 const handler=require('/tmp/alexa/index.js').handler;
@@ -83,6 +86,10 @@ const dir=r=>(r.response.directives||[]).map(d=>d.type+(d.slotToElicit?':'+d.slo
   await T('→ no','IntentRequest','AMAZON.NoIntent',{},c2.sessionAttributes);
   await T('yes with nothing','IntentRequest','AMAZON.YesIntent',{});
   await T('where is Aria','IntentRequest','WhereIntent',{person:'Aria'});
+  await T('tell Mummy (no words)','IntentRequest','TellBIntent',{});
+  await T('tell Mummy','IntentRequest','TellBIntent',{msg:'I love you'});
+  await T('tell everyone','IntentRequest','TellFamilyIntent',{msg:'dinner is ready'});
+  await T('read my messages','IntentRequest','ReadMsgsIntent',{});
   console.log('\nwritten:',Object.keys(DB).filter(k=>/\/v[a-z0-9]{10,}/.test(k)).map(k=>k.split('/').slice(-2).join('/')+' → '+JSON.stringify(DB[k])).join('\n   '));
   srv.close();
 })();

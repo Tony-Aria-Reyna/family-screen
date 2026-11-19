@@ -33,7 +33,7 @@ async def main():
         print('fridge todo input kept:', await F.input_value('#tIn'))
         await F.fill('#tIn','')
         # fridge adds event, multi person
-        await F.click('#addBtn'); await F.click('[data-who=p1]'); await F.click('[data-who=p3]'); await F.fill('#evTitle','Swimming lessons'); await F.click('#sBtn'); await F.wait_for_timeout(600)
+        await F.click('#addBtn'); await F.click('#aaForm'); await F.click('[data-who=p1]'); await F.click('[data-who=p3]'); await F.fill('#evTitle','Swimming lessons'); await F.click('#sBtn'); await F.wait_for_timeout(600)
         print('phone events:', await P.evaluate("S.events.map(e=>e.title+'/'+e.whos.join('+')).join(',')"))
         # rename
         await F.click('#setBtn'); await F.fill('[data-pn=p1]','Tony'); await F.press('[data-pn=p1]','Tab'); await F.wait_for_timeout(600); await F.click('#ok')

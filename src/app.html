@@ -196,6 +196,24 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal{background:var(--card);border-radius:26px;width:min(920px,100%);max-height:94vh;overflow:auto;padding:22px 28px}
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
+.snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.addany{background:#fff;border:2px solid var(--line);border-radius:18px;padding:8px;margin:0 0 10px}
+.addany .aarow{display:flex;gap:6px;align-items:center}
+.addany .aain{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:18px;padding:8px 6px;background:transparent;user-select:text;-webkit-user-select:text}
+.addany .aaic{border:0;background:#f3efe6;border-radius:12px;font-size:20px;width:42px;height:42px;flex:none}
+.addany .aamic.on{background:#ffd6d6;animation:aapulse .8s infinite alternate}
+@keyframes aapulse{from{opacity:1}to{opacity:.5}}
+.addany .aago{border-radius:12px;padding:10px 14px;font-weight:800}
+.addany .aadone{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 6px 2px;font-size:16px;line-height:1.45}
+.addany .aanote{padding:6px 6px 2px;color:var(--muted);font-size:15px}
+.addany.big .aain{font-size:22px}
+
+.shd{font-size:21px;font-weight:800;margin:22px 0 4px;padding-top:12px;border-top:2px solid var(--line);scroll-margin-top:10px}
+.hlth{border:2px solid #b9e4c4;background:#f1fbf3;border-radius:16px;padding:12px 14px;margin:8px 0;color:var(--ink)}
+.hlth.warn{border-color:#f3c98b;background:#fff8ec}
+.hlth h4{margin:0 0 6px;font-size:18px;color:var(--ink)}
+.hlrow{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(0,0,0,.07)}
+.hlrow .hlmid{flex:1;display:flex;flex-direction:column;min-width:0}.hlrow .hlmid b{font-size:16px;line-height:1.3}.hlrow small{color:var(--muted);font-size:14px;line-height:1.3}.hlrow .hlic{width:22px;text-align:center;flex:none}
 .opts{display:flex;flex-wrap:wrap;gap:10px}
 .opt{border:3px solid var(--line);border-radius:16px;padding:12px 18px;font-size:21px;background:#fff;min-width:96px}
 .opt.on{border-color:var(--ink);background:var(--soft);font-weight:700}
@@ -746,7 +764,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
       <button class="globebtn msgbtn" id="msgBtn" aria-label="Messages">✉️<span>MSGS</span><i class="mdot" id="msgBadge" style="display:none"></i></button>
       <button class="globebtn askbtn" id="askBtn" aria-label="Ask">💬<span>ASK</span></button>
       <button class="iconbtn" id="setBtn" style="margin-left:auto" aria-label="Settings">⚙️</button>
-      <button class="bigadd" id="addBtn"><b>＋</b><span>Add to<br>calendar</span></button>
+      <button class="bigadd" id="addBtn"><b>＋</b><span>Add<br>anything</span></button>
     </div>
     <div class="bar" id="bar"></div>
     <div class="panel" id="calWrap"><div class="calhead" id="calhead"></div><div class="calbody" id="cal"></div></div>
@@ -2799,12 +2817,13 @@ function openMore(){
     m.querySelectorAll('[data-tile]').forEach(b=>b.onclick=()=>{ close(); moreTiles()[+b.dataset.tile][2](); });
   });
 }
-function openSettings(){
+function openSettings(at){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goAI">✨ AI</button><button class="opt" id="goHelpers">🧰 Helpers</button></div>
-    <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
+    <div class="snav">${SET_SECS.filter(x=>!LOCAL||!['health','mail'].includes(x[0])).map(x=>`<button class="opt sm" data-sgo="${x[0]}">${x[1]}</button>`).join('')}</div>
+    ${LOCAL?'':`<div class="shd" id="s-health">🩺 Health</div><div id="hcard">${healthHTML()}</div>`}
+    <div class="shd" id="s-family">👪 Family</div>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
@@ -2813,6 +2832,14 @@ function openSettings(){
       <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
       <div id="invList" class="note">Loading invites…</div>
       <div class="row" style="margin-top:8px"><input type="email" id="invIn" placeholder="e.g. friend@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="invAdd">✉️ Invite</button></div>`:''}`}
+    <div class="step">People: type each name and tap a colour <button class="xbtn" id="goWho" style="margin-left:8px">👪 Who’s who</button></div>
+    ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
+      ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
+      <label class="small"><input type="radio" name="trav" data-trav="${p.id}" ${p.traveller?'checked':''}> travels for work ✈️</label>
+      ${p.traveller?`<label class="small">Kids call them <input type="text" style="width:120px" value="${esc(p.nick||'')}" data-nick="${p.id}" placeholder="e.g. Mummy"></label>`:''}
+      ${S.people.length>1?`<button class="xbtn" data-prm="${p.id}">Remove</button>`:''}</div>`).join('')}
+    <div class="row" style="margin-top:10px"><button class="xbtn" id="padd">＋ Add a person</button><label class="small"><input type="radio" name="trav" data-trav="" ${tp?'':'checked'}> nobody travels</label></div>
+    ${tp?`<div class="row small" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center">🚕 ${esc(tName(tp))}'s taxi: pick-up <input type="number" min="0" max="240" id="txB" value="${taxiSet().before}" style="width:64px"> min before sign-on · drop-off <input type="number" min="0" max="240" id="txA" value="${taxiSet().after}" style="width:64px"> min after landing <span class="note">(0 = don't show)</span></div>`:''}
     <div class="srccard" style="margin:12px 0"><h4>🔢 Settings PIN ${S.pinHash?'<span class="pill-ok">on</span>':'<span class="pill-wait">off</span>'}</h4>
       <p class="note">Stops the kids changing settings, loading rosters or changing Mummy's city. The calendar and lists stay open for everyone.</p>
       <div class="row">${S.pinHash?'<button class="xbtn" id="pinChange">Change PIN</button><button class="xbtn" id="pinOff">Turn off</button>':'<button class="xbtn" id="pinSet" style="background:#ffe5a8;font-weight:800">Set a PIN</button>'}
@@ -2822,23 +2849,23 @@ function openSettings(){
       <label class="small"><input type="checkbox" id="privShow" ${showPriv()?'checked':''}> Show my private entries on this device</label>
       <div class="row" style="margin-top:8px;align-items:center"><span class="small">Signed in as ${esc(SYNC.me())}, which is</span>${S.people.map(q=>`<button class="opt sm ${mePerson()===q.id?'on':''}" data-mep="${q.id}"><span class="dot" style="background:${q.color}"></span>${esc(q.name)}</button>`).join('')}</div>
       <p class="note">Your Google account is linked to your name, so jobs you hand to someone else show “from ${esc(mePerson()?nm(mePerson()):'you')}”. ${S.people.filter(q=>q.email).map(q=>esc(q.name)+': '+esc(q.email)).join(' · ')}</p></div>`:''}
-    <div class="step">People: type each name and tap a colour <button class="xbtn" id="goWho" style="margin-left:8px">👪 Who’s who</button></div>
-    ${S.people.map(p=>`<div class="prow"><input type="text" value="${esc(p.name)}" data-pn="${p.id}">
-      ${PASTELS.map(c=>`<button class="sw ${p.color===c?'on':''}" style="background:${c}" data-pc="${p.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
-      <label class="small"><input type="radio" name="trav" data-trav="${p.id}" ${p.traveller?'checked':''}> travels for work ✈️</label>
-      ${p.traveller?`<label class="small">Kids call them <input type="text" style="width:120px" value="${esc(p.nick||'')}" data-nick="${p.id}" placeholder="e.g. Mummy"></label>`:''}
-      ${S.people.length>1?`<button class="xbtn" data-prm="${p.id}">Remove</button>`:''}</div>`).join('')}
-    <div class="row" style="margin-top:10px"><button class="xbtn" id="padd">＋ Add a person</button><label class="small"><input type="radio" name="trav" data-trav="" ${tp?'':'checked'}> nobody travels</label></div>
-    ${tp?`<div class="row small" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center">🚕 ${esc(tName(tp))}'s taxi: pick-up <input type="number" min="0" max="240" id="txB" value="${taxiSet().before}" style="width:64px"> min before sign-on · drop-off <input type="number" min="0" max="240" id="txA" value="${taxiSet().after}" style="width:64px"> min after landing <span class="note">(0 = don't show)</span></div>`:''}
-    <div class="step">Shops</div>
+    ${LOCAL?'':`<div class="shd" id="s-mail">✉️ Email addresses</div>
+    <p class="note">Forward emails to these addresses. Both are “+” versions of the Gmail that runs the Reminder helper, so there is nothing new to sign up for.</p>
+    <div class="step">🧾 Bills</div>${billSetupHTML()}
+    <div class="step">📥 Family inbox: school notes, invitations, appointments</div>${inboxSetupHTML()}`}
+    <div class="shd" id="s-conn">🔗 Connections</div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goAI">✨ AI</button><button class="opt" id="goHelpers">🧰 Helpers and Alexa</button></div>
+    <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
+    <div class="shd" id="s-dev">📱 This device</div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button></div>
+    ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
+    <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
+    <div class="shd" id="s-shops">🛒 Shops</div>
     ${S.shops.map(s=>`<div class="prow"><input type="text" value="${esc(s.name)}" data-sn="${s.id}">
       ${PASTELS.slice(0,8).map(c=>`<button class="sw ${s.color===c?'on':''}" style="background:${c}" data-sc="${s.id}" data-c="${c}" aria-label="colour"></button>`).join('')}
       <label class="small"><input type="checkbox" data-sa="${s.id}" ${s.aisles?'checked':''}> sort by aisle</label>
       ${S.shops.length>1?`<button class="xbtn" data-srm="${s.id}">Remove</button>`:''}</div>`).join('')}
     <div class="row" style="margin-top:10px"><button class="xbtn" id="sadd">＋ Add a shop</button></div>
-    ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
-    <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="step">This device</div>
-    <div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
     <div class="mact"><button class="save" id="ok">Done</button></div>`;
     const re=()=>{ save(); renderAll(); };
     m.querySelector('#goSync').onclick=()=>{ close(); openSync(); };
@@ -2865,6 +2892,8 @@ function openSettings(){
     m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
+    m.querySelectorAll('[data-sgo]').forEach(b=>b.onclick=()=>{ const t=m.querySelector('#s-'+b.dataset.sgo); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); });
+    if(!LOCAL){ wireHealth(m,draw,close); wireBillSetup(m,draw); wireInboxSetup(m,draw); }
     if(!LOCAL){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
@@ -2879,7 +2908,54 @@ function openSettings(){
     m.querySelector('#clr').onclick=()=>{ ['events','flights','groceries','todos'].forEach(k=>S[k]=S[k].filter(x=>!x.sample)); re(); toast('Sample entries removed'); };
     m.querySelector('#reset').onclick=()=>{ S=fresh(); ['events','flights','groceries','todos'].forEach(k=>S[k]=[]); re(); close(); toast('Cleared. Set up names in ⚙️ Settings'); };
     m.querySelector('#ok').onclick=close;
-  }; draw(); });
+  }; draw(); if(at) setTimeout(()=>{ const t=m.querySelector('#s-'+at); if(t) t.scrollIntoView({block:'start'}); },60); });
+}
+const SET_SECS=[['health','🩺 Health'],['family','👪 Family'],['mail','✉️ Email addresses'],['conn','🔗 Connections'],['dev','📱 This device'],['shops','🛒 Shops']];
+/* 2.1 The Health card: is everything working, and a one-tap fix where there is one. Built from what the Reminder helper
+   reports every run (notifier.health) and what this screen knows about itself. */
+let healthLive=null;
+const agoTxt=t=>{ const m=Math.round((Date.now()-t)/60e3); return m<2?'just now':m<60?m+' minutes ago':m<48*60?Math.round(m/60)+' hours ago':Math.round(m/1440)+' days ago'; };
+// the next Pacific-time midnight, when the free reads start again
+function readsReset(){ const now=new Date(), p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hourCycle:'h23',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(now).reduce((o,x)=>(o[x.type]=x.value,o),{});
+  return new Date(now.getTime()-((+p.hour%24)*3600+(+p.minute)*60+(+p.second))*1000-now.getMilliseconds()+864e5); }
+function healthItems(){
+  const out=[], nt=SYNC.getNotifier&&SYNC.getNotifier(), hl=healthLive||(nt&&nt.health)||{}, latestV=NOTIFIER?+((NOTIFIER.code.match(/HELPER_VERSION = (\d+)/)||[])[1]||0):0;
+  const n=x=>Number(x||0).toLocaleString('en-NZ');
+  const st=alertsState();
+  if(st==='off') out.push({bad:1,t:'Alerts are off on this phone',d:'Reminders and messages won’t reach it.',fix:'alerts',fl:'Turn on alerts'});
+  else if(st==='blocked') out.push({bad:1,t:'Alerts are blocked on this phone',d:'Allow notifications for Family Screen in the phone’s settings, then come back here.'});
+  else if(st==='ios') out.push({bad:1,t:'This iPhone needs Family Screen on its home screen to get alerts',fix:'install',fl:'Show me how'});
+  else if(isPhone()) out.push({t:'Alerts work on this phone'});
+  if(!nt||!nt.lastRun) out.push({bad:1,t:'The Reminder helper isn’t running yet',d:'It sends the reminders, reads the emails and answers Alexa.',fix:'helpers',fl:'Open Helpers'});
+  else if(Date.now()-nt.lastRun>20*60e3) out.push({bad:1,t:'The Reminder helper last ran '+agoTxt(nt.lastRun),d:'It normally runs every 5 minutes.',fix:'helpers',fl:'Open Helpers'});
+  else if(latestV&&(nt.version||0)<latestV) out.push({bad:1,t:'A newer Reminder helper is ready (v'+(nt.version||'?')+' → v'+latestV+')',d:'It normally updates itself within 15 minutes.',fix:'update',fl:'Update now'});
+  else out.push({t:'Reminder helper running (v'+(nt.version||'?')+', last run '+agoTxt(nt.lastRun)+')'});
+  if(nt&&nt.error) out.push({bad:1,t:'The helper’s last run had a problem',d:String(nt.error).slice(0,160)});
+  if(nt&&nt.rules&&nt.rules.ok===false) out.push({bad:1,t:'The database rules couldn’t be updated',d:String(nt.rules.error||'').slice(0,160),fix:'update',fl:'Try again'});
+  if(hl.reads!=null&&!hl.readsErr){ const r=readsReset(); out.push({bad:hl.reads>30000,t:'Database reads today: about '+n(hl.reads)+' of the free 50,000',d:'The helper '+n(hl.readsHelper)+', the screens '+n(hl.readsApp)+(r?'. The count starts again at '+r.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'}).replace(':00','')+'.':'.')}); }
+  if((hl.stale||[]).length) out.push({bad:1,t:hl.stale.join(', ')+' stopped updating',d:'No new entries for over 4 days.',fix:'sync',fl:'Check calendars'});
+  if(hl.slow) out.push({bad:1,t:hl.slow+' slow Alexa answer'+(hl.slow>1?'s':'')+' today',d:'Alexa gives up after 8 seconds. Asking again usually works.'});
+  if((hl.dropped||[]).length) out.push({bad:1,t:'Stopped getting alerts: '+hl.dropped.join(', '),d:'Opening Family Screen on that phone turns them back on.'});
+  if(S.billsHelper&&S.billsHelper.error) out.push({bad:1,t:'Bills by email had a problem',d:String(S.billsHelper.error).slice(0,160),fix:'mail',fl:'Email addresses'});
+  if(S.inboxHelper&&S.inboxHelper.error) out.push({bad:1,t:'The family inbox had a problem',d:String(S.inboxHelper.error).slice(0,160),fix:'mail',fl:'Email addresses'});
+  if(SYNC.privateOk&&!SYNC.privateOk()) out.push({bad:1,t:'Private entries can’t be read on this device',d:'Sign out and back in on this device.'});
+  return out;
+}
+function healthHTML(){ const it=healthItems(), bad=it.filter(x=>x.bad).length;
+  return `<div class="hlth ${bad?'warn':''}"><h4>${bad?'⚠️ '+bad+(bad>1?' things':' thing')+' to look at':'✅ Everything is working'}</h4>
+    ${it.map(x=>`<div class="hlrow ${x.bad?'bad':''}"><span class="hlic">${x.bad?'⚠️':'✓'}</span><span class="hlmid"><b>${esc(x.t)}</b>${x.d?`<small>${esc(x.d)}</small>`:''}</span>${x.fix?`<button class="xbtn" data-hfix="${x.fix}">${esc(x.fl)}</button>`:''}</div>`).join('')}
+    ${S.voiceUrl&&S.voiceKey?'<div class="row" style="margin-top:8px"><button class="cancel" data-hfix="check">🔄 Check again now</button></div>':''}</div>`; }
+function wireHealth(m,draw,close){
+  m.querySelectorAll('[data-hfix]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.hfix;
+    if(k==='alerts'){ b.disabled=true; b.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome();
+      setTimeout(()=>{ const hc=m.isConnected&&m.querySelector('#hcard'); if(hc){ hc.innerHTML=healthHTML(); wireHealth(m,draw,close); } },900); }
+    else if(k==='install'){ close(); showInstall(); }
+    else if(k==='helpers'){ close(); openHelpers(); }
+    else if(k==='sync'){ close(); openSync(); }
+    else if(k==='mail'){ const t=m.querySelector('#s-mail'); if(t) t.scrollIntoView({behavior:'smooth'}); }
+    else if(k==='update'||k==='check'){ b.disabled=true; b.textContent='🔄 Asking the helper…'; const j=await helperDo(k==='update'?'update':'health');
+      if(!j) toast('The helper didn’t answer. Try again in a minute.'); else { if(j.health) healthLive=j.health; toast(k==='update'?(j.speech||j.error||'Done'):'Checked just now'); }
+      if(m.isConnected){ const hc=m.querySelector('#hcard'); if(hc){ hc.innerHTML=healthHTML(); wireHealth(m,draw,close); } } } });
 }
 
 /* ================= install on a phone, tablet or computer ================= */
@@ -3080,7 +3156,8 @@ function renderHome(){
   // needs doing: my jobs first (overdue and due soon at the top), else everyone's
   const jobs=(me&&mine.length?mine:open).slice().sort((a,b)=>String(a.due||'9999').localeCompare(String(b.due||'9999')));
   const need=jobs.length||shop?`<button class="hneed" id="hNeed"><h3>✅ Needs doing</h3>${jobs.slice(0,3).map(t=>`<div class="hln">${esc(t.title)}${t.due?` <small>· ${esc(fmtD(new Date(t.due+'T12:00'),{weekday:'short',day:'numeric',month:'short'}))}</small>`:''}</div>`).join('')}${jobs.length>3?`<div class="hnone">+ ${jobs.length-3} more</div>`:''}${shop?`<div class="hln">🛒 ${shop} on the shopping list</div>`:''}</button>`:'';
-  el.innerHTML=alertsBanner()+`<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
+  const keepAdd=el.querySelector('#hAdd'); if(keepAdd) keepAdd.remove();
+  el.innerHTML=alertsBanner()+`<div id="hAddSlot"></div><button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
       ${T.show.length?T.show.map(line).join('')+(T.more?`<div class="hnone">+ ${T.more} more</div>`:''):`<div class="hnone">${T.done?'That’s everything for today ✓':'Nothing on today'}</div>`}</button>
     <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
     ${need}
@@ -3088,6 +3165,7 @@ function renderHome(){
     <div class="hmore">Everything else</div>
     <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
   const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
+  { const slot=$('#hAddSlot'); if(slot){ if(keepAdd) slot.replaceWith(keepAdd); else { slot.outerHTML=addAnyHTML('hAdd'); wireAddAny($('#hAdd')); } } }
   $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
   { const n=$('#hNeed'); if(n) n.onclick=()=>setTab(jobs.length?'todo':'shop'); }
   { const on=$('#hAlertsOn'); if(on) on.onclick=async()=>{ on.disabled=true; on.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome(); };
@@ -3325,9 +3403,9 @@ let launchAct=(()=>{ try{ const v=new URLSearchParams(location.search).get('open
 function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null; try{ sessionStorage.removeItem('fs.open'); }catch(e){}
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); }
-    else if(a==='inbox') openInbox(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
+    else if(a==='inbox') openInbox(); else if(a==='share') takeShare(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
 function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
-$('#addBtn').onclick=()=>openAdd(null);
+$('#addBtn').onclick=()=>openAddAny();   // 2.3: one box for calendar, jobs and shopping; the full calendar form is a tap away inside it
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
 $('#mealBtn').onclick=openMeals;

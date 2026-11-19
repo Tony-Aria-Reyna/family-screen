@@ -1,10 +1,29 @@
 // Keeps the Family Screen app itself working with no internet. Family data is cached by Firebase separately.
-const VERSION = 'fs-mwneuzc8';
+const VERSION = 'fs-mwnfghjn';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'earth-day.jpg', 'earth-night.jpg'].concat(["lib/globe-8f2384e0ca.js","lib/cards-23fbe90e1e.js"]);
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
-  const req = e.request; if (req.method !== 'GET') return;
+  const req = e.request;
+  // 2.4 Android's Share menu → Family Screen: keep what was shared (text, link, up to 3 files) and open the app to sort it
+  if (req.method === 'POST' && /\/share\/?$/.test(new URL(req.url).pathname)) {
+    e.respondWith((async () => {
+      try {
+        const f = await req.formData(), c = await caches.open('fs-share');
+        const meta = { title: String(f.get('title') || ''), text: String(f.get('text') || ''), url: String(f.get('url') || ''), at: Date.now(), files: [] };
+        const files = f.getAll('file').filter(x => x && typeof x === 'object' && x.size);
+        for (let i = 0; i < Math.min(files.length, 3); i++) {
+          const x = files[i], k = 'share-file-' + i;
+          await c.put(k, new Response(x, { headers: { 'Content-Type': x.type || 'application/octet-stream' } }));
+          meta.files.push({ k, type: x.type || '', name: x.name || 'shared', size: x.size });
+        }
+        await c.put('share-meta', new Response(JSON.stringify(meta), { headers: { 'Content-Type': 'application/json' } }));
+      } catch (x) {}
+      return Response.redirect(new URL('./?open=share', self.registration.scope).href, 303);
+    })());
+    return;
+  }
+  if (req.method !== 'GET') return;
   const url = new URL(req.url); if (url.origin !== location.origin) return;
   if (/manifest\.webmanifest$/.test(url.pathname)) { e.respondWith(fetch(req, { cache: 'no-cache' }).catch(() => caches.match(req))); return; }   // always the newest app details (shortcuts)
   if (/version\.json$/.test(url.pathname)) { e.respondWith(fetch(req).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } }))); return; }   // never cached

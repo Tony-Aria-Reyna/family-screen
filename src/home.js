@@ -886,8 +886,19 @@ function voiceNameProblem(n){ const w=n.split(' ');
   if(w.some(x=>['ask','tell','open','launch','start','load','begin','enable','use','run','play','resume','to','from','by','if','and','whether','in','using','with','about','for','that','on'].includes(x))) return 'Leave out words like ask, tell, open, to, for and and. Alexa uses those herself.';
   if(w.length===2&&w.some(x=>['the','a','an','of','up','at','off'].includes(x))) return 'A two-word name can’t use the, a, an or of.';
   return ''; }
+/* 3.2 "Alexa, ask big sis to tell Mummy I love you": Alexa's free-text slot can't sit beside a name slot, so each person
+   gets an intent of their own, answering to every name they go by (a name two people share is left out). */
+// who a voice message is from when Alexa can't tell: the family's choice, else the first person without their own account (usually a child)
+const alexaFrom=()=>S.people.some(p=>p.id===S.alexaFrom)?S.alexaFrom:((eaters().find(p=>!p.email)||eaters()[0]||{}).id||'');
+function tellTargets(){
+  const clean=a=>String(a||'').replace(/[^A-Za-z '-]/g,'').replace(/\s+/g,' ').trim().toLowerCase(), used={};
+  const list=eaters().map(p=>({id:p.id,say:String(p.nick||p.name||''),aka:[...new Set([p.name].concat(voiceAka(p)).map(clean).filter(a=>a&&a.length>1))]}));
+  list.forEach(t=>t.aka.forEach(a=>used[a]=(used[a]||0)+1));
+  return list.map((t,i)=>Object.assign(t,{intent:'Tell'+String.fromCharCode(65+i)+'Intent',aka:t.aka.filter(a=>used[a]===1&&!['me','everyone','the family'].includes(a))})).filter(t=>t.aka.length).slice(0,20);
+}
 function alexaCode(){
-  return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames()));
+  const tell={}; tellTargets().forEach(t=>tell[t.intent]={id:t.id,say:t.say}); tell.TellFamilyIntent={id:'fam',say:'the family'};
+  return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames())).replace('__TELL__',JSON.stringify(tell));
 }
 function alexaModel(){
   const people=alexaNames(), syn=n=>{ const p=eaters().find(q=>alexaNames().includes(n)&&String(q.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim().toLowerCase()===n.toLowerCase()); return p?voiceAka(p).map(a=>a.replace(/[^A-Za-z0-9 '-]/g,'').trim()).filter(Boolean):[]; }, P={name:'PERSON',values:people.concat(['everyone']).map(n=>{ const sy=syn(n); return {name:sy.length?{value:n,synonyms:sy}:{value:n}}; })};
@@ -911,6 +922,9 @@ function alexaModel(){
     I('MealIntent',[s('when','AMAZON.DATE')],['what is for dinner','what is for dinner {when}','what are we eating {when}','what is for tea','what is the meal plan','what is for dinner tonight']),
     I('WakeIntent',[s('person','PERSON')],['wake up {person}','wake {person} up','wake {person}','wake up','wake up now','wake me up','get {person} up','get up {person}','sing to {person}','sing {person} awake','sing the wake up song','sing the wake up song for {person}','sing {person} the wake up song','sing a wake up song for {person}','good morning song','good morning song for {person}','morning song for {person}','time to get up {person}','time for {person} to get up','get {person} out of bed','do the wake up song']),
     I('RememberIntent',[s('text','AMAZON.SearchQuery')],['remember {text}','remember that {text}','make a note {text}','note that {text}','do not forget {text}']),
+    ...tellTargets().map(t=>I(t.intent,[s('msg','AMAZON.SearchQuery')],t.aka.flatMap(a=>['tell '+a+' {msg}','tell '+a+' that {msg}','message '+a+' {msg}','send '+a+' a message {msg}','send a message to '+a+' {msg}']))),
+    I('TellFamilyIntent',[s('msg','AMAZON.SearchQuery')],['tell everyone {msg}','tell everyone that {msg}','tell the family {msg}','tell the family that {msg}','message everyone {msg}','message the family {msg}']),
+    I('ReadMsgsIntent',[s('person','PERSON')],['read my messages','read the messages','any messages','any new messages','do i have any messages','have i got any messages','what are my messages','read {person} messages','has anyone messaged me']),
     I('AskIntent',[s('q','AMAZON.SearchQuery')],['tell me {q}','ask {q}','answer {q}','find out {q}','i want to know {q}','do you know {q}','question {q}','help me with {q}','what about {q}'])
   ]}}},null,2);
 }
@@ -948,11 +962,16 @@ function openAlexa(){
       <div class="srccard" style="margin-top:12px"><h4>Step 3 · Say</h4>
         <div class="vsay">${[['What’s on today?','the calendar, any day'],['What’s on this week?',''],['Where is everyone?','who’s away, who’s flying, when she’s home'],['What’s for dinner?','tonight or any night'],['What bills are due?',''],['What’s coming up?','WOF, rego, insurance'],['What are my jobs?','your own, if it knows your voice'],['How much have I saved?','the savings jars'],['Add milk to the shopping list.','saves straight away'],['What’s on the shopping list?',''],['Add a job.','it asks what, and who for'],['Put something in the calendar.','asks what, when, what time, who for — then reads it back before saving'],['Remember that the bins go out Tuesday.','goes into family memory'],['Tell me what we need for Thursday’s dinner.','anything at all']].map(([a,b])=>`<div><b>“Alexa, ask ${esc(voiceSay())} ${esc(a)}”</b>${b?`<small>${esc(b)}</small>`:''}</div>`).join('')}</div>
         <p class="note">You can also say “Alexa, open ${esc(voiceSay())}” and then just talk, without saying the name again.</p></div>
+      <div class="srccard" style="margin-top:12px"><h4>💬 Messages by voice</h4>
+        <p class="note">Say <b>“Alexa, ask ${esc(voiceSay())} to tell ${esc((tellTargets()[0]||{}).aka?.[0]||'Mummy')} I love you”</b> or <b>“… to tell everyone dinner is ready”</b>. It goes to their phone like any message, and they reply in ✉️ Messages. <b>“Alexa, ask ${esc(voiceSay())} to read my messages”</b> reads the replies.</p>
+        <label class="small">When Alexa doesn’t know the voice, the message is from <select id="vFrom">${eaters().map(p=>`<option value="${p.id}" ${alexaFrom()===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <p class="note">After changing names, copy the skill code and the voice model into the Alexa console again (Step 2).</p></div>
       <div class="srccard" style="margin-top:12px"><h4>🗣️ So it knows who's talking</h4>
         <p class="note">“What are my jobs?” and “how much have I saved?” need Alexa to recognise the voice. In the <b>Alexa app</b> → <b>More</b> → <b>Settings</b> → <b>Your Profile &amp; Family</b> → <b>Voice ID</b>, each of you sets up a voice profile (a minute each). Then say <b>“Alexa, ask ${esc(voiceSay())} I am ${esc((eaters()[0]||{}).name||'Tony')}”</b> once and it remembers which profile is which person.</p>
         <p class="note">Without voice profiles it just asks “who are you?” first — nothing breaks.</p>
         <p class="note">🔒 Private entries and gift ideas are never read out, whoever is in the room. Bill amounts and savings totals are.</p></div>`;
     m.querySelector('#x').onclick=close;
+    { const vf=m.querySelector('#vFrom'); if(vf) vf.onchange=()=>{ S.alexaFrom=vf.value; save(); toast('Voice messages are from '+nm(vf.value)+' unless Alexa knows the voice'); }; }
     const vu=m.querySelector('#vu');
     m.querySelector('#vs').onclick=()=>{ const v=vu.value.trim(); if(v&&!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(v)){ toast('That should be the web app URL ending in /exec'); return; } S.voiceUrl=v; save(); test=''; draw(); toast('Saved'); };
     m.querySelector('#vns').onclick=()=>{ const n=cleanVoiceName(m.querySelector('#vn').value); const bad=voiceNameProblem(n); if(bad){ toast(bad); return; } S.voiceName=n==='family screen'?'':n; save(); draw(); toast('Saved. Now copy the voice model into Amazon again.'); };
@@ -1128,6 +1147,41 @@ function inboxAdd(d,it){
   else { const by=it.due?' (by '+fmtD(kd(it.due),{weekday:'short',day:'numeric',month:'short'})+')':''; S.todos.unshift({id:uid(),title:(it.title+by+note).slice(0,130),who,done:false,at:Date.now(),from:'inbox'}); }
   it.state='added'; if(!(d.items||[]).some(i=>i.state==='new')) d.status='done';
 }
+/* 2.4 Something shared from another Android app (an email, a photo, a screenshot, a web page): the AI reads it and it
+   lands in the family inbox, where each entry or job waits for someone to tap Add, the same as a forwarded email. */
+async function takeShare(){
+  let c, meta; try{ c=await caches.open('fs-share'); const r=await c.match('share-meta'); if(!r) return; meta=await r.json(); }catch(e){ return; }
+  const files=[]; for(const f of meta.files||[]){ try{ const r=await c.match(f.k); if(r) files.push(new File([await r.blob()],f.name||'shared',{type:f.type||''})); }catch(e){} }
+  try{ await Promise.all(['share-meta'].concat((meta.files||[]).map(f=>f.k)).map(k=>c.delete(k))); }catch(e){}
+  let text=[meta.title,meta.text].filter(Boolean).join('\n'); const link=meta.url||((text.match(/https?:\/\/\S+/)||[])[0])||'';
+  const tf=files.find(f=>/^text\/|\.(ics|eml|txt)$/i.test(f.type+' '+f.name)); if(tf) try{ text+='\n'+(await tf.text()).slice(0,12000); }catch(e){}
+  const pic=files.find(f=>/^image\/|application\/pdf/.test(f.type));
+  const me=mePerson(), d={id:uid(),status:'new',at:Date.now(),sender:'Shared by '+(me?nm(me):'the family'),summary:'',items:[],shared:true,
+    fromEmail:{from:'Shared',subject:String(meta.title||(pic?pic.name:'')||link||text.split('\n')[0]||'Shared').slice(0,120),link}};
+  if(aiOK()){ const done=aiBusy('Reading what you shared…');
+    try{ const out=await aiAsk({json:true,file:pic?await fileForAI(pic):undefined,url:link&&!text.replace(link,'').trim()&&!pic?link:undefined,
+        prompt:withMemory(`A family member shared this to the family inbox${pic?' (the attached file)':''}${link?' (link: '+link+')':''}.${text.trim()?' Text: +text.slice(0,12000)+':''}
+Find what the family needs to do or go to. Return JSON only: {"summary":"one short sentence about what it is","items":[{"type":"event|todo","title":"short","date":"YYYY-MM-DD or empty","time":"HH:MM or empty","end":"HH:MM or empty","due":"YYYY-MM-DD or empty","note":"a few words, e.g. what to bring, or empty","who":"person id or empty"}]}
+People (id = names): ${S.people.filter(p=>p.id!=='all').map(p=>p.id+' = '+[p.name,p.nick,p.role].filter(Boolean).join(' / ')).join('; ')}. Leave out anything already past. No items is fine.`,text)});
+      d.summary=String(out.summary||'').slice(0,300); d.items=(out.items||[]).filter(x=>x&&x.title).slice(0,12).map(x=>({id:uid(),type:x.type==='event'&&/^\d{4}-\d\d-\d\d$/.test(x.date||'')?'event':'todo',title:String(x.title).slice(0,110),date:x.date||'',time:/^\d\d:\d\d$/.test(x.time||'')?x.time:'',end:/^\d\d:\d\d$/.test(x.end||'')?x.end:'',due:/^\d{4}-\d\d-\d\d$/.test(x.due||'')?x.due:'',note:String(x.note||'').slice(0,80),who:S.people.some(p=>p.id===x.who)?x.who:'',state:'new'}));
+      if(!d.items.length) d.status='none'; }
+    catch(e){ d.summary=e.message==='quiet'?'':'The AI couldn’t read it: '+e.message; }
+    done(); }
+  else d.summary='Saved here. Turn on AI (⚙️ Settings → Connections → ✨ AI) and shared things are sorted into entries and jobs for you.';
+  if(!d.summary&&text) d.summary=text.slice(0,200);
+  S.inbox=S.inbox||[]; S.inbox.unshift(d); save(); openInbox();
+  toast(d.items.length?d.items.length+(d.items.length===1?' thing':' things')+' to check in the inbox':'Saved to the inbox');
+}
+// the family inbox address, as Settings → Email addresses shows it (2.1)
+function inboxSetupHTML(){ const ih=S.inboxHelper;
+  return `<div class="rform"><label>Family inbox address <small>(a “+” version of the Gmail that runs your Reminder helper, e.g. yourname+family@gmail.com. Bills sent here are passed on to Bills.)</small><input class="txt" id="ia" type="email" value="${esc(S.inboxEmail||'')}" placeholder="yourname+family@gmail.com"></label>
+    <div><button class="save" id="isv" style="border-radius:14px;padding:12px 20px;font-weight:800">Save</button></div></div>
+    <p class="note">Read once a day at about 6am, or straight away with Check now. Nothing goes on the calendar until someone taps Add in 📥 Inbox.${ih&&ih.lastRun?' Last checked '+new Date(ih.lastRun).toLocaleString('en-NZ',{weekday:'short',hour:'numeric',minute:'2-digit'})+'.':''}</p>
+    ${S.voiceUrl&&S.voiceKey&&S.inboxEmail?'<button class="xbtn" id="ick">🔄 Check for new emails now</button>':''}`; }
+function wireInboxSetup(m,draw){
+  const sv=m.querySelector('#isv'); if(sv) sv.onclick=()=>{ const e=m.querySelector('#ia').value.trim().toLowerCase(); if(e&&!/^[^\s@]+\+[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ toast('Use a “+” address, like yourname+family@gmail.com'); return; } if(e&&e===String(S.billEmail||'').toLowerCase()){ toast('Use a different address from the bills one'); return; } S.inboxEmail=e; save(); toast(e?'Saved. Forward an email, then tap Check now.':'Inbox turned off'); draw(); };
+  const ck=m.querySelector('#ick'); if(ck) ck.onclick=async()=>{ ck.disabled=true; ck.textContent='🔄 Checking…'; const j=await helperDo('inbox_check'); toast(j?(j.speech||j.error||'Done'):'The helper didn’t answer. Try again in a minute.'); draw(); };
+}
 function openInbox(){
   const cut=Date.now()-45*864e5; if((S.inbox||[]).some(d=>d.at<cut)){ S.inbox=S.inbox.filter(d=>d.at>=cut); save(); }
   let setup=!S.inboxEmail;
@@ -1159,4 +1213,106 @@ function openInbox(){
     };
     draw();
   });
+}
+
+/* ================= words in the screen's own language (3.1) =================
+   English unless this screen is set to Japanese (⚙️ Settings → This device → Language). JA holds the Japanese for each
+   English phrase; anything missing stays in English. */
+const appLang=()=>lsGet('fs.lang','')==='ja'?'ja':'en';
+const JA={};
+function tr(s){ return appLang()==='ja'&&JA[s]!=null?JA[s]:s; }
+Object.assign(JA,{'＋ Add anything: milk, dentist Tue 3pm…':'＋ なんでも追加：牛乳、火曜3時 歯医者…','Add anything':'なんでも追加','Say it':'声で入力','Photo of a list':'メモの写真','Add':'追加','Undo':'元に戻す',
+  'Taken off again':'取り消しました','Reading the photo…':'写真を読んでいます…','Sorting it…':'仕分けています…','Nothing to add was found.':'追加するものが見つかりませんでした。',
+  'I didn’t catch that. Try again or type it.':'聞き取れませんでした。もう一度話すか、入力してください。','Voice isn’t available here. Type it instead.':'ここでは音声入力が使えません。入力してください。',
+  'Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.':'写真を読むにはAIの設定が必要です：⚙️ 設定 → 接続 → ✨ AI','That photo couldn’t be read.':'その写真は読めませんでした。',
+  '＋ Add anything':'＋ なんでも追加','Close':'閉じる','by':'期限','Calendar entry form':'予定の入力画面',
+  'Shopping, jobs and calendar entries, in your own words. Several at once is fine, one per line. 📷 reads a photo of a paper list.':'買い物、やること、予定を、ふだんの言葉で。1行に1つずつなら、いくつでも。📷 で紙のメモの写真を読み取ります。'});
+
+/* ================= 2.3 one add-anything box =================
+   Type it, say it, or take a photo of a paper list: "milk, eggs and bread", "Dentist Tuesday 3pm for Aria",
+   "Tony: fix the gate by Friday", or a note in Japanese. The AI sorts it into calendar entries, jobs and shopping;
+   without AI, simple rules do. Everything added can be undone from the same box. */
+const AA_SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const aiOK=()=>!LOCAL&&(!!S.aiKey||(S.aiProv==='claude'&&!!S.claudeKey)||!!(S.linkHelper&&S.linkHelper.url))||!!window.AI_TEST;
+function aaPerson(name){ const k=String(name||'').trim().toLowerCase(); if(!k) return null;
+  return S.people.find(p=>p.id!=='all'&&[p.name,p.nick,p.role].concat(String(p.aka||'').split(',')).some(x=>String(x||'').trim().toLowerCase()===k))||null; }
+function addAnyHTML(id,big){
+  return `<div class="addany${big?' big':''}" id="${id}"><div class="aarow"><input type="text" class="aain" placeholder="${esc(tr('＋ Add anything: milk, dentist Tue 3pm…'))}" enterkeyhint="done" autocomplete="off" aria-label="${esc(tr('Add anything'))}">
+    ${AA_SR?`<button class="aaic aamic" aria-label="${esc(tr('Say it'))}">🎤</button>`:''}<button class="aaic aacam" aria-label="${esc(tr('Photo of a list'))}">📷</button><button class="save aago">${esc(tr('Add'))}</button></div>
+    <input type="file" accept="image/*" class="aafile" hidden><div class="aares"></div></div>`; }
+function wireAddAny(box,after){
+  if(!box) return; const inp=box.querySelector('.aain'), go=box.querySelector('.aago'), res=box.querySelector('.aares'), file=box.querySelector('.aafile');
+  let busy=false;
+  const show=(added,note)=>{ clearTimeout(box._t);
+    res.innerHTML=added.length?`<div class="aadone"><span>${added.map(a=>esc(a.label)).join('<br>')}</span><button class="cancel aaundo">${esc(tr('Undo'))}</button></div>`:note?`<div class="aanote">${esc(note)}</div>`:'';
+    const u=res.querySelector('.aaundo'); if(u) u.onclick=()=>{ undoAdds(added); res.innerHTML=`<div class="aanote">${esc(tr('Taken off again'))}</div>`; box._t=setTimeout(()=>res.innerHTML='',4000); if(after) after(); };
+    box._t=setTimeout(()=>{ res.innerHTML=''; },added.length?20000:8000); };
+  const run=async(text,photo)=>{ if(busy) return; text=String(text||'').trim(); if(!text&&!photo) { inp.focus(); return; }
+    busy=true; go.disabled=true; go.textContent='…'; res.innerHTML=`<div class="aanote">${esc(photo?tr('Reading the photo…'):tr('Sorting it…'))}</div>`;
+    try{ const items=await sortAdds(text,photo); const added=applyAdds(items); inp.value=''; show(added,added.length?'':tr('Nothing to add was found.')); if(after) after(); }
+    catch(e){ show([],e.message==='quiet'?'':e.message); }
+    busy=false; go.disabled=false; go.textContent=tr('Add'); };
+  go.onclick=()=>run(inp.value);
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); run(inp.value); } };
+  const mic=box.querySelector('.aamic'); if(mic) mic.onclick=()=>{ try{ const r=new AA_SR(); r.lang=appLang()==='ja'?'ja-JP':'en-NZ'; r.interimResults=true; mic.classList.add('on');
+      r.onresult=ev=>{ const t=[...ev.results].map(x=>x[0].transcript).join(' '); inp.value=t; if(ev.results[ev.results.length-1].isFinal){ try{ r.stop(); }catch(x){} run(t); } };
+      r.onerror=()=>{ mic.classList.remove('on'); show([],tr('I didn’t catch that. Try again or type it.')); }; r.onend=()=>mic.classList.remove('on'); r.start(); }catch(e){ show([],tr('Voice isn’t available here. Type it instead.')); } };
+  box.querySelector('.aacam').onclick=()=>{ if(!aiOK()){ show([],tr('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.')); return; } file.click(); };
+  file.onchange=async()=>{ const f=file.files&&file.files[0]; file.value=''; if(!f) return; let data; try{ data=await fileForAI(f); }catch(e){ show([],tr('That photo couldn’t be read.')); return; } run(inp.value,data); };
+}
+function openAddAny(){ modal((m,close)=>{ m.innerHTML=`<div class="tvhead"><h2>${esc(tr('＋ Add anything'))}</h2><button class="cancel" id="x">${esc(tr('Close'))}</button></div>${addAnyHTML('mAdd',true)}
+    <p class="note">${esc(tr('Shopping, jobs and calendar entries, in your own words. Several at once is fine, one per line. 📷 reads a photo of a paper list.'))}</p>
+    <div class="row"><button class="cancel" id="aaForm">📅 ${esc(tr('Calendar entry form'))}</button></div>`;
+  m.querySelector('#x').onclick=close; m.querySelector('#aaForm').onclick=()=>{ close(); openAdd(null); }; wireAddAny(m.querySelector('#mAdd'),()=>renderAll()); setTimeout(()=>{ const i=m.querySelector('.aain'); if(i) i.focus(); },80); }); }
+async function sortAdds(text,photo){
+  if(!aiOK()) { if(photo) throw new Error(tr('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.')); return addRules(text); }
+  const ppl=S.people.filter(p=>p.id!=='all').map(p=>`${p.id} = ${[p.name,p.nick,p.role,p.aka].filter(Boolean).join(' / ')}`).join('; ');
+  const shops=S.shops.map(s=>`${s.id} = ${s.name}`).join('; ');
+  const prompt=`Sort what a family member ${photo?'wrote on the attached photo of a paper note or list'+(text?' (and typed: """'+text+'""")':''):'typed: """'+text+'"""'} into calendar entries, jobs and shopping.
+People (id = names): ${ppl}. Shops (id = name): ${shops}. Today is ${dk(new Date())} (${fmtD(new Date(),{weekday:'long'})}), New Zealand.
+Return JSON only: {"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":"person id or empty","shop":"shop id or empty"}]}
+Rules: each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. Never translate. Leave out anything crossed out.`;
+  const out=await aiAsk({prompt:withMemory(prompt,text),json:true,file:photo||undefined});
+  const items=Array.isArray(out)?out:(out&&out.items)||[]; return items.filter(x=>x&&x.title);
+}
+// without AI: today/tomorrow/weekday and "3pm" make an entry, "buy …" or a list of food makes shopping, the rest are jobs
+function addRules(text){
+  const out=[], WD=['sun','mon','tue','wed','thu','fri','sat'], now=new Date();
+  String(text||'').split(/\n|;/).map(x=>x.trim()).filter(Boolean).forEach(line=>{
+    let who=''; const a=line.match(/^([^:]{2,24}):\s*(.+)$/); if(a&&aaPerson(a[1])){ who=aaPerson(a[1]).id; line=a[2]; }
+    const b=line.match(/\s+for\s+([^\s,]+)\s*$/i); if(b&&aaPerson(b[1])){ who=aaPerson(b[1]).id; line=line.slice(0,b.index); }
+    const low=line.toLowerCase(); let date='', time='';
+    if(/\btoday\b/.test(low)) date=dk(now); else if(/\btomorrow\b/.test(low)) date=dk(addDays(now,1));
+    else { const m=low.match(/\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b/); if(m){ let n=(WD.indexOf(m[1])-now.getDay()+7)%7; if(!n) n=7; date=dk(addDays(now,n)); } }
+    const t=low.match(/\b(\d{1,2})(?:[:.](\d\d))?\s*(am|pm)\b/); if(t){ let h=+t[1]%12; if(t[3]==='pm') h+=12; time=String(h).padStart(2,'0')+':'+(t[2]||'00'); if(!date) date=dk(now); }
+    const clean=line.replace(/\b(by\s+|on\s+|at\s+)?(today|tomorrow|(sun|mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?)(day)?)\b/ig,'').replace(/\b(at\s+)?\d{1,2}([:.]\d\d)?\s*(am|pm)\b/ig,'').replace(/\s{2,}/g,' ').replace(/[\s,.-]+$/,'').trim()||line;
+    const parts=line.replace(/^(buy|get|need|pick up)\s+/i,'').split(/,|\band\b|、|と/).map(x=>x.trim()).filter(Boolean);
+    if(date&&time) out.push({type:'event',title:clean,date,time,who});
+    else if(!date&&(/^(buy|get|need|pick up)\s+/i.test(line)||parts.every(x=>x.length<30&&guessAisle(x)!=='Other'))) parts.forEach(x=>out.push({type:'shop',title:x}));
+    else out.push({type:'todo',title:clean,date,who});
+  });
+  return out;
+}
+function applyAdds(items){
+  const added=[], ok=d=>/^\d{4}-\d\d-\d\d$/.test(d||'');
+  for(const it of items||[]){
+    const title=String(it.title||'').trim().slice(0,110); if(!title) continue;
+    const who=S.people.some(p=>p.id===it.who&&p.id!=='all')?it.who:'';
+    if(it.type==='shop'){ const sid=S.shops.some(s=>s.id===it.shop)?it.shop:suggestShop(title);
+      const ex=S.groceries.find(x=>x.shop===sid&&x.name.toLowerCase()===title.toLowerCase());
+      if(ex){ if(ex.done){ ex.done=false; added.push({k:'groceries',id:ex.id,undone:true,label:'🛒 '+ex.name+' ('+shop(sid).name+')'}); } continue; }
+      const g={id:uid(),name:title.charAt(0).toUpperCase()+title.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(title):'',done:false}; S.groceries.push(g); S.itemShop[title.toLowerCase()]=sid;
+      added.push({k:'groceries',id:g.id,label:'🛒 '+g.name+' ('+shop(sid).name+')'}); }
+    else if(it.type==='event'&&ok(it.date)){ const time=/^\d\d:\d\d$/.test(it.time||'')?it.time:'';
+      const ev={id:uid(),whos:[who||(person('all')?'all':S.people[0].id)],title,addr:'',date:it.date,time,dur:time?Math.max(15,Math.min(720,+it.mins||60)):0}; S.events.push(ev);
+      added.push({k:'events',id:ev.id,label:'📅 '+title+' · '+fmtD(kd(it.date),{weekday:'short',day:'numeric',month:'short'})+(time?' '+t12(time):'')+(who?' · '+nm(who):'')}); }
+    else { const t={id:uid(),title,done:false,who}; if(ok(it.date)) t.due=it.date; S.todos.push(t);
+      added.push({k:'todos',id:t.id,label:'✅ '+title+(who?' · '+nm(who):'')+(t.due?' · '+tr('by')+' '+fmtD(kd(t.due),{weekday:'short',day:'numeric',month:'short'}):'')}); }
+  }
+  if(added.length){ save(); renderAll(); }
+  return added;
+}
+function undoAdds(added){
+  added.forEach(a=>{ const l=S[a.k]||[], i=l.findIndex(x=>x.id===a.id); if(i<0) return; if(a.undone) l[i].done=true; else l.splice(i,1); });
+  save(); renderAll();
 }
