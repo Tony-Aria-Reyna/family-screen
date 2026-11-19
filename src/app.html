@@ -536,6 +536,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .ibit select{font:inherit;font-size:15px;padding:6px;border-radius:10px;border:1px solid var(--line);max-width:120px}.ibit button{padding:7px 14px}
 .ibst{color:var(--muted);font-weight:700}.ibact{margin-top:8px;gap:8px;flex-wrap:wrap}.ibact a{text-decoration:none;display:inline-flex;align-items:center;border-radius:14px;padding:8px 14px;color:var(--ink);font-weight:700}
 .hmore{margin:18px 2px 8px;font-size:15px;font-weight:800;color:var(--muted)}
+.hwarn{background:#fff4e5;border:2px solid #f3c58a;border-radius:20px;padding:14px 16px;margin:0 0 12px}.hwarn b{display:block;font-size:16px;line-height:1.35;margin-bottom:8px}.hwarn .row{gap:8px;flex-wrap:wrap}
+.hneed{display:block;width:100%;text-align:left;font:inherit;background:#fff;border:2px solid var(--line);border-radius:24px;padding:14px 18px;margin:12px 0 0;color:var(--ink)}.hneed h3{margin:0 0 6px;font-size:17px}.hneed .hln{border-left:4px solid #c3e8cc;padding:4px 10px;margin:4px 0;font-size:16px}.hneed small{color:var(--muted)}
 @media (max-width:900px){
   body{font-size:18px}
   .app{display:block;height:auto;min-height:100vh;padding:0 0 calc(76px + env(safe-area-inset-bottom))}
@@ -2503,11 +2505,35 @@ async function turnOnPush(){
   const old=lsGet('fs.pushHash',''); if(old&&old!==hash){ try{ await SYNC.removeDevice(old); }catch(e){} }
   lsSet('fs.pushHash',hash); return true;
 }
-async function refreshPushToken(){ // keep this phone's address up to date
-  try{ const VK=(CONFIG&&CONFIG.vapidKey)||S.vapidKey; if(LOCAL||!VK||!lsGet('fs.pushHash','')||Notification.permission!=='granted') return;
-    const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(VK,reg), hash=hashStr(token), old=lsGet('fs.pushHash',''), dev=SYNC.getDevices()[old];
-    if(hash!==old&&dev){ await SYNC.saveDevice(hash,Object.assign({},dev,{token,at:Date.now()})); await SYNC.removeDevice(old); lsSet('fs.pushHash',hash); } }catch(e){}
+/* 1.1: a phone that had alerts keeps them. Google sometimes hands a phone a new address, or the helper forgets one that
+   stopped answering; either way the phone signs itself up again (same settings) the next time Family Screen opens. */
+async function refreshPushToken(){
+  try{ const VK=(CONFIG&&CONFIG.vapidKey)||S.vapidKey, old=lsGet('fs.pushHash','');
+    if(LOCAL||!VK||!old||!('Notification' in window)||Notification.permission!=='granted'||!(await SYNC.pushSupported())) return;
+    const devs=SYNC.getDevices(); if(devs[old]) lsSet('fs.pushPrefs',devs[old]);
+    const reg=await navigator.serviceWorker.ready, token=await SYNC.pushToken(VK,reg), hash=hashStr(token);
+    if(devs[hash]&&devs[hash].token===token) return;
+    const me=SYNC.me(), mine=S.people.find(p=>p.email===me), was=devs[old]||lsGet('fs.pushPrefs',null)||{};
+    await SYNC.saveDevice(hash,Object.assign({email:me,label:deviceLabel()+(me?' · '+me:''),people:mine?[mine.id,'all']:[],lead:30,remind:true,morning:true,jobs:true},
+      was,{token,email:me,at:Date.now()}));
+    if(old!==hash&&devs[old]){ try{ await SYNC.removeDevice(old); }catch(e){} }
+    lsSet('fs.pushHash',hash); renderHome();
+  }catch(e){}
 }
+// what the phone's Home says about alerts: '' when they work
+function alertsState(){
+  if(LOCAL||!isPhone()) return '';
+  const ios=/iPhone|iPad/.test(navigator.userAgent), standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(!('Notification' in window)) return ios&&!standalone?'ios':'';
+  if(Notification.permission==='denied') return 'blocked';
+  return myPush()?'':'off';
+}
+function alertsBanner(){
+  const st=alertsState(); if(!st||Date.now()<lsGet('fs.alertsLater',0)) return '';
+  const msg={off:'Alerts are off on this phone, so reminders and messages won’t reach you.',blocked:'Alerts are blocked for Family Screen in this phone’s settings. Allow notifications for it there.',ios:'To get alerts on an iPhone, open this page in Safari, tap Share → Add to Home Screen, then open Family Screen from there.'}[st];
+  return `<div class="hwarn" id="hAlerts"><b>🔕 ${esc(msg)}</b><div class="row">${st==='off'?'<button class="save" id="hAlertsOn">Turn on alerts</button>':''}<button class="cancel" id="hAlertsLater">Later</button></div></div>`;
+}
+
 function flightCard(nt,needUpd){
   const fl=nt.flights;
   if(!fl) return `<div class="srccard"><h4>🛰️ Live flight status <span class="pill-wait">needs the new helper</span></h4><p class="note">Update the helper (above) to switch this on.</p></div>`;
@@ -2777,7 +2803,7 @@ function openSettings(){
   modal((m,close)=>{ const draw=()=>{
     const tp=traveller();
     m.innerHTML=`<h2>Settings</h2>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goAI">✨ AI (Gemini key)</button><button class="opt" id="goHelpers">🧰 Helpers</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goAI">✨ AI</button><button class="opt" id="goHelpers">🧰 Helpers</button></div>
     <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
@@ -2989,9 +3015,10 @@ async function enterHome(again){
   if(SYNC.needsVerify&&SYNC.needsVerify()){ gate('verify'); return; }
   gate('loading');
   try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
-  catch(e){ const pd=e&&e.code==='permission-denied';
-    // the sign-in is sometimes a moment behind the first question to the database: ask once more before saying so
-    if(pd&&!again){ setTimeout(()=>enterHome(true),1500); return; }
+  catch(e){ const pd=e&&e.code==='permission-denied', tries=+again||0;
+    // 1.4: the sign-in pass is sometimes a moment behind the first question to the database (a new tab, a phone waking
+    // up). Fetch a fresh pass and ask again, three times over about eight seconds, before saying anything is wrong.
+    if((pd||/unavailable|deadline|network/.test(e&&e.code||''))&&tries<3){ await SYNC.refreshToken(); setTimeout(()=>enterHome(tries+1),[1200,2500,4500][tries]); return; }
     gate('error',(pd?'The family database said no.':'Could not reach the family database. Check the internet connection.')+' Signed in as '+(SYNC.me()||'?')+'. Details: '+(e.code||'')+' · '+String(e.message||e).slice(0,220)); }
 }
 let pendingRender=false, rTimer=null;
@@ -3004,7 +3031,8 @@ function syncChanged(what,err){
   if(what==='error'){ console.error(err); if(err&&err.code==='permission-denied'){ syncDead=true; SYNC.stop(); gate('nohome'); } return; }
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
 }
-function startHome(id){ SYNC.start(id,S,syncChanged); setTimeout(()=>refreshLinks(false),4000); setTimeout(refreshPushToken,8000); }
+function startHome(id){ SYNC.setDevice(isPhone()?'phone':'fridge'); SYNC.start(id,S,syncChanged);
+  setTimeout(()=>{ const day=dk(new Date()), k='fs.opened|'+(SYNC.me()||''); if(lsGet(k,'')!==day) SYNC.markOpen(day).then(ok=>{ if(ok) lsSet(k,day); }); },6000); setTimeout(()=>refreshLinks(false),4000); setTimeout(refreshPushToken,8000); }
 
 /* ================= phone: header, calendar, swipes, back button ================= */
 const isPhone=()=>matchMedia('(max-width:900px)').matches;
@@ -3046,15 +3074,22 @@ function renderHome(){
     ['✉️','Messages',mun?mun+' new':'Chat with the family',()=>openMsgs(),mun],
     ['📥','Inbox',inb?inb+' to check':S.inboxEmail?'Nothing new':'Forward emails here',()=>openInbox(),inb],
   ];
-  const skip=['Bills','Our travels','Messages','Inbox'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1]));
-  el.innerHTML=`<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
+  const skip=['Bills','Our travels','Messages','Inbox'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1])&&!/’s corner$/.test(x.t[1]));
+  // needs doing: my jobs first (overdue and due soon at the top), else everyone's
+  const jobs=(me&&mine.length?mine:open).slice().sort((a,b)=>String(a.due||'9999').localeCompare(String(b.due||'9999')));
+  const need=jobs.length||shop?`<button class="hneed" id="hNeed"><h3>✅ Needs doing</h3>${jobs.slice(0,3).map(t=>`<div class="hln">${esc(t.title)}${t.due?` <small>· ${esc(fmtD(new Date(t.due+'T12:00'),{weekday:'short',day:'numeric',month:'short'}))}</small>`:''}</div>`).join('')}${jobs.length>3?`<div class="hnone">+ ${jobs.length-3} more</div>`:''}${shop?`<div class="hln">🛒 ${shop} on the shopping list</div>`:''}</button>`:'';
+  el.innerHTML=alertsBanner()+`<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
       ${T.show.length?T.show.map(line).join('')+(T.more?`<div class="hnone">+ ${T.more} more</div>`:''):`<div class="hnone">${T.done?'That’s everything for today ✓':'Nothing on today'}</div>`}</button>
     <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
+    ${need}
     <div class="hgrid">${tiles.map((t,i)=>`<button class="tile ${t[4]?'hot':''}" data-ht="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[2]||'')}</small></button>`).join('')}</div>
     <div class="hmore">Everything else</div>
     <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
   const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
   $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
+  { const n=$('#hNeed'); if(n) n.onclick=()=>setTab(jobs.length?'todo':'shop'); }
+  { const on=$('#hAlertsOn'); if(on) on.onclick=async()=>{ on.disabled=true; on.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome(); };
+    const later=$('#hAlertsLater'); if(later) later.onclick=()=>{ lsSet('fs.alertsLater',Date.now()+3*864e5); renderHome(); }; }
   el.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>tiles[+b.dataset.ht][3]());
   el.querySelectorAll('[data-hm]').forEach(b=>b.onclick=()=>moreTiles()[+b.dataset.hm][2]());
 }

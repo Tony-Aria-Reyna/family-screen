@@ -30,7 +30,7 @@ service cloud.firestore {
       allow delete: if signedIn() && email() == resource.data.owner;
 
       match /{col}/{id} {
-        allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs'];
+        allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs', 'usage', 'docs'];
       }
       // Secrets (the Gemini key): only signed-in family members can read or write them, so each family device can
       // talk to Gemini directly. Never on GitHub or the website.

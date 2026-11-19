@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "node build.js && cp dist/* .",
+    "build": "node build.js && cp -r dist/* .",
     "test:build": "MOCK=1 node build.js"
   },
   "keywords": [],

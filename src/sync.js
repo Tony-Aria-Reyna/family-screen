@@ -145,6 +145,28 @@ export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsu
 const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '' });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
+/* ---------- who did what (v1.5) ----------
+   Each new calendar entry, job or shopping item is stamped with the account that added it and the kind of screen
+   (phone or fridge); a job or item ticked off gets who and when. Set once, never overwritten. */
+let deviceKind = 'phone';
+export const setDevice = k => { deviceKind = k === 'fridge' ? 'fridge' : 'phone'; };
+const STAMPED = ['events', 'todos', 'groceries'];
+function stamp(c, x, before) {
+  if (!STAMPED.includes(c) || !me()) return false;
+  let ch = false;
+  if (before === undefined && !x.by) { x.by = me(); x.dev = deviceKind; if (!x.at) x.at = Date.now(); ch = true; }
+  if (x.done && !x.doneBy) { let was = false; try { was = before !== undefined && !!JSON.parse(before).done; } catch (e) {}
+    if (!was) { x.doneBy = me(); x.doneAt = Date.now(); ch = true; } }
+  if (!x.done && x.doneBy) { delete x.doneBy; delete x.doneAt; ch = true; }
+  return ch;
+}
+// once a day each screen notes that it was opened, so the family can see whether Family Screen is really in use
+export async function markOpen(day) {
+  if (!hid || !me()) return false;
+  try { await setDoc(doc(db, 'households', hid, 'usage', day), { [me()]: { [deviceKind]: Date.now() } }, { merge: true }); return true; } catch (e) { return false; }
+}
+export async function refreshToken() { try { if (auth.currentUser) await auth.currentUser.getIdToken(true); } catch (e) {} }
+
 // Write whatever changed since the last sync. Called after every edit; cheap when nothing changed.
 export function push() {
   if (!hid || !S) return;
@@ -157,6 +179,7 @@ export function push() {
     const pm = synced.priv[c], pseen = new Set();
     for (const x of S[c]) {
       if (!x.id || !x.priv) continue; pseen.add(x.id);
+      stamp(c, x, pm.get(x.id));
       const body = clean(x); delete body.id; const j = JSON.stringify(clean(x));
       if (pm.get(x.id) !== j) { pops.push(['set', doc(db, 'households', hid, 'private', me(), c, x.id), body]); pm.set(x.id, j); }
     }
@@ -170,6 +193,7 @@ export function push() {
     const m = synced.cols[c], seen = new Set();
     for (const x of (S[c] || [])) {
       if (!x.id) continue; if (PRIV.includes(c) && x.priv) continue; seen.add(x.id);
+      if (m.get(x.id) !== JSON.stringify(clean(x))) stamp(c, x, m.get(x.id));
       const body = clean(x); delete body.id;
       const j = JSON.stringify(clean(x));
       if (m.get(x.id) !== j) { ops1.push(['set', doc(db, 'households', hid, c, x.id), body]); m.set(x.id, j); }
