@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 27;
+const HELPER_VERSION = 28;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -694,6 +694,30 @@ function jaAlert(h, title, body) {
     const j = JSON.parse(String(t).replace(/^[^{]*/, '').replace(/[^}]*$/, '')), out = [String(j.title || JA_FIXED[title] || title).slice(0, 120), String(j.body || body).slice(0, 600)];
     c.put(key, JSON.stringify(out), 86400); return out; } catch (e) { Logger.log('Japanese alert: ' + e); return [JA_FIXED[title] || title, body]; }
 }
+/* 3.5 a document kept for the family: saved into "Family Screen documents" in this Google Drive, link back to the app */
+function docSave(h, b) {
+  const data = String(b.data || ''); if (!data || data.length > 13e6) return { error: 'No file, or it is too big' };
+  const props = PropertiesService.getScriptProperties(); let folder = null;
+  try { const id = props.getProperty('DOCS_FOLDER'); if (id) folder = DriveApp.getFolderById(id); } catch (e) {}
+  if (!folder) { folder = DriveApp.createFolder('Family Screen documents'); props.setProperty('DOCS_FOLDER', folder.getId()); }
+  const f = folder.createFile(Utilities.newBlob(Utilities.base64Decode(data), String(b.mime || 'application/pdf'), String(b.name || 'Document').replace(/[\\/:*?"<>|]/g, ' ').slice(0, 120)));
+  return { ok: true, id: f.getId(), url: f.getUrl() };
+}
+/* 3.4 the fridge's night-time photo frame: pictures from a Drive folder the family picked, 10 at a time, about 1280 px wide */
+function photosPage(b) {
+  const id = String(b.folder || '').replace(/[^\w-]/g, ''); if (!id) return { error: 'No folder' };
+  let files; try { files = DriveApp.getFolderById(id).getFiles(); } catch (e) { return { error: 'That folder can\'t be opened by the helper\'s Google account' }; }
+  const all = []; while (files.hasNext() && all.length < 200) { const f = files.next(); if (/^image\//.test(f.getMimeType())) all.push(f); }
+  all.sort(function (a, c) { return c.getDateCreated() - a.getDateCreated(); });
+  const page = Math.max(0, Math.min(3, Number(b.page) || 0)), slice = all.slice(page * 10, page * 10 + 10), tok = ScriptApp.getOAuthToken(), out = [];
+  slice.forEach(function (f) { try {
+      const meta = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.getId() + '?fields=thumbnailLink', { headers: { Authorization: 'Bearer ' + tok } }).getContentText());
+      let blob = null; if (meta.thumbnailLink) { const r = UrlFetchApp.fetch(meta.thumbnailLink.replace(/=s\d+$/, '=s1280'), { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true }); if (r.getResponseCode() === 200) blob = r.getBlob(); }
+      if (!blob && f.getSize() < 1500000) blob = f.getBlob();
+      if (blob) out.push({ id: f.getId(), mime: blob.getContentType() || 'image/jpeg', data: Utilities.base64Encode(blob.getBytes()) });
+    } catch (e) { Logger.log('Photo ' + f.getName() + ': ' + e); } });
+  return { photos: out, more: all.length > (page + 1) * 10 && page < 3 };
+}
 /* ================= Family inbox =================
    One address for everything the family gets sent (a plus address of THIS Gmail account, set in the app: 📥 Inbox → Setup):
    the teacher's weekly note, a party invitation, a club newsletter, an appointment confirmation. Forward it there and the AI
@@ -1066,6 +1090,8 @@ function voiceDo(h, action, b) {
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
   if (action === 'msg_send') return voiceMsgSend(h, b, now);
+  if (action === 'photos') return photosPage(b);
+  if (action === 'doc_save') return docSave(h, b);
   if (action === 'msg_read') return voiceMsgRead(h, b, now);
   if (action === 'health') { const pr = PropertiesService.getScriptProperties(), st = hRead(pr, h._id); st.readsAt = 0; hSave(pr, h._id, st); return { ok: true, health: healthAfterRun(h, pr, new Date(), '', {}) }; }
   if (action === 'bills_tidy' || action === 'bills_check') { const bl0 = billsTick(h, PropertiesService.getScriptProperties(), new Date(), action === 'bills_check'), nw = bl0.filter(function (x) { return x._new; }).length; return { ok: true, added: nw, speech: action === 'bills_check' ? (nw ? nw + ' new' : 'Nothing new') : 'Done' }; }

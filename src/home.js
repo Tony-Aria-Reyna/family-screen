@@ -714,8 +714,8 @@ function billReport(){
     <div class="step">Every bill in ${billYear}</div><table class="btab"><tr><th>Due</th><th>Biller</th><th>Amount</th><th>Status</th><th></th></tr>${bs.sort((a,b)=>(b.due||b.date).localeCompare(a.due||a.date)).map(b=>`<tr><td>${b.due?fmtD(kd(b.due),{day:'numeric',month:'short'}):''}</td><td>${billIcon(b)} ${esc(b.biller)}</td><td>${$m(b.amount)}</td><td>${b.status==='paid'?'✅ Paid':b.directDebit?'💳 Debit':'To pay'}</td><td>${b.pdf&&b.pdf.link?`<a href="${esc(b.pdf.link)}" target="_blank" rel="noopener">📄</a>`:''}</td></tr>`).join('')}</table>`;
 }
 /* ask the Reminder helper to do one thing now; null if it didn't answer */
-async function helperDo(action){ if(!(S.voiceUrl&&S.voiceKey)) return null;
-  try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action}),redirect:'follow'}); return await r.json(); }catch(e){ return null; } }
+async function helperDo(action,extra){ if(!(S.voiceUrl&&S.voiceKey)) return null;
+  try{ const r=await fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:S.voiceKey,action},extra||{})),redirect:'follow'}); return await r.json(); }catch(e){ return null; } }
 let billsNudgeT=0;
 function billsNudge(){ clearTimeout(billsNudgeT); billsNudgeT=setTimeout(()=>{ helperDo('bills_tidy'); },4000); }
 function billSetupHTML(){
@@ -1133,7 +1133,7 @@ function msgRefresh(){
   if(msgOpen&&!document.querySelector('#msgBox')) msgOpen=null;
   const who=msgWho(), fresh=(S.msgs||[]).filter(m=>m.at>msgSeenAt&&!who.includes(m.from)&&(m.th==='fam'||who.some(id=>String(m.th).split('|').includes(id)))&&!who.every(id=>(m.seen||[]).includes(id))).sort((a,b)=>a.at-b.at);
   if(fresh.length){ const last=fresh[fresh.length-1]; msgSeenAt=last.at;
-    if(!(msgOpen&&msgOpen.th===last.th)){ msgChime(); toast('💬 '+nm(last.from)+': '+last.text.slice(0,80)); } }
+    if(!(msgOpen&&msgOpen.th===last.th)){ const h=new Date().getHours(); if(isPhone()||(h>=7&&h<21)) msgChime(); toast('💬 '+nm(last.from)+': '+last.text.slice(0,80)); if(typeof saverOff==='function') saverOff(); } }
   if(msgOpen&&msgOpen.draw){ const i=document.querySelector('#msgBox #mi'), v=i?i.value:'', f=i&&document.activeElement===i; msgOpen.draw(); const j=document.querySelector('#msgBox #mi'); if(j&&v){ j.value=v; } if(j&&f) j.focus(); }
   const n=msgUnreadAll(), b=document.querySelector('#msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; }
 }
@@ -1381,3 +1381,90 @@ function openSimplePick(){ modal((m,close)=>{ let lang=appLang(), who=lsGet('fs.
     m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{ lang=b.dataset.l; draw(); });
     m.querySelector('#x').onclick=close; m.querySelector('#ok').onclick=()=>{ close(); setView('simple',who,lang); }; };
   draw(); }); }
+
+/* ================= 3.4 the fridge as the family hub =================
+   On the fridge (not phones): the screen stays on; after 3 minutes untouched it closes what was open and goes back to
+   Today; from 9pm to 6am, after 5 minutes untouched, a photo frame with the clock and what's next. A touch wakes it.
+   Photos come from a Google Drive folder through the Reminder helper (⚙️ Settings → This device), kept on the screen. */
+let hubIdle=Date.now(), hubLock=null, hubHome=true;
+const hubOn=()=>!isPhone()&&!LOCAL&&S.people.length&&lsGet('fs.hub','1')==='1';
+function hubTouch(){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')) saverOff(); }
+['pointerdown','keydown','wheel','touchstart'].forEach(e=>addEventListener(e,hubTouch,{passive:true,capture:true}));
+async function hubWake(){ if(!hubOn()||!('wakeLock' in navigator)||document.visibilityState!=='visible') return; try{ if(!hubLock||hubLock.released) hubLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') hubWake(); });
+function hubTick(){
+  if(!hubOn()) return; hubWake(); const idle=Date.now()-hubIdle, h=new Date().getHours();
+  if(idle>3*60e3&&!hubHome){ hubHome=true; try{ if(document.querySelector('.scrim')&&!document.querySelector('.aibusy')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(e){} }
+  if((h>=21||h<6)&&idle>5*60e3&&!document.getElementById('saver')) saverOn();
+  if(h>=6&&h<21&&document.getElementById('saver')) saverOff();
+}
+setInterval(hubTick,30e3);
+let saverT=null, saverI=0;
+async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=await c.match('list'); return r?await r.json():[]; }catch(e){ return []; } }
+async function saverOn(){
+  const el=document.createElement('div'); el.id='saver'; document.body.appendChild(el);
+  const pics=await saverPhotos(); let urls=[];
+  try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,40)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
+  const draw=()=>{ if(!document.getElementById('saver')) return; const now=new Date(), t=now.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'});
+    const nx=itemsForDay(dk(now)).concat(itemsForDay(dk(addDays(now,1)))).filter(it=>it.k==='ev').map(it=>it.e).filter(e=>!e.time||e.date!==dk(now)||e.time>String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'))[0];
+    const u=urls.length?urls[saverI++%urls.length]:'';
+    el.innerHTML=`${u?`<img src="${u}" alt="">`:''}<div class="sv-info"><div class="sv-time">${esc(t)}</div><div class="sv-date">${esc(jaDate(now))}</div>${nx?`<div class="sv-next">${esc((nx.date===dk(now)?tr('Today'):tr('Tomorrow'))+' · '+(nx.time?jaTime(nx.time)+' ':'')+(nx.title||''))}</div>`:''}</div>`; };
+  draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
+  if(navigator.onLine&&S.photoFolder&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
+}
+function saverOff(){ clearInterval(saverT); const el=document.getElementById('saver'); if(el){ el.querySelectorAll('img').forEach(i=>{ try{ URL.revokeObjectURL(i.src); }catch(e){} }); el.remove(); } }
+// the photo frame's pictures: up to 40 from the family's Drive folder, fetched through the helper and kept on this screen
+async function saverFetch(force){
+  if(!S.photoFolder||!S.voiceUrl) return 0; lsSet('fs.photosAt',String(Date.now()));
+  const c=await caches.open('fs-photos'), keys=[]; let n=0;
+  for(let page=0;page<4;page++){ const j=await helperDo('photos',{folder:S.photoFolder,page}); if(!j||!j.photos) break;
+    for(const p of j.photos){ try{ const bin=Uint8Array.from(atob(p.data),ch=>ch.charCodeAt(0)); await c.put('p/'+p.id,new Response(new Blob([bin],{type:p.mime||'image/jpeg'}))); keys.push(p.id); n++; }catch(e){} }
+    if(!j.more) break; }
+  if(keys.length){ const old=await saverPhotos(); for(const k of old) if(!keys.includes(k)) try{ await c.delete('p/'+k); }catch(e){}
+    await c.put('list',new Response(JSON.stringify(keys),{headers:{'Content-Type':'application/json'}})); }
+  if(force) toast(n?n+' photos ready for the night-time photo frame':'No photos found in that folder');
+  return n;
+}
+
+/* ================= 3.5 documents vault (insurance first) =================
+   Photograph or upload a policy: the AI pulls out who it's with, what it covers, the excess, when it renews and who to
+   call. The file itself goes to a "Family Screen documents" folder in the helper's Google Drive; the summary lives here.
+   "Who do we call?" lists every claims line; "Check for overlaps" asks the AI where cover doubles up or is missing. */
+const DOC_KINDS=[['🚗','Car'],['🏠','House'],['🛋️','Contents'],['❤️','Health'],['✈️','Travel'],['🛡️','Life'],['🐾','Pet'],['📄','Other']];
+function openVault(){ modal((m,close)=>{ m.classList.add('wide'); let busy=false;
+  const draw=()=>{ const ds=(S.docs||[]).slice().sort((a,b)=>String(a.kind).localeCompare(String(b.kind))||String(a.title).localeCompare(String(b.title)));
+    m.innerHTML=`<div class="tvhead"><h2>📁 Documents</h2><button class="cancel" id="x">Close</button></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="vAdd" style="border-radius:14px;padding:12px 18px">＋ Add a policy or document</button><button class="xbtn" id="vCall">📞 Who do we call?</button>${ds.length>1?'<button class="xbtn" id="vOver">🔍 Check for overlaps and gaps</button>':''}</div>
+    <input type="file" id="vFile" accept="image/*,application/pdf" hidden><div id="vOut"></div>
+    ${ds.length?ds.map(d=>{ const k=DOC_KINDS.find(x=>x[1]===d.kind)||DOC_KINDS[7]; return `<div class="srccard" style="margin:10px 0"><h4>${k[0]} ${esc(d.title||d.kind)}${d.insurer?' · '+esc(d.insurer):''}</h4>
+      ${d.summary?`<p class="note">${esc(d.summary)}</p>`:''}
+      <div class="note">${[d.covers?'<b>Covers:</b> '+esc(d.covers):'',d.excess?'<b>Excess:</b> '+esc(d.excess):'',d.premium?'<b>Costs:</b> '+esc(d.premium):'',d.renews?'<b>Renews:</b> '+fmtD(kd(d.renews),{day:'numeric',month:'long',year:'numeric'}):'',d.policyNo?'<b>Policy number:</b> '+esc(d.policyNo):''].filter(Boolean).join('<br>')}</div>
+      <div class="row" style="gap:8px;margin-top:6px">${d.claimsPhone?`<a class="xbtn" href="tel:${esc(String(d.claimsPhone).replace(/[^+\d]/g,''))}">📞 Claims ${esc(d.claimsPhone)}</a>`:''}${d.link?`<a class="xbtn" href="${esc(d.link)}" target="_blank" rel="noopener">📄 Open the document</a>`:''}<button class="cancel" data-vdel="${d.id}">Delete</button></div></div>`; }).join(''):'<p class="note" style="margin-top:12px">Nothing here yet. Start with the insurance policies: car, house, contents, health, travel.</p>'}`;
+    m.querySelector('#x').onclick=close;
+    const f=m.querySelector('#vFile'); m.querySelector('#vAdd').onclick=()=>{ if(!aiOK()){ toast('Reading documents needs AI: ⚙️ Settings → Connections → ✨ AI'); return; } f.click(); };
+    f.onchange=async()=>{ const file=f.files&&f.files[0]; f.value=''; if(!file||busy) return; busy=true; await vaultAdd(file); busy=false; draw(); };
+    m.querySelector('#vCall').onclick=()=>{ const ds2=(S.docs||[]).filter(d=>d.claimsPhone||d.emergencyPhone);
+      m.querySelector('#vOut').innerHTML=`<div class="hlth" style="margin-top:10px"><h4>📞 Who do we call?</h4>${ds2.length?ds2.map(d=>`<div class="hlrow"><span class="hlmid"><b>${esc((DOC_KINDS.find(x=>x[1]===d.kind)||DOC_KINDS[7])[0]+' '+(d.title||d.kind))}</b><small>${esc(d.insurer||'')}${d.policyNo?' · policy '+esc(d.policyNo):''}${d.when?' · '+esc(d.when):''}</small></span>${[d.claimsPhone,d.emergencyPhone].filter(Boolean).map(ph=>`<a class="xbtn" href="tel:${esc(String(ph).replace(/[^+\d]/g,''))}">${esc(ph)}</a>`).join('')}</div>`).join(''):'<p class="note">No phone numbers found in the documents yet.</p>'}<p class="note">Emergency: 111.</p></div>`; };
+    const ov=m.querySelector('#vOver'); if(ov) ov.onclick=async()=>{ ov.disabled=true; const out=m.querySelector('#vOut'); out.innerHTML='<p class="note">Comparing the policies…</p>';
+      try{ const j=await aiAsk({json:true,prompt:withMemory(`These are a New Zealand family's insurance policies (summaries). Find cover that doubles up (paying twice for the same thing), important gaps, and anything worth checking at renewal. Plain words, short. Return JSON only: {"overlaps":["…"],"gaps":["…"],"check":["…"]}
+${JSON.stringify((S.docs||[]).map(d=>({kind:d.kind,title:d.title,insurer:d.insurer,covers:d.covers,excess:d.excess,premium:d.premium,renews:d.renews,summary:d.summary})))}`)});
+        const li=(t,a)=>a&&a.length?`<h4 style="margin:8px 0 2px">${t}</h4><ul class="note" style="margin:0 0 0 18px">${a.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul>`:'';
+        out.innerHTML=`<div class="hlth warn" style="margin-top:10px">${li('Doubling up',j.overlaps)}${li('Gaps',j.gaps)}${li('Worth checking',j.check)||''}${!(j.overlaps||[]).length&&!(j.gaps||[]).length?'<p class="note">No overlaps or gaps found.</p>':''}<p class="note">A starting point, not advice: check with the insurer before changing cover.</p></div>`; }
+      catch(e){ out.innerHTML=e.message==='quiet'?'':`<p class="note">${esc(e.message)}</p>`; } ov.disabled=false; };
+    m.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{ const d=(S.docs||[]).find(x=>x.id===b.dataset.vdel); if(!d) return; S.docs=S.docs.filter(x=>x.id!==d.id); save(); draw(); toastUndo('Deleted '+(d.title||'document'),()=>{ S.docs.push(d); save(); draw(); }); });
+  }; draw(); }); }
+async function vaultAdd(file){
+  const done=aiBusy('Reading the document…'); let d=null;
+  try{ const data=await fileForAI(file);
+    const j=await aiAsk({json:true,file:data,prompt:`Read this New Zealand family document (usually an insurance policy or schedule). Return JSON only:
+{"kind":"${DOC_KINDS.map(k=>k[1]).join('|')}","title":"short, e.g. Mazda car insurance","insurer":"","policyNo":"","covers":"one or two short sentences","excess":"","premium":"e.g. $84.20 a month","renews":"YYYY-MM-DD or empty","claimsPhone":"","emergencyPhone":"","when":"when to call, a few words","summary":"two sentences in plain words"}`});
+    d={id:uid(),kind:DOC_KINDS.some(k=>k[1]===j.kind)?j.kind:'Other',at:Date.now(),fileName:file.name};
+    ['title','insurer','policyNo','covers','excess','premium','claimsPhone','emergencyPhone','when','summary'].forEach(k=>{ if(j[k]) d[k]=String(j[k]).slice(0,400); });
+    if(/^\d{4}-\d\d-\d\d$/.test(j.renews||'')) d.renews=j.renews;
+    if(file.size<9e6&&S.voiceUrl){ const r=await helperDo('doc_save',{name:(d.title||file.name)+' '+dk(new Date()),mime:file.type||'application/pdf',data:await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.readAsDataURL(file); })}); if(r&&r.url) d.link=r.url; }
+    S.docs=S.docs||[]; S.docs.push(d);
+    if(d.renews&&!(S.renewals||[]).some(r=>r.due===d.renews&&r.item===d.title)){ S.renewals=S.renewals||[]; S.renewals.push({id:uid(),what:'Insurance',emoji:'🛡️',item:d.title||d.kind,due:d.renews,every:12,cost:d.premium||'',ref:d.policyNo||'',notes:d.insurer||''}); }
+    save(); renderAll(); toast('Saved: '+(d.title||'document')+(d.renews?' (renewal added to 📌 Renewals)':''));
+  }catch(e){ if(e.message!=='quiet') toast('Couldn’t read that: '+e.message); }
+  done(); return d;
+}

@@ -198,6 +198,11 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
 body.simple{overflow:hidden}
+#saver{position:fixed;inset:0;z-index:85;background:#000;color:#fff;cursor:none}
+#saver img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;animation:svfade 1.5s}
+@keyframes svfade{from{opacity:0}to{opacity:1}}
+#saver .sv-info{position:absolute;left:32px;bottom:28px;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+#saver .sv-time{font-size:84px;font-weight:800;line-height:1}#saver .sv-date{font-size:28px;opacity:.9}#saver .sv-next{font-size:26px;margin-top:8px;opacity:.95}
 #simple{position:fixed;inset:0;z-index:48;background:#fbf8f2;overflow:auto;padding:16px 18px 40px;font-size:24px;color:var(--ink)}
 #simple .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 #simple .sdate{font-size:32px;font-weight:900}#simple .swho{font-size:20px;color:var(--muted)}
@@ -987,7 +992,7 @@ function migrate(s){
 }
 function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
 let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
-['recipes','meals','renewals','gifts','bills','memory','kids','inbox','msgs'].forEach(k=>S[k]=S[k]||[]);
+['recipes','meals','renewals','gifts','bills','memory','kids','inbox','msgs','docs'].forEach(k=>S[k]=S[k]||[]);
 (()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
 let weekOff=0, monthOff=0;
 
@@ -2813,6 +2818,7 @@ function moreTiles(){ return [
   ['❓','What can I say?',()=>openHelp(),()=>'Alexa phrases'],
   ['👵','Big and simple',()=>openSimplePick(),()=>'日本語 or English'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
+  ['📁','Documents',()=>openVault(),()=>{ const n=(S.docs||[]).length; return n?n+' kept · who to call':'insurance and policies'; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
   ['📖','Recipes',()=>openRecipeBook(),()=>allRecipes().length+' recipes'],
   ['📍','Our travels',()=>{ globeTravel=true; if(isPhone()) setTab('where'); else openGlobe(); },()=>countAll()+' countries'],
@@ -2875,6 +2881,9 @@ function openSettings(at){
     <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
     <div class="shd" id="s-dev">📱 This device</div>
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goSimple">👵 Big and simple screen</button></div>
+    ${isPhone()||LOCAL?'':`<div class="srccard" style="margin:10px 0"><h4>🧲 Fridge screen</h4><label class="small"><input type="checkbox" id="hubOn" ${lsGet('fs.hub','1')==='1'?'checked':''}> Keep the screen on, go back to Today after 3 minutes, and show a photo frame from 9pm to 6am</label>
+      <label class="small">Photos from this Google Drive folder (paste its link) <input class="txt" id="phF" value="${esc(S.photoFolder||'')}" placeholder="https://drive.google.com/drive/folders/…"></label>
+      <div class="row"><button class="xbtn" id="phGo">📷 Save and get the photos now</button><button class="xbtn" id="phTry">🌙 Try the photo frame</button></div></div>`}
     <label class="small">Language on this device <select id="devLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語 (Japanese)</option></select></label>
     ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
     <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
@@ -2910,6 +2919,10 @@ function openSettings(at){
     m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
+    { const hb=m.querySelector('#hubOn'); if(hb) hb.onchange=()=>{ lsSet('fs.hub',hb.checked?'1':'0'); };
+      const pg=m.querySelector('#phGo'); if(pg) pg.onclick=async()=>{ const v=m.querySelector('#phF').value.trim(), id=(v.match(/folders\/([\w-]{10,})/)||v.match(/[?&]id=([\w-]{10,})/)||v.match(/^([\w-]{20,})$/)||[])[1]||'';
+        if(v&&!id){ toast('That doesn’t look like a Drive folder link'); return; } S.photoFolder=id; save(); if(!id) return; pg.disabled=true; pg.textContent='📷 Getting photos…'; await saverFetch(true); pg.disabled=false; pg.textContent='📷 Save and get the photos now'; };
+      const pt=m.querySelector('#phTry'); if(pt) pt.onclick=()=>{ close(); setTimeout(()=>{ hubIdle=Date.now(); saverOn(); },300); }; }
     m.querySelector('#goSimple').onclick=()=>{ close(); openSimplePick(); };
     m.querySelector('#devLang').onchange=e=>{ setLang(e.target.value); toast(e.target.value==='ja'?'この端末は日本語になりました':'This device is in English'); renderAll(); };
     m.querySelectorAll('[data-sgo]').forEach(b=>b.onclick=()=>{ const t=m.querySelector('#s-'+b.dataset.sgo); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); });
