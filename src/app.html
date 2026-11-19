@@ -443,6 +443,10 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .gbtn.ghostb{background:var(--soft);border-color:var(--soft)}
 .gerr{color:var(--danger);font-weight:700}
 .gsmall{font-size:14px!important;color:var(--muted)}
+.gform{display:flex;flex-direction:column;align-items:center;gap:10px;margin:14px 0 4px}
+.gform input{width:100%;max-width:340px;font-size:18px;padding:14px 16px;border:2px solid #dadce0;border-radius:14px;background:#fff;user-select:text;-webkit-user-select:text}
+.gform label{font-size:15px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.gnote{color:#2f8f82;font-weight:700}
 .gcard a{color:#2f8f82;font-weight:700}
 .gdots{display:inline-flex;gap:8px;margin:18px 0 6px}
 .gdots i{width:14px;height:14px;border-radius:50%;animation:bounce 1s ease-in-out infinite}
@@ -2646,12 +2650,16 @@ function pinPad(title,check,onOk,canForget){
       });
       const f=m.querySelector('#pinForgot'); if(f) f.onclick=async()=>{
         if(LOCAL){ S.pinHash=''; save(); close(); toast('PIN removed'); onOk&&onOk(); return; }
+        if(SYNC.usesPassword&&SYNC.usesPassword()){ const pad=m.querySelector('.pinpad'); f.remove();
+          if(pad) pad.outerHTML=`<div style="text-align:center"><input type="password" id="pinPw" placeholder="Your Family Screen password" style="font-size:18px;padding:12px;border:2px solid var(--line);border-radius:12px;width:260px;user-select:text;-webkit-user-select:text"><div style="margin-top:10px"><button class="save" id="pinPwGo">Reset the PIN</button></div></div>`;
+          const go=m.querySelector('#pinPwGo'); if(go) go.onclick=async()=>{ try{ await SYNC.reauth(m.querySelector('#pinPw').value); S.pinHash=''; save(); close(); toast('PIN removed. Set a new one in ⚙️ Settings.'); onOk&&onOk(); }catch(e){ toast('That password isn’t right'); } };
+          return; }
         try{ await SYNC.reauth(); S.pinHash=''; save(); close(); toast('PIN removed. Set a new one in ⚙️ Settings.'); onOk&&onOk(); }
-        catch(e){ toast('Only a family member’s Google sign-in can reset the PIN'); }
+        catch(e){ toast('Only a family member’s sign-in can reset the PIN'); }
       };
     };
     draw();
-    m.tabIndex=-1; m.focus(); m.onkeydown=e=>{ if(/^[0-9]$/.test(e.key)) m.querySelector(`[data-k="${e.key}"]`).click(); if(e.key==='Backspace') m.querySelector('[data-k="b"]').click(); };
+    m.tabIndex=-1; m.focus(); m.onkeydown=e=>{ if(e.target&&e.target.tagName==='INPUT') return; if(/^[0-9]$/.test(e.key)) m.querySelector(`[data-k="${e.key}"]`).click(); if(e.key==='Backspace') m.querySelector('[data-k="b"]').click(); };
   });
 }
 function setPinFlow(after){
@@ -2665,7 +2673,7 @@ function openPrivacy(){
   modal((m,close)=>{ const draw=()=>{
     const owner=!LOCAL&&SYNC.getOwner()===SYNC.me();
     m.innerHTML=`<h2>🔒 Privacy &amp; our data</h2>
-    <p class="note">Your family's calendar, lists and travel are stored in Google Firebase (Sydney data centre), encrypted by Google. Only the Google accounts in ⚙️ Family accounts can open them. <a href="privacy.html" target="_blank" rel="noopener">Read the privacy statement</a>.</p>
+    <p class="note">Your family's calendar, lists and travel are stored in Google Firebase (Sydney data centre), encrypted by Google. Only the accounts in ⚙️ Family accounts can open them. <a href="privacy.html" target="_blank" rel="noopener">Read the privacy statement</a>.</p>
     <div class="srccard"><h4>✈️ Travel details</h4>
       <div class="srcline"><span>Hide hotel names (Where's Mummy? and flight details)</span><button class="opt ${S.hideHotels?'on':''}" id="pvHotel">${S.hideHotels?'Hidden':'Shown'}</button></div>
       <p class="note">Roster PDFs are read on the device and never uploaded. Only the flights and duties you tick are saved.</p></div>
@@ -2771,10 +2779,10 @@ function openSettings(){
     m.innerHTML=`<h2>Settings</h2>
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goAI">✨ AI (Gemini key)</button><button class="opt" id="goHelpers">🧰 Helpers</button></div>
     <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
-    ${LOCAL?'':`<div class="step">Family accounts: these Google accounts can open Family Screen</div>
+    ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
-      <p class="note">After adding someone, they open Family Screen on their phone and sign in with that Google account.</p>
+      <p class="note">After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
       ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
       <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
       <div id="invList" class="note">Loading invites…</div>
@@ -2906,7 +2914,8 @@ function gateScene(){
 }
 function gateClock(){ const now=new Date(), t=hm(now,'Pacific/Auckland'); return `<div class="gclock">${t.txt}<small>${t.ap}</small></div><div class="gdate">${dateIn(now,'Pacific/Auckland')}</div>`; }
 const FEATS=`<div class="gfeat"><span style="background:#bfe3f2">📅 Calendar</span><span style="background:#c3e8cc">✅ To do</span><span style="background:#ffe5a8">🛒 Shopping</span><span style="background:#f9c9d0">🌏 Where's Mummy?</span></div>`;
-function gate(kind,extra){
+let gateMail='';
+function gate(kind,extra,note){
   const g=$('#gate'); clearInterval(gateTimer);
   if(!kind){ g.hidden=true; g.innerHTML=''; return; }
   g.hidden=false;
@@ -2914,24 +2923,70 @@ function gate(kind,extra){
   let card='';
   if(kind==='loading') card=`${gateClock()}<h1>Family Screen</h1><div class="gdots"><i style="background:#bfe3f2"></i><i style="background:#ffe5a8"></i><i style="background:#f9c9d0"></i></div><p class="gsmall">Getting everything ready…</p>`;
   if(kind==='signin') card=`${gateClock()}<h1>Family Screen</h1><p>Our calendar, jobs and shopping, on the fridge and on our phones.</p>${FEATS}
-     <button class="gbtn" id="gIn">${GOOGLE_G}<span>Sign in with Google</span></button>${extra?`<p class="gerr">${esc(extra)}</p>`:''}
-     <p class="gsmall">Only the Google accounts our family adds can see anything here.</p><p class="gsmall"><a href="?demo">Have a look at the demo</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`;
+     <button class="gbtn" id="gIn">${GOOGLE_G}<span>Sign in with Google</span></button>
+     <div><button class="gbtn ghostb" id="gMail">✉️ <span>Sign in with email</span></button></div>${extra?`<p class="gerr">${esc(extra)}</p>`:''}
+     <p class="gsmall">Sign in with email works with Outlook, iCloud or any other address. Only the accounts our family adds can see anything here.</p><p class="gsmall"><a href="?demo">Have a look at the demo</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>`;
+  if(kind==='email'||kind==='emailnew'){ const nw=kind==='emailnew';
+    card=`${gateClock()}<h1>${nw?'Create your password':'Sign in with email'}</h1>
+     <p class="gsmall">${nw?'Use the email address the family added for you, and choose a password of at least 8 characters.':'For Outlook, iCloud or any other address the family has added.'}</p>
+     <form class="gform" id="gForm" novalidate><input type="email" id="gEm" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="Email address" value="${esc(gateMail)}">
+      <input type="password" id="gPw" autocomplete="${nw?'new-password':'current-password'}" placeholder="${nw?'New password (8 or more characters)':'Password'}">
+      <label><input type="checkbox" id="gShow" style="width:auto"> Show password</label>
+      <button class="gbtn dark" type="submit" id="gGo">${nw?'Create my password':'Sign in'}</button></form>
+     ${extra?`<p class="gerr">${esc(extra)}</p>`:''}${note?`<p class="gnote">${esc(note)}</p>`:''}
+     <p class="gsmall">${nw?'<a href="#" id="gHave">I already have a password</a>':'<a href="#" id="gNewPw">First time? Create my password</a> · <a href="#" id="gForgot">Forgot password?</a>'}</p>
+     <p class="gsmall"><a href="#" id="gBack">Back</a></p>`; }
+  if(kind==='verify') card=`${gateClock()}<h1>Check your email</h1><p>We've sent a link to <b>${esc(SYNC.me())}</b>. Open the email from Family Screen (look in Junk too), tap the link, then come back here.</p>
+     <button class="gbtn dark" id="gVer">I've tapped the link</button>${extra?`<p class="gerr">${esc(extra)}</p>`:''}${note?`<p class="gnote">${esc(note)}</p>`:''}
+     <p class="gsmall"><a href="#" id="gResend">Send the email again</a> · <a href="#" id="gOut">Use a different account</a></p>`;
   if(kind==='nohome') card=`${gateClock()}<h1>Nearly there</h1><p>You're signed in as <b>${esc(SYNC.me())}</b>, but this account isn't part of a family yet.</p>
      <p class="gsmall">Joining your family? Ask whoever set it up to add <b>${esc(SYNC.me())}</b> in ⚙️ Settings → Family accounts, then tap Check again.</p>
      ${extra==='invited'?`<div><button class="gbtn dark" id="gNew">🏠 Set up our family</button></div>`:`<p class="gsmall">Starting a new family? Family Screen is invite-only. Ask Tony to invite <b>${esc(SYNC.me())}</b>.</p>`}
      <div><button class="gbtn ghostb" id="gCheck">🔄 Check again</button></div>
-     <p class="gsmall"><a href="#" id="gOut">Use a different Google account</a></p>`;
+     <p class="gsmall"><a href="#" id="gOut">Use a different account</a></p>`;
   if(kind==='error') card=`${gateClock()}<h1>Hmm…</h1><p class="gerr">${esc(extra||'Something went wrong.')}</p><button class="gbtn dark" id="gRetry">Try again</button><p class="gsmall"><a href="#" id="gOut">Sign out</a></p>`;
   g.innerHTML=sc.html+`<div class="gcard">${card}</div>`;
   gateTimer=setInterval(()=>{ const c=g.querySelector('.gclock'); if(c) c.outerHTML=gateClock().replace(/<div class="gdate">.*$/,''); },15000);
   const on=(id,f)=>{ const b=document.getElementById(id); if(b) b.onclick=e=>{ e.preventDefault(); f(); }; };
   on('gIn',async()=>{ try{ await SYNC.signIn(); }catch(e){ gate('signin',e&&e.code==='auth/popup-closed-by-user'?'':'Sign-in did not finish. Please try again.'); } });
   on('gCheck',()=>{ syncDead=false; enterHome(); });
+  on('gMail',()=>gate('email'));
+  on('gNewPw',()=>{ const e=document.getElementById('gEm'); if(e) gateMail=e.value.trim(); gate('emailnew'); });
+  on('gHave',()=>{ const e=document.getElementById('gEm'); if(e) gateMail=e.value.trim(); gate('email'); });
+  on('gBack',()=>gate('signin'));
+  { const sh=document.getElementById('gShow'), pw=document.getElementById('gPw'); if(sh&&pw) sh.onchange=()=>{ pw.type=sh.checked?'text':'password'; }; }
+  on('gForgot',async()=>{ const em=(document.getElementById('gEm')||{}).value||''; gateMail=em.trim();
+    if(!/^\S+@\S+\.\S+$/.test(gateMail)){ gate('email','Type your email address first, then tap Forgot password.'); return; }
+    try{ await SYNC.resetPassword(gateMail); gate('email','',`We've emailed ${gateMail} a link to set a new password. Check Junk too.`); }
+    catch(e){ gate('email',mailErr(e)); } });
+  const fm=document.getElementById('gForm'); if(fm) fm.onsubmit=async e=>{ e.preventDefault();
+    const em=document.getElementById('gEm').value.trim(), pw=document.getElementById('gPw').value, nw=kind==='emailnew'; gateMail=em;
+    if(!/^\S+@\S+\.\S+$/.test(em)){ gate(kind,'Check the email address.'); return; }
+    if(nw&&pw.length<8){ gate(kind,'Choose a password of at least 8 characters.'); return; }
+    if(!pw){ gate(kind,'Type your password.'); return; }
+    const b=document.getElementById('gGo'); b.disabled=true; b.textContent=nw?'Creating…':'Signing in…';
+    try{ if(nw) await SYNC.createEmailAccount(em,pw); else await SYNC.signInEmail(em,pw); }
+    catch(x){ gate(kind,mailErr(x,nw)); } };
+  on('gVer',async()=>{ const b=document.getElementById('gVer'); b.disabled=true; b.textContent='Checking…';
+    try{ if(await SYNC.refreshVerified()) enterHome(); else gate('verify','Not confirmed yet. Tap the link in the email first, then try again.'); }
+    catch(e){ gate('verify',mailErr(e)); } });
+  on('gResend',async()=>{ try{ await SYNC.resendVerification(); gate('verify','','Sent again. It can take a minute to arrive.'); }catch(e){ gate('verify',mailErr(e)); } });
   on('gNew',async()=>{ gate('loading'); try{ const id=await SYNC.createHousehold(starter()); SYNC.useInvite(); startHome(id); }catch(e){ gate('error','Could not set up the family: '+(e.code||e.message)); } });
   on('gOut',()=>SYNC.signOut());
   on('gRetry',()=>location.reload());
 }
+// plain words for what Firebase says went wrong with an email sign-in
+function mailErr(e,nw){ const c=(e&&e.code)||'';
+  if(/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'That email and password don’t match. First time here? Tap “Create my password”.';
+  if(/email-already-in-use/.test(c)) return 'This email already has a password. Tap “I already have a password” to sign in, or reset it.';
+  if(/weak-password/.test(c)) return 'Choose a longer password (at least 8 characters).';
+  if(/invalid-email/.test(c)) return 'Check the email address.';
+  if(/too-many-requests/.test(c)) return 'Too many tries. Wait a few minutes, or tap “Forgot password?”.';
+  if(/network-request-failed/.test(c)) return 'No internet connection. Check the Wi-Fi and try again.';
+  if(/operation-not-allowed/.test(c)) return 'Email sign-in isn’t switched on for this family yet.';
+  return (nw?'Could not create the password':'Could not sign in')+(c?' ('+c.replace('auth/','')+')':'')+'. Please try again.'; }
 async function enterHome(again){
+  if(SYNC.needsVerify&&SYNC.needsVerify()){ gate('verify'); return; }
   gate('loading');
   try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
   catch(e){ const pd=e&&e.code==='permission-denied';

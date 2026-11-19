@@ -3,7 +3,9 @@
 // documents, keeps them up to date in real time, and writes back whatever the UI changes.
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, reauthenticateWithPopup,
-  signOut as fbSignOut, connectAuthEmulator, signInWithCredential, browserLocalPersistence, setPersistence } from 'firebase/auth';
+  signOut as fbSignOut, connectAuthEmulator, signInWithCredential, browserLocalPersistence, setPersistence,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, reload,
+  EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection,
   onSnapshot, query, where, getDocs, addDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
@@ -52,6 +54,26 @@ export async function testSignIn(email) { // emulator only
   await signInWithCredential(auth, cred);
 }
 export function signOut() { stop(); return fbSignOut(auth); }
+
+/* ---------- sign in with any email address (Outlook, iCloud...) and a password ----------
+   For family members without a Google account. The address must be confirmed by a link in an email before the
+   family's data opens (the database rules ask for a confirmed address). Emails go out in the phone's own language. */
+export const usesPassword = () => !!(user && (user.providerData || []).some(p => p.providerId === 'password'));
+export const needsVerify = () => usesPassword() && !user.emailVerified;
+export async function signInEmail(email, password) { await signInWithEmailAndPassword(auth, String(email || '').trim(), password || ''); }
+export async function createEmailAccount(email, password) {
+  auth.useDeviceLanguage();
+  const c = await createUserWithEmailAndPassword(auth, String(email || '').trim(), password || '');
+  try { await sendEmailVerification(c.user); } catch (e) {}
+}
+export async function resendVerification() { auth.useDeviceLanguage(); await sendEmailVerification(auth.currentUser); }
+export async function resetPassword(email) { auth.useDeviceLanguage(); await sendPasswordResetEmail(auth, String(email || '').trim()); }
+// after the link in the email is tapped (often in another app), check again and fetch a fresh pass that says so
+export async function refreshVerified() {
+  const u = auth.currentUser; if (!u) return false;
+  await reload(u); if (!u.emailVerified) return false;
+  await u.getIdToken(true); user = u; return true;
+}
 export const me = () => user && user.email && user.email.toLowerCase();
 
 export async function findHousehold() {
@@ -207,5 +229,8 @@ export async function deleteHousehold() {
 }
 
 /* confirm it's really a family member (for resetting a forgotten PIN) */
-export async function reauth() { const p = new GoogleAuthProvider(); p.setCustomParameters({ login_hint: me() || '' }); await reauthenticateWithPopup(auth.currentUser, p); return true; }
+export async function reauth(password) {
+  if (usesPassword()) { await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, password || '')); return true; }
+  const p = new GoogleAuthProvider(); p.setCustomParameters({ login_hint: me() || '' }); await reauthenticateWithPopup(auth.currentUser, p); return true;
+}
 export const householdId = () => hid;
