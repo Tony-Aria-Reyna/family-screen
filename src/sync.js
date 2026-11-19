@@ -251,6 +251,7 @@ function watchKey() {
   unsub.push(keyUnsub);
 }
 export const saveDevice = (hash, data) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: clean(data) });
+export const setDeviceLang = (hash, lang) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash + '.lang']: lang || '' });
 export const removeDevice = hash => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: deleteField() });
 export const requestTest = hash => updateDoc(doc(db, 'households', hid), { testPing: { hash, at: Date.now() } });
 

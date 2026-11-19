@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 26;
+const HELPER_VERSION = 27;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -672,6 +672,7 @@ function patch(path, fields) {
 }
 function send(h, hash, title, body, tag) {
   const dev = (h.devices || {})[hash]; if (!dev || !dev.token) return;
+  if (dev.lang === 'ja') { const j = jaAlert(h, title, body); title = j[0]; body = j[1]; }
   const msg = { message: { token: dev.token, data: { title: String(title), body: String(body), tag: String(tag || ''), url: APP_URL },
     webpush: { headers: { Urgency: 'high', TTL: '3600' } } } };
   const r = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + PROJECT_ID + '/messages:send', { method: 'post', contentType: 'application/json', payload: JSON.stringify(msg), headers: headers(), muteHttpExceptions: true });
@@ -681,6 +682,17 @@ function send(h, hash, title, body, tag) {
     try { noteDrop(h._id, dev); } catch (e) {}
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
+}
+/* 3.1 alerts for a phone set to Japanese (Masako's): the AI puts the title and text into plain Japanese, kept for a day
+   so the same reminder isn't translated twice. Names, times and emoji stay. If the AI can't, the English goes. */
+const JA_FIXED = { '⏰ Wake-up': '⏰ おはよう', '💬 Family': '💬 家族' };
+function jaAlert(h, title, body) {
+  const key = 'JA|' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, title + '\n' + body)), c = CacheService.getScriptCache();
+  try { const hit = c.get(key); if (hit) return JSON.parse(hit); } catch (e) {}
+  try { if (!aiReady(h)) return [title, body];
+    const t = aiCall(h, [{ text: 'Translate this phone notification for a Japanese grandmother into natural, simple Japanese. Keep names, times, numbers and emoji as they are. Reply with JSON only: {"title":"…","body":"…"}\nTitle: ' + title + '\nText: ' + body }], true);
+    const j = JSON.parse(String(t).replace(/^[^{]*/, '').replace(/[^}]*$/, '')), out = [String(j.title || JA_FIXED[title] || title).slice(0, 120), String(j.body || body).slice(0, 600)];
+    c.put(key, JSON.stringify(out), 86400); return out; } catch (e) { Logger.log('Japanese alert: ' + e); return [JA_FIXED[title] || title, body]; }
 }
 /* ================= Family inbox =================
    One address for everything the family gets sent (a plus address of THIS Gmail account, set in the app: 📥 Inbox → Setup):

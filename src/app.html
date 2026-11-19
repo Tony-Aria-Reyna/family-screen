@@ -197,6 +197,22 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+body.simple{overflow:hidden}
+#simple{position:fixed;inset:0;z-index:48;background:#fbf8f2;overflow:auto;padding:16px 18px 40px;font-size:24px;color:var(--ink)}
+#simple .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+#simple .sdate{font-size:32px;font-weight:900}#simple .swho{font-size:20px;color:var(--muted)}
+#simple .sbtns{display:flex;gap:8px;flex-wrap:wrap}#simple .sbtn{font:inherit;font-size:20px;font-weight:800;border:2px solid var(--line);background:#fff;border-radius:16px;padding:10px 14px}
+#simple .sbadge{background:#e11d48;color:#fff;border-radius:12px;padding:0 8px}
+#simple .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+#simple h3{font-size:28px;margin:14px 0 6px}
+#simple .sline{background:#fff;border-left:8px solid #ccc;border-radius:12px;padding:10px 12px;margin:6px 0;line-height:1.35}
+#simple .stime{font-weight:900}#simple small{color:var(--muted);font-size:19px}
+#simple .stick{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:inherit;background:#fff;border:2px solid var(--line);border-radius:14px;padding:12px;margin:6px 0}
+#simple .sbox{width:30px;height:30px;border:3px solid #9ca3af;border-radius:8px;flex:none}
+#simple .snone{color:var(--muted);padding:6px 2px}
+#simple .addany .aain{font-size:24px}
+#sToast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,150%);z-index:70;background:#222;color:#fff;border-radius:16px;padding:12px 16px;font-size:20px;display:flex;gap:14px;align-items:center;transition:transform .2s}
+#sToast.on{transform:translate(-50%,0)}#sToast button{font:inherit;font-weight:800;background:#ffe5a8;border:0;border-radius:10px;padding:6px 12px}
 .addany{background:#fff;border:2px solid var(--line);border-radius:18px;padding:8px;margin:0 0 10px}
 .addany .aarow{display:flex;gap:6px;align-items:center}
 .addany .aain{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:18px;padding:8px 6px;background:transparent;user-select:text;-webkit-user-select:text}
@@ -2519,7 +2535,7 @@ async function turnOnPush(){
   const perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('Notifications were blocked. Allow them in the phone’s settings for this app.'); return false; }
   const reg=await navigator.serviceWorker.ready; const token=await SYNC.pushToken(VK,reg);
   const hash=hashStr(token), me=SYNC.me(), mine=S.people.find(p=>p.email===me);
-  await SYNC.saveDevice(hash,{token,email:me,label:deviceLabel()+(me?' · '+me:''),people:mine?[mine.id,'all']:[],lead:30,remind:true,morning:true,jobs:true,at:Date.now()});
+  await SYNC.saveDevice(hash,{token,email:me,label:deviceLabel()+(me?' · '+me:''),people:mine?[mine.id,'all']:[],lead:30,remind:true,morning:true,jobs:true,lang:appLang()==='ja'?'ja':'',at:Date.now()});
   const old=lsGet('fs.pushHash',''); if(old&&old!==hash){ try{ await SYNC.removeDevice(old); }catch(e){} }
   lsSet('fs.pushHash',hash); return true;
 }
@@ -2795,6 +2811,7 @@ function moreTiles(){ return [
   ['✉️','Messages',()=>openMsgs(),()=>{ const n=typeof msgUnreadAll==='function'?msgUnreadAll():0; return n?n+' new':'chat with the family'; }],
   ['📥','Inbox',()=>openInbox(),()=>{ const n=typeof inboxNew==='function'?inboxNew():0; return n?n+' to check':S.inboxEmail?'nothing new':'forward emails here'; }],
   ['❓','What can I say?',()=>openHelp(),()=>'Alexa phrases'],
+  ['👵','Big and simple',()=>openSimplePick(),()=>'日本語 or English'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
   ['📖','Recipes',()=>openRecipeBook(),()=>allRecipes().length+' recipes'],
@@ -2857,7 +2874,8 @@ function openSettings(at){
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goSync">🔗 Connect calendars</button><button class="opt" id="goNotify">🔔 Notifications</button><button class="opt" id="goAI">✨ AI</button><button class="opt" id="goHelpers">🧰 Helpers and Alexa</button></div>
     <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
     <div class="shd" id="s-dev">📱 This device</div>
-    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button></div>
+    <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goSimple">👵 Big and simple screen</button></div>
+    <label class="small">Language on this device <select id="devLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語 (Japanese)</option></select></label>
     ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
     <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
     <div class="shd" id="s-shops">🛒 Shops</div>
@@ -2892,6 +2910,8 @@ function openSettings(at){
     m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
+    m.querySelector('#goSimple').onclick=()=>{ close(); openSimplePick(); };
+    m.querySelector('#devLang').onchange=e=>{ setLang(e.target.value); toast(e.target.value==='ja'?'この端末は日本語になりました':'This device is in English'); renderAll(); };
     m.querySelectorAll('[data-sgo]').forEach(b=>b.onclick=()=>{ const t=m.querySelector('#s-'+b.dataset.sgo); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); });
     if(!LOCAL){ wireHealth(m,draw,close); wireBillSetup(m,draw); wireInboxSetup(m,draw); }
     if(!LOCAL){
@@ -3152,12 +3172,12 @@ function renderHome(){
     ['✉️','Messages',mun?mun+' new':'Chat with the family',()=>openMsgs(),mun],
     ['📥','Inbox',inb?inb+' to check':S.inboxEmail?'Nothing new':'Forward emails here',()=>openInbox(),inb],
   ];
-  const skip=['Bills','Our travels','Messages','Inbox'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1])&&!/’s corner$/.test(x.t[1]));
+  const skip=['Bills','Our travels','Messages','Inbox','Big and simple'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1])&&!/’s corner$/.test(x.t[1]));
   // needs doing: my jobs first (overdue and due soon at the top), else everyone's
   const jobs=(me&&mine.length?mine:open).slice().sort((a,b)=>String(a.due||'9999').localeCompare(String(b.due||'9999')));
   const need=jobs.length||shop?`<button class="hneed" id="hNeed"><h3>✅ Needs doing</h3>${jobs.slice(0,3).map(t=>`<div class="hln">${esc(t.title)}${t.due?` <small>· ${esc(fmtD(new Date(t.due+'T12:00'),{weekday:'short',day:'numeric',month:'short'}))}</small>`:''}</div>`).join('')}${jobs.length>3?`<div class="hnone">+ ${jobs.length-3} more</div>`:''}${shop?`<div class="hln">🛒 ${shop} on the shopping list</div>`:''}</button>`:'';
   const keepAdd=el.querySelector('#hAdd'); if(keepAdd) keepAdd.remove();
-  el.innerHTML=alertsBanner()+`<div id="hAddSlot"></div><button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
+  el.innerHTML=alertsBanner()+`<div id="hAddSlot"></div>${personalCard()}<button class="hcard" id="hToday"><h2>${fmtD(now,{weekday:'short',day:'numeric',month:'short'})}</h2>
       ${T.show.length?T.show.map(line).join('')+(T.more?`<div class="hnone">+ ${T.more} more</div>`:''):`<div class="hnone">${T.done?'That’s everything for today ✓':'Nothing on today'}</div>`}</button>
     <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
     ${need}
@@ -3166,7 +3186,7 @@ function renderHome(){
     <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
   const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
   { const slot=$('#hAddSlot'); if(slot){ if(keepAdd) slot.replaceWith(keepAdd); else { slot.outerHTML=addAnyHTML('hAdd'); wireAddAny($('#hAdd')); } } }
-  $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
+  wirePersonal(); $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
   { const n=$('#hNeed'); if(n) n.onclick=()=>setTab(jobs.length?'todo':'shop'); }
   { const on=$('#hAlertsOn'); if(on) on.onclick=async()=>{ on.disabled=true; on.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome(); };
     const later=$('#hAlertsLater'); if(later) later.onclick=()=>{ lsSet('fs.alertsLater',Date.now()+3*864e5); renderHome(); }; }
@@ -3404,7 +3424,7 @@ function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null; try{ ses
   setTimeout(()=>{ if(a==='cards'){ if(isPhone()) setTab('shop'); if((S.cards||[]).length) openWallet(0); else requirePin(openCards); }
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); }
     else if(a==='inbox') openInbox(); else if(a==='share') takeShare(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
-function renderAll(){ if(!S.people.length) return; if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
+function renderAll(){ if(!S.people.length) return; setTimeout(renderSimple,0); if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
 $('#addBtn').onclick=()=>openAddAny();   // 2.3: one box for calendar, jobs and shopping; the full calendar form is a tap away inside it
 $('#setBtn').onclick=()=>requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;

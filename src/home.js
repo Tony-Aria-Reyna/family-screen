@@ -1316,3 +1316,68 @@ function undoAdds(added){
   added.forEach(a=>{ const l=S[a.k]||[], i=l.findIndex(x=>x.id===a.id); if(i<0) return; if(a.undone) l[i].done=true; else l.splice(i,1); });
   save(); renderAll();
 }
+
+/* ================= 3.1 a view for each person =================
+   Reyna's phone: while she is away, what's happening at home. Tony's phone: bills due and his jobs.
+   Masako: a big-text, simple screen (on her phone and, with one tap, on the fridge) in Japanese or English. */
+function personalCard(){
+  const me=mePerson(); if(!me) return '';
+  const tp=traveller(), now=new Date(), out=[];
+  if(tp&&tp.id===me){ const r=travellerNow(now), away=r&&(r.air||r.a);
+    const soon=S.flights.filter(f=>f.who===me&&fS(f)>now&&fS(f)-now<3*864e5).sort((a,b)=>fS(a)-fS(b))[0];
+    if(away||soon){ const lines=[]; for(let i=0;i<3;i++){ const k=dk(addDays(now,i)), l=dayLines(k).filter(x=>!/✈️/.test(x.t)).slice(0,2); if(l.length) lines.push(`<b>${i?fmtD(addDays(now,i),{weekday:'short'}):'Today'}</b> ${l.map(x=>esc(x.t)).join(' · ')}`); }
+      const jobs=S.todos.filter(t=>!t.done&&vis(t)&&t.who&&t.who!==me).length, un=typeof msgUnreadAll==='function'?msgUnreadAll():0;
+      out.push(`<button class="hcard hpers" id="hPers"><div class="hhd">✈️ ${away?'While you’re away':'Before you fly'}</div>${lines.length?lines.map(x=>`<div class="hln">${x}</div>`).join(''):'<div class="hln">Nothing on at home for 3 days</div>'}<div class="hln">✅ ${jobs} job${jobs===1?'':'s'} with the others${un?' · 💬 '+un+' new message'+(un>1?'s':''):''}</div></button>`); } }
+  const bills=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=14&&daysTo(b.due)>=-3);
+  const p=person(me); if(bills.length&&p&&p.email){ const tot=bills.reduce((a,b)=>a+(+b.amount||0),0);
+    out.push(`<button class="hcard hpers" id="hBills"><div class="hhd">🧾 Bills in the next 2 weeks</div>${bills.sort((a,b)=>a.due.localeCompare(b.due)).slice(0,3).map(b=>`<div class="hln">${esc(b.biller||'Bill')} · $${((+b.amount||0)/100).toFixed(2)} · ${fmtD(kd(b.due),{weekday:'short',day:'numeric',month:'short'})}${b.directDebit?' · direct debit':''}</div>`).join('')}<div class="hln"><b>$${(tot/100).toFixed(2)}</b> in all</div></button>`); }
+  return out.join('');
+}
+function wirePersonal(){ const a=$('#hPers'); if(a) a.onclick=()=>{ const n=typeof msgUnreadAll==='function'?msgUnreadAll():0; if(n) openMsgs(); else goDay(dk(new Date())); }; const b=$('#hBills'); if(b) b.onclick=()=>openBills(); }
+
+// the big, simple screen. fs.view = 'simple' on this device; fs.who = whose jobs it shows
+Object.assign(JA,{'Today':'今日','Tomorrow':'明日','Jobs':'やること','Shopping':'買い物','Messages':'メッセージ','Normal screen':'ふつうの画面','Nothing on':'予定はありません','Nothing to do':'やることはありません',
+  'Nothing to buy':'買うものはありません','All day':'終日','Everyone':'みんな','new':'件 新着','Tap to tick it off':'タップで完了','Big and simple screen':'大きな文字のかんたん画面','Language':'言語',
+  'Whose screen is this?':'だれの画面ですか？','English':'English','Ticked off':'完了しました','Undo':'元に戻す'});
+const simpleOn=()=>lsGet('fs.view','')==='simple';
+function setView(v,who,lang){ lsSet('fs.view',v||''); if(who!=null) lsSet('fs.who',who); if(lang) setLang(lang); renderSimple(); renderAll(); }
+function setLang(l){ lsSet('fs.lang',l==='ja'?'ja':''); const h=typeof myPush==='function'&&myPush(); if(h&&SYNC.setDeviceLang) SYNC.setDeviceLang(h,l==='ja'?'ja':'').catch(()=>{}); document.documentElement.lang=l==='ja'?'ja':'en'; }
+function jaDate(d){ return appLang()==='ja'?(d.getMonth()+1)+'月'+d.getDate()+'日（'+'日月火水木金土'[d.getDay()]+'）':fmtD(d,{weekday:'long',day:'numeric',month:'long'}); }
+function jaTime(t){ if(!t) return tr('All day'); if(appLang()!=='ja') return t12(t); const [h,m]=t.split(':').map(Number); return (h<12?'午前':'午後')+((h%12)||12)+'時'+(m?m+'分':''); }
+function renderSimple(){
+  let el=document.getElementById('simple');
+  if(!simpleOn()||!S.people.length){ if(el) el.remove(); document.body.classList.remove('simple'); return; }
+  if(!el){ el=document.createElement('div'); el.id='simple'; document.body.appendChild(el); }
+  document.body.classList.add('simple');
+  const typing=el.querySelector('#sAdd'); if(typing) typing.remove();
+  const now=new Date(), who=lsGet('fs.who','')||mePerson();
+  const day=(d)=>{ const its=itemsForDay(dk(d)).filter(it=>it.k==='ev').sort((a,b)=>String(a.sort||'').localeCompare(String(b.sort||'')));
+    return its.length?its.slice(0,8).map(it=>{ const e=it.e, ws=(e.whos||[]).filter(w=>w!=='all').map(nm).join('・'); return `<div class="sline" style="border-left-color:${col((e.whos||[])[0])}"><span class="stime">${esc(jaTime(e.time))}</span> ${esc(e.title||'')}${ws?`<small> ${esc(ws)}</small>`:''}</div>`; }).join(''):`<div class="snone">${esc(tr('Nothing on'))}</div>`; };
+  const jobs=S.todos.filter(t=>!t.done&&vis(t)&&(!who||!t.who||t.who===who)).slice(0,10);
+  const buy=S.groceries.filter(x=>!x.done).slice(0,14), un=typeof msgUnreadAll==='function'?msgUnreadAll():0;
+  el.innerHTML=`<div class="shead"><div><div class="sdate">${esc(jaDate(now))}</div>${who?`<div class="swho">${esc(nm(who))}</div>`:''}</div>
+      <div class="sbtns"><button class="sbtn" id="sLang">${appLang()==='ja'?'English':'日本語'}</button><button class="sbtn" id="sMsg">✉️ ${esc(tr('Messages'))}${un?` <b class="sbadge">${un}</b>`:''}</button><button class="sbtn" id="sNormal">${esc(tr('Normal screen'))}</button></div></div>
+    <div id="sAddSlot"></div>
+    <div class="sgrid"><section><h3>${esc(tr('Today'))}</h3>${day(now)}<h3>${esc(tr('Tomorrow'))}</h3>${day(addDays(now,1))}</section>
+    <section><h3>${esc(tr('Jobs'))}</h3>${jobs.length?jobs.map(t=>`<button class="stick" data-st="todos:${t.id}"><span class="sbox"></span>${esc(t.title)}${t.due?`<small> ${esc(appLang()==='ja'?(kd(t.due).getMonth()+1)+'/'+kd(t.due).getDate():fmtD(kd(t.due),{day:'numeric',month:'short'}))}</small>`:''}</button>`).join(''):`<div class="snone">${esc(tr('Nothing to do'))}</div>`}
+      <h3>${esc(tr('Shopping'))}</h3>${buy.length?buy.map(g=>`<button class="stick" data-st="groceries:${g.id}"><span class="sbox"></span>${esc(g.name)}<small> ${esc(shop(g.shop)?shop(g.shop).name:'')}</small></button>`).join(''):`<div class="snone">${esc(tr('Nothing to buy'))}</div>`}</section></div>`;
+  const slot=el.querySelector('#sAddSlot'); if(typing) slot.replaceWith(typing); else { slot.outerHTML=addAnyHTML('sAdd',true); wireAddAny(el.querySelector('#sAdd')); }
+  el.querySelector('#sLang').onclick=()=>{ setLang(appLang()==='ja'?'en':'ja'); const b=el.querySelector('#sAdd'); if(b) b.remove(); renderSimple(); };
+  el.querySelector('#sNormal').onclick=()=>setView('');
+  el.querySelector('#sMsg').onclick=()=>openMsgs();
+  el.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ const [k,id]=b.dataset.st.split(':'), x=(S[k]||[]).find(y=>y.id===id); if(!x) return; x.done=true; save(); renderAll(); renderSimple();
+    toastUndo(tr('Ticked off')+': '+(x.title||x.name),()=>{ x.done=false; save(); renderAll(); renderSimple(); }); });
+}
+function toastUndo(text,undo){ let t=document.getElementById('sToast'); if(!t){ t=document.createElement('div'); t.id='sToast'; document.body.appendChild(t); }
+  t.innerHTML=`<span>${esc(text)}</span><button>${esc(tr('Undo'))}</button>`; t.className='on'; t.querySelector('button').onclick=()=>{ undo(); t.className=''; }; clearTimeout(t._t); t._t=setTimeout(()=>t.className='',6000); }
+
+// choosing the big and simple screen: whose it is, and the language (Masako: 日本語)
+function openSimplePick(){ modal((m,close)=>{ let lang=appLang(), who=lsGet('fs.who','')||mePerson();
+  const draw=()=>{ m.innerHTML=`<h2>👵 ${esc(tr('Big and simple screen'))}</h2><p class="note">Today, tomorrow, jobs and shopping in big writing, with the add-anything box. On the fridge, “Normal screen” at the top goes back.</p>
+    <div class="step">${esc(tr('Whose screen is this?'))}</div><div class="opts">${eaters().map(p=>`<button class="opt ${who===p.id?'on':''}" data-w="${p.id}">${esc(p.name)}</button>`).join('')}</div>
+    <div class="step">${esc(tr('Language'))}</div><div class="opts"><button class="opt ${lang==='ja'?'on':''}" data-l="ja">日本語</button><button class="opt ${lang!=='ja'?'on':''}" data-l="en">English</button></div>
+    <div class="mact"><button class="cancel" id="x">Cancel</button><button class="save" id="ok">Show it</button></div>`;
+    m.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ who=b.dataset.w; const p=person(who); if(p&&/machan|obachan|masako/i.test([p.name,p.role,p.aka].join(' '))) lang='ja'; draw(); });
+    m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{ lang=b.dataset.l; draw(); });
+    m.querySelector('#x').onclick=close; m.querySelector('#ok').onclick=()=>{ close(); setView('simple',who,lang); }; };
+  draw(); }); }
