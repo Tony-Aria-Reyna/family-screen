@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 23;
+const HELPER_VERSION = 24;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -31,37 +31,80 @@ function tick() {
   const flightNote = { key: !!props.getProperty('AERODATABOX_KEY'), used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: '' };
   const rules = syncRules(props, now);
   let upd = null; try { upd = selfUpdate(props, now, false); } catch (e) { Logger.log('Self-update: ' + e); }
-  for (const h of listDocs('households')) {
-    let err = '';
+  let homes;
+  try { homes = listDocs('households'); healthGlobal(props, now, ''); }
+  catch (e) { healthGlobal(props, now, String(e && e.message || e)); throw e; }
+  for (const h of homes) {
+    let err = '', pre = {};
     try {
-      // Only what this run needs is read (v20): the entries near today, never the whole history. See "what a run reads" below.
+      // v24: every read this run needs goes out at once (Apps Script otherwise waits about a second for each)
       const hp = 'households/' + h._id, seven = now.getHours() === 7 && now.getMinutes() < 15, nine = now.getHours() === 9 && now.getMinutes() < 15;
-      const data = { events: nearEvents(hp, now), todos: [], flights: [], renewals: [], bills: [] };
-      // private entries: each member's own corner. Reminders for these go only to that member's own phones.
-      for (const who of (h.members || [])) {
-        try { nearEvents(hp + '/private/' + encodeURIComponent(who), now).forEach(x => { x._owner = who; data.events.push(x); }); } catch (e) {}
-      }
-      data.todos = jobTodos(hp, data.events, now);
-      if (seven || props.getProperty('AERODATABOX_KEY')) data.flights = recentFlights(hp, now);
-      if (nine) { try { data.renewals = listDocs(hp + '/renewals'); } catch (e) {} }
+      pre = runReads(h, props, now, seven, nine);
+      const data = { events: pre.events, todos: pre.todos, flights: pre.flights, renewals: pre.renewals, bills: [] };
       // emails are read once a day (and whenever the app's "check now" button asks)
       if (mailDue(props, 'BILL', h, now)) { try { data.bills = billsTick(h, props, now, true); } catch (e) { Logger.log('Bills: ' + e); } }
-      else if (nine) { try { data.bills = runQuery(hp, 'bills', fOp('status', 'EQUAL', 'due')); } catch (e) { Logger.log('Bills: ' + e); } }
+      else if (nine) data.bills = pre.bills;
       let inboxNew = []; if (mailDue(props, 'INBOX', h, now)) { try { inboxNew = inboxTick(h, props, now, true); } catch (e) { Logger.log('Inbox: ' + e); } }
       const msgs = planNotifications(h, data, now, k => !!sent[k]);
       inboxArrivals(h, inboxNew, msgs);
-      try { msgPush(h); } catch (e) { Logger.log('Messages: ' + e); }
+      try { msgPush(h, pre.msgs); } catch (e) { Logger.log('Messages: ' + e); }
       try { wakePrep(h, props, now); } catch (e) { Logger.log('Wake: ' + e); }
+      try { weekAhead(h, props, now, pre); } catch (e) { Logger.log('Week ahead: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
-    patch('households/' + h._id, { notifier: { lastRun: now.getTime(), error: err, version: HELPER_VERSION, rules: rules, update: upd, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } }, testPing: null });
+    let health = null; try { health = healthAfterRun(h, props, now, err, pre); } catch (e) { Logger.log('Health: ' + e); }
+    // the app only needs to know the helper is alive: written every 10 minutes, or straight away when something changed
+    const st = { lastRun: now.getTime(), error: err, version: HELPER_VERSION, rules: rules, update: upd, health: health, flights: { key: flightNote.key, used: +(props.getProperty('adb|' + keyOf(now).slice(0, 7)) || 0), budget: FLIGHT_BUDGET, error: flightNote.error } };
+    const sig = JSON.stringify([err, rules && rules.error, upd && upd.error, upd && upd.latest, health && [health.fails, health.stale, health.dropped, health.log && health.log.length], flightNote.error]);
+    const sk = 'STATUS_' + h._id, last = JSON.parse(props.getProperty(sk) || '{}');
+    if (h.testPing || sig !== last.sig || now.getTime() - (last.at || 0) > 9.5 * 60e3 || !h.notifier || (h.notifier.version || 0) !== HELPER_VERSION) {
+      const f = { notifier: st }; if (h.testPing) f.testPing = null;
+      patch('households/' + h._id, f); props.setProperty(sk, JSON.stringify({ sig: sig, at: now.getTime() }));
+    }
   }
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
   Object.keys(sent).forEach(k => { if (+sent[k] > 1 && +sent[k] < cutoff) props.deleteProperty(k); });
+}
+
+/* Every read a 5-minute run needs, sent together: the calendar near today and its repeating entries (the family's and each
+   member's private ones), new messages, recent flights (kept 30 minutes), and at 9am the renewals and due bills, at 7am the
+   calendar feeds. Then the to-dos the calendar has booked, also together. */
+function runReads(h, props, now, seven, nine) {
+  const hp = 'households/' + h._id, from = keyOf(addDays(now, -3)), to = keyOf(addDays(now, 1)), today = keyOf(now);
+  const dateQ = parent => ({ kind: 'query', parent: parent, col: 'events', where: fAnd([fOp('date', 'GREATER_THAN_OR_EQUAL', from), fOp('date', 'LESS_THAN_OR_EQUAL', to)]) });
+  const rptQ = parent => ({ kind: 'query', parent: parent, col: 'events', where: fOp('rpt.f', 'IN', ['D', 'W', 'M', 'Y']) });
+  const specs = [dateQ(hp), rptQ(hp)], owners = [null, null];
+  (h.members || []).forEach(who => { const pp = hp + '/private/' + encodeURIComponent(who); specs.push(dateQ(pp), rptQ(pp)); owners.push(who, who); });
+  const nEv = specs.length, slot = {};
+  const msgAt = Number(props.getProperty('MSG_AT_' + h._id) || 0);
+  slot.msgs = specs.push({ kind: 'query', parent: hp, col: 'msgs', where: fOp('at', 'GREATER_THAN', Math.max(msgAt - 10 * 60e3, now.getTime() - 12 * 3600e3)) }) - 1;
+  const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null, ck = 'fl|' + hp;
+  let flights = null;
+  if (seven || props.getProperty('AERODATABOX_KEY')) {
+    if (cache) { try { const c = cache.get(ck); if (c) flights = JSON.parse(c); } catch (e) {} }
+    if (!flights) slot.fl = specs.push({ kind: 'query', parent: hp, col: 'flights', where: fOp('end', 'GREATER_THAN_OR_EQUAL', new Date(now.getTime() - 3 * 864e5).toISOString()) }) - 1;
+  }
+  if (nine) { slot.rn = specs.push({ kind: 'list', path: hp + '/renewals' }) - 1; slot.bl = specs.push({ kind: 'query', parent: hp, col: 'bills', where: fOp('status', 'EQUAL', 'due') }) - 1; }
+  if (seven) slot.src = specs.push({ kind: 'list', path: hp + '/sources' }) - 1;
+  const r = fetchManyLoose(specs);
+  if (r[0] instanceof Error) throw r[0]; if (r[1] instanceof Error) throw r[1];
+  const events = [], seen = {};
+  for (let i = 0; i < nEv; i++) {
+    if (!Array.isArray(r[i])) continue;                       // one member's private corner not readable: carry on without it
+    r[i].forEach(d => { const k = (owners[i] || '') + '|' + d._id; if (seen[k]) return; seen[k] = 1; if (owners[i]) d._owner = owners[i]; events.push(d); });
+  }
+  const got = k => (slot[k] !== undefined && Array.isArray(r[slot[k]])) ? r[slot[k]] : null;
+  if (slot.fl !== undefined) { flights = got('fl') || []; if (cache) { try { const j = JSON.stringify(flights); if (j.length < 90000) cache.put(ck, j, 1800); } catch (e) {} } }
+  // "did it get done?" only ever asks about a to-do booked onto the calendar in the last few days
+  const jobs = events.filter(e => e.todoId && !e.done && e.date && e.date >= from && e.date <= today);
+  const tr = jobs.length ? fetchManyLoose(jobs.map(e => ({ kind: 'doc', path: (e._owner ? hp + '/private/' + encodeURIComponent(e._owner) : hp) + '/todos/' + e.todoId }))) : [];
+  const todos = [];
+  tr.forEach((t, i) => { if (!t || t instanceof Error) return; if (!t.id) t.id = t._id; if (jobs[i]._owner) t._owner = jobs[i]._owner; todos.push(t); });
+  return { events: events, todos: todos, flights: flights || [], msgs: got('msgs'), renewals: got('rn') || [], bills: got('bl') || [], sources: got('src') };
 }
 
 /* ---------- keeping itself up to date ----------
@@ -196,6 +239,126 @@ function mailDue(props, kind, h, now) {
   return v[0] !== keyOf(now) || (v.length > 1 && now.getHours() > Number(v[1]));
 }
 function mailDone(props, kind, h, now, err) { props.setProperty(kind + '_DAY_' + h._id, keyOf(now) + (err ? '|' + now.getHours() : '')); }
+
+/* ---------- Sunday 6pm: the week ahead ----------
+   A short push to the adults' phones and the full list by email: each day's entries, who is flying, jobs nobody owns,
+   what the family inbox added this week, and a line on how Family Screen itself ran. Once a week, Sunday from 6pm. */
+function weekAhead(h, props, now, pre) {
+  if (now.getDay() !== 0 || now.getHours() < 18 || now.getHours() > 20) return false;
+  const wk = 'WEEK_' + h._id; if (props.getProperty(wk) === keyOf(now)) return false;
+  props.setProperty(wk, keyOf(now));
+  const hp = 'households/' + h._id, d1 = addDays(now, 1), d7 = addDays(now, 7);
+  const extra = vPrep(h, keyOf(d1), keyOf(d7), [
+    { kind: 'query', parent: hp, col: 'flights', where: fAnd([fOp('start', 'GREATER_THAN_OR_EQUAL', now.toISOString()), fOp('start', 'LESS_THAN_OR_EQUAL', addDays(now, 8).toISOString())]) },
+    { kind: 'query', parent: hp, col: 'todos', where: fOp('done', 'EQUAL', false) },
+    { kind: 'query', parent: hp, col: 'inbox', where: fOp('at', 'GREATER_THAN_OR_EQUAL', now.getTime() - 7 * 864e5) }]);
+  const people = vPeople(h), nameOf = id => (people.filter(p => p.id === id)[0] || {}).name || '';
+  const days = [], short = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = addDays(now, i), k = keyOf(d), ev = vEventsOn(h, k);
+    const label = Utilities.formatDate(d, 'Pacific/Auckland', 'EEE d MMM');
+    days.push(label + ': ' + (ev.length ? ev.slice(0, 8).map(e => vSay(e, h)).join('; ') : 'nothing on'));
+    if (ev.length) short.push(Utilities.formatDate(d, 'Pacific/Auckland', 'EEE') + ' ' + ev.length);
+  }
+  const fl = (extra[0] || []).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  const away = fl.map(f => (nameOf(f.who) || 'Flight') + ': ' + (f.flight || '') + ' ' + (f.from || '') + '→' + (f.to || '') + ', ' + Utilities.formatDate(new Date(f.start), 'Pacific/Auckland', 'EEE h:mma').replace('AM', 'am').replace('PM', 'pm'));
+  const open = extra[1] || [], noOwner = open.filter(t => !t.who || t.who === 'all');
+  const ib = extra[2] || [], added = ib.reduce((n, d) => n + (d.items || []).filter(x => x.state === 'added').length, 0);
+  const hs = hRead(props, h._id);
+  const healthLine = (hs.failsWeek ? hs.failsWeek + ' failed helper runs this week' : 'No failed helper runs this week') + (hs.readsPeak ? '; database reads peaked at ' + Number(hs.readsPeak).toLocaleString('en-NZ') + ' of the free 50,000 a day' : '') + '.';
+  const body = 'The week ahead\n\n' + days.join('\n') + '\n\n' + (away.length ? 'Flights:\n' + away.join('\n') + '\n\n' : '') +
+    (noOwner.length ? 'Jobs nobody owns yet (' + noOwner.length + '): ' + noOwner.slice(0, 6).map(t => t.title).join('; ') + '\n\n' : '') +
+    (ib.length ? 'From the family inbox this week: ' + added + ' added from ' + ib.length + ' email' + (ib.length === 1 ? '' : 's') + '.\n\n' : '') + 'Family Screen: ' + healthLine;
+  const pushText = (short.length ? short.join(' · ') : 'A quiet week') + (away.length ? ' · ' + away.length + ' flight' + (away.length === 1 ? '' : 's') : '') + (noOwner.length ? ' · ' + noOwner.length + ' jobs need an owner' : '');
+  // the adults who run the house: whoever set the family up, and the one who flies for work
+  const adults = [String(h.owner || '').toLowerCase()].concat(people.filter(p => p.traveller && p.email).map(p => String(p.email).toLowerCase())).filter((e, i, l) => e && l.indexOf(e) === i);
+  Object.keys(h.devices || {}).forEach(hash => { const d = h.devices[hash]; if (d && d.token && adults.indexOf(String(d.email || '').toLowerCase()) >= 0) { try { send(h, hash, '🗓️ The week ahead', pushText, 'week'); } catch (e) {} } });
+  adults.forEach(em => { try { GmailApp.sendEmail(em, 'Family Screen: the week ahead', body + '\n\n' + APP_URL); } catch (e) { Logger.log('Week email: ' + e); } });
+  hs.failsWeek = 0; hs.readsPeak = 0; hSave(props, h._id, hs);
+  return { push: pushText, body: body };
+}
+
+/* ---------- health: Tony hears about a problem before the family does ----------
+   Checked after every run: runs that fail, the database's free daily reads (asked of Cloud Monitoring once an hour),
+   Alexa answers that took too long, calendar feeds that stopped (at 7am), and phones that stopped getting alerts.
+   Each kind of alert goes out at most once every few hours: a push to Tony's phones and an email to him. */
+const READ_WARN = 30000;   // of the free 50,000 a day
+function hRead(props, hid) { try { return JSON.parse(props.getProperty('HEALTH_' + hid) || '{}'); } catch (e) { return {}; } }
+function hSave(props, hid, s) { props.setProperty('HEALTH_' + hid, JSON.stringify(s)); }
+function healthAlert(h, s, kind, title, body, gapHours, now) {
+  s.alerted = s.alerted || {}; const last = Number(s.alerted[kind] || 0);
+  if (now.getTime() - last < (gapHours || 6) * 3600e3) return false;
+  s.alerted[kind] = now.getTime();
+  s.log = [{ kind: kind, title: title, at: now.getTime() }].concat(s.log || []).slice(0, 8);
+  const owner = String(h.owner || '').toLowerCase();
+  Object.keys(h.devices || {}).forEach(function (hash) { const d = h.devices[hash];
+    if (d && d.token && owner && String(d.email || '').toLowerCase() === owner) { try { send(h, hash, '⚠️ ' + title.charAt(0).toUpperCase() + title.slice(1), body.slice(0, 180), 'health-' + kind); } catch (e) {} } });
+  try { if (owner && typeof GmailApp !== 'undefined') GmailApp.sendEmail(owner, 'Family Screen: ' + title, body + '\n\n' + APP_URL + '\n\nThis note comes from the Family Screen Reminder helper.'); } catch (e) { Logger.log('Health email: ' + e); }
+  return true;
+}
+// the helper could not even read the family list (the database refused, or its limit was reached): only email can reach Tony then
+function healthGlobal(props, now, err) {
+  const s = JSON.parse(props.getProperty('HEALTH_GLOBAL') || '{}');
+  if (!err) { if (s.fails) { s.fails = 0; props.setProperty('HEALTH_GLOBAL', JSON.stringify(s)); } return; }
+  s.fails = (s.fails || 0) + 1;
+  const full = /429|quota|RESOURCE_EXHAUSTED/i.test(err);
+  if ((full || s.fails >= 3) && now.getTime() - (s.alerted || 0) > 6 * 3600e3) {
+    s.alerted = now.getTime();
+    try { GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), 'Family Screen: ' + (full ? 'the family database hit its daily limit' : 'the Reminder helper cannot reach the family database'),
+      (full ? 'Reminders, messages and Alexa may stop until the limit resets (about 9pm NZ summer time, 8pm winter).' : 'The last ' + s.fails + ' runs failed.') + '\n\nError: ' + err + '\n\n' + APP_URL); } catch (e) { Logger.log('Health email: ' + e); }
+  }
+  props.setProperty('HEALTH_GLOBAL', JSON.stringify(s));
+}
+// document reads so far today (the free allowance resets at midnight Pacific time), from Cloud Monitoring
+function readsToday(now) {
+  const tz = 'America/Los_Angeles', day = Utilities.formatDate(now, tz, 'yyyy-MM-dd'), off = Utilities.formatDate(now, tz, 'XXX');
+  const start = day + 'T00:00:00' + off, secs = Math.max(60, Math.ceil((now.getTime() - Date.parse(start)) / 1000));
+  const q = 'filter=' + encodeURIComponent('metric.type="firestore.googleapis.com/document/read_ops_count"') + '&interval.startTime=' + encodeURIComponent(start) +
+    '&interval.endTime=' + encodeURIComponent(now.toISOString()) + '&aggregation.alignmentPeriod=' + secs + 's&aggregation.perSeriesAligner=ALIGN_SUM&aggregation.crossSeriesReducer=REDUCE_SUM';
+  const r = UrlFetchApp.fetch('https://monitoring.googleapis.com/v3/projects/' + PROJECT_ID + '/timeSeries?' + q, { headers: headers(), muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('Cloud Monitoring ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 160));
+  let n = 0; (JSON.parse(r.getContentText()).timeSeries || []).forEach(function (ts) { (ts.points || []).forEach(function (pt) { n += Number(pt.value && (pt.value.int64Value || pt.value.doubleValue) || 0); }); });
+  return { n: n, day: day };
+}
+function noteDrop(hid, dev) {
+  const props = PropertiesService.getScriptProperties(), k = 'DROPS_' + hid, l = JSON.parse(props.getProperty(k) || '[]');
+  l.push({ label: String(dev && dev.label || 'a phone').slice(0, 60), email: String(dev && dev.email || ''), at: Date.now() }); props.setProperty(k, JSON.stringify(l.slice(-5)));
+}
+function noteVoice(h, b, ms, failed) {
+  if (b.via !== 'alexa' || (!failed && ms < 7000)) return;
+  const props = PropertiesService.getScriptProperties(), s = hRead(props, h._id), day = keyOf(new Date());
+  if (!s.slow || s.slow.day !== day) s.slow = { day: day, n: 0, worst: 0 };
+  s.slow.n++; s.slow.worst = Math.max(s.slow.worst || 0, ms); s.slow.last = String(b.action || '') + (failed ? ' (error)' : ' (' + Math.round(ms / 100) / 10 + ' s)');
+  hSave(props, h._id, s);
+}
+function healthAfterRun(h, props, now, err, pre) {
+  const s = hRead(props, h._id), day = keyOf(now);
+  if (err) { s.fails = (s.fails || 0) + 1; s.lastErr = err; s.failsWeek = (s.failsWeek || 0) + 1; } else s.fails = 0;
+  const full = /429|quota|RESOURCE_EXHAUSTED/i.test(err || '');
+  if (err && (full || s.fails >= 3)) healthAlert(h, s, full ? 'limit' : 'fail', full ? 'the family database hit its daily limit' : 'the Reminder helper is failing',
+    full ? 'Reminders, messages and Alexa may stop until the limit resets at about 9pm (NZ summer time). Error: ' + err : 'The last ' + s.fails + ' runs failed. Error: ' + err, 6, now);
+  if (!s.readsAt || now.getTime() - s.readsAt > 55 * 60e3) {
+    s.readsAt = now.getTime();
+    try { const rd = readsToday(now); s.reads = rd.n; s.readsDay = rd.day; s.readsErr = ''; s.readsPeak = Math.max(s.readsPeak || 0, rd.n);
+      if (rd.n > READ_WARN) healthAlert(h, s, 'reads', 'database reads are high today', rd.n.toLocaleString('en-NZ') + ' of the free 50,000 reads a day are used so far. If it reaches 50,000, the app and reminders stop until about 9pm.', 20, now); }
+    catch (e) { s.readsErr = String(e && e.message || e).slice(0, 160); }
+  }
+  if (s.slow && s.slow.day === day && s.slow.n >= 2) healthAlert(h, s, 'slow', 'Alexa answers are slow', s.slow.n + ' Alexa answers today took longer than the 8 seconds Alexa allows (worst ' + Math.round((s.slow.worst || 0) / 1000) + ' s, last: ' + (s.slow.last || '') + ').', 20, now);
+  if (pre && Array.isArray(pre.sources)) {
+    s.stale = pre.sources.filter(function (x) { return x.type !== 'roster' && x.url && (x.err || (x.at && now.getTime() - x.at > 4 * 864e5)); }).map(function (x) { return String(x.label || x.type || 'A calendar').slice(0, 40); });
+    if (s.stale.length) healthAlert(h, s, 'feeds', 'a calendar has stopped updating', s.stale.join(', ') + ' has not updated for over 4 days. Open Family Screen, or check the link in ⚙️ Settings → Connect calendars.', 20, now);
+  }
+  const dk = 'DROPS_' + h._id, drops = JSON.parse(props.getProperty(dk) || '[]');
+  if (drops.length) {
+    props.deleteProperty(dk); s.dropped = drops.concat(s.dropped || []).slice(0, 5);
+    healthAlert(h, s, 'drop', 'a phone stopped getting alerts', drops.map(function (d) { return d.label; }).join(', ') + ' stopped receiving Family Screen alerts. Opening Family Screen on that phone turns them back on.', 1, now);
+    drops.forEach(function (d) { const em = String(d.email || '').toLowerCase(); if (!em || em === String(h.owner || '').toLowerCase()) return;
+      try { GmailApp.sendEmail(em, 'Family Screen alerts stopped on your phone', 'Your phone stopped getting Family Screen reminders and messages. Open Family Screen on it and tap "Turn on alerts" if it asks.\n\n' + APP_URL); } catch (e) {} });
+  }
+  hSave(props, h._id, s);
+  return { fails: s.fails || 0, lastErr: s.fails ? s.lastErr || '' : '', reads: s.reads == null ? null : s.reads, readsDay: s.readsDay || '', readsAt: s.readsAt || 0, readsErr: s.readsErr || '',
+    slow: s.slow && s.slow.day === day ? s.slow.n : 0, stale: s.stale || [], dropped: (s.dropped || []).map(function (d) { return d.label; }), log: (s.log || []).slice(0, 5) };
+}
 
 /* ---------- what to send (pure logic, no network) ---------- */
 function planNotifications(h, all, now, already) {
@@ -465,20 +628,25 @@ function runQuery(parent, col, where) {
 }
 function mkDoc(d) { const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; return o; }
 // several reads at once (Apps Script otherwise waits about a second for each): [{kind:'query'|'doc'|'list', ...}] in, an array of results out
-function fetchMany(specs) {
-  const reqs = specs.map(function (s) {
+function fetchReqs(specs) {
+  return specs.map(function (s) {
     if (s.kind === 'query') return { url: BASE + (s.parent ? '/' + s.parent : '') + ':runQuery', method: 'post', contentType: 'application/json', headers: headers(), muteHttpExceptions: true, payload: JSON.stringify({ structuredQuery: { from: [{ collectionId: s.col }], where: s.where } }) };
     return { url: BASE + '/' + s.path + (s.kind === 'list' ? '?pageSize=300' : ''), headers: headers(), muteHttpExceptions: true };
   });
-  return UrlFetchApp.fetchAll(reqs).map(function (r, i) {
-    const s = specs[i], code = r.getResponseCode(), what = s.path || s.col;
-    if (s.kind === 'doc' && code === 404) return null;
-    if (code !== 200) throw new Error('Reading ' + what + ': ' + code + ' ' + r.getContentText().slice(0, 120));
-    const j = JSON.parse(r.getContentText());
-    if (s.kind === 'doc') return mkDoc(j);
-    if (s.kind === 'query') return j.filter(function (x) { return x.document; }).map(function (x) { return mkDoc(x.document); });
-    return j.nextPageToken ? listDocs(s.path) : (j.documents || []).map(mkDoc);
-  });
+}
+function readOne(s, r) {
+  const code = r.getResponseCode(), what = s.path || s.col;
+  if (s.kind === 'doc' && code === 404) return null;
+  if (code !== 200) throw new Error('Reading ' + what + ': ' + code + ' ' + r.getContentText().slice(0, 120));
+  const j = JSON.parse(r.getContentText());
+  if (s.kind === 'doc') return mkDoc(j);
+  if (s.kind === 'query') return j.filter(function (x) { return x.document; }).map(function (x) { return mkDoc(x.document); });
+  return j.nextPageToken ? listDocs(s.path) : (j.documents || []).map(mkDoc);
+}
+function fetchMany(specs) { return UrlFetchApp.fetchAll(fetchReqs(specs)).map(function (r, i) { return readOne(specs[i], r); }); }
+function fetchManyLoose(specs) {
+  if (!specs.length) return [];
+  return UrlFetchApp.fetchAll(fetchReqs(specs)).map(function (r, i) { try { return readOne(specs[i], r); } catch (e) { return e; } });
 }
 function patch(path, fields) {
   const mask = Object.keys(fields).map(k => 'updateMask.fieldPaths=' + encodeURIComponent(k)).join('&');
@@ -492,7 +660,8 @@ function send(h, hash, title, body, tag) {
   const r = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + PROJECT_ID + '/messages:send', { method: 'post', contentType: 'application/json', payload: JSON.stringify(msg), headers: headers(), muteHttpExceptions: true });
   const code = r.getResponseCode();
   if (code === 404 || (code === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) {
-    // that phone uninstalled or turned notifications off: forget it
+    // that phone uninstalled or turned notifications off: forget it, and remember it for the health check
+    try { noteDrop(h._id, dev); } catch (e) {}
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
 }
@@ -569,11 +738,11 @@ function inboxCheckNow() { const props = PropertiesService.getScriptProperties()
 /* ================= Family messages =================
    The app writes each message to households/{id}/msgs. This sends the notification: to the phones signed in as the person
    it is for (or everyone else, for the family group). The app asks for this the moment a message is sent; the 5-minute tick is the backstop. */
-function msgPush(h) {
+function msgPush(h, pre) {
   const path = 'households/' + h._id + '/msgs', devices = h.devices || {}, people = h.people || [], now = Date.now(); let n = 0;
   // only messages newer than the last one handled are read (10 minutes of overlap covers a phone whose clock is a little off)
   const props = PropertiesService.getScriptProperties(), ck = 'MSG_AT_' + h._id, last = Number(props.getProperty(ck) || 0);
-  const recent = runQuery('households/' + h._id, 'msgs', fOp('at', 'GREATER_THAN', Math.max(last - 10 * 60e3, now - 12 * 3600e3)));
+  const recent = Array.isArray(pre) ? pre : runQuery('households/' + h._id, 'msgs', fOp('at', 'GREATER_THAN', Math.max(last - 10 * 60e3, now - 12 * 3600e3)));
   const newest = recent.reduce(function (t, m) { return Math.max(t, Number(m.at) || 0); }, last);
   if (newest > last) props.setProperty(ck, String(Math.min(newest, now)));
   const waiting = recent.filter(function (m) { return !m.pushed && m.at && now - m.at < 12 * 3600e3; }).sort(function (a, b) { return a.at - b.at; });
@@ -779,13 +948,15 @@ function doPost(e) {
   let h; try { h = listDocs('households').filter(x => String(x.voiceKey || '') === key)[0]; }
   catch (err) { const full = /429|quota/i.test(String(err)), say = full ? 'The family database has reached its free limit for today. Try again later.' : 'I can’t reach the family database right now. Try again in a minute.'; return out({ error: say, speech: say }); }
   if (!h) return out({ error: 'not allowed' });
-  try { return out(voiceDo(h, String(b.action || ''), b)); }
-  catch (err) { return out({ speech: 'Sorry, something went wrong at my end. ' + String(err && err.message || err).slice(0, 80) }); }
+  const t0 = Date.now(), act = String(b.action || '');
+  try { const res = voiceDo(h, act, b); noteVoice(h, b, Date.now() - t0, false); return out(res); }
+  catch (err) { noteVoice(h, b, Date.now() - t0, true); return out({ speech: 'Sorry, something went wrong at my end. ' + String(err && err.message || err).slice(0, 80) }); }
 }
 const VOICE_MAX = 55;                                     // keep spoken answers short
 function vPeople(h) { return (h.people || []).filter(p => p.id !== 'all'); }
 // every name a person goes by: their own, what the kids call them, and the "also called" list from Who's who
-function vAka(p) { return [p.name, p.nick].concat(String(p.aka || '').split(',')).map(function (x) { return String(x || '').trim(); }).filter(Boolean); }
+function vAka(p) { const role = String(p.role || '').trim(), r = role && role.split(/\s+/).length <= 2 && !/[,·(]/.test(role) ? [role] : [];
+  return [p.name, p.nick].concat(r, String(p.aka || '').split(',')).map(function (x) { return String(x || '').trim(); }).filter(Boolean); }
 function vFind(h, name) {
   const n = normB(name); if (!n) return null;
   const all = vPeople(h);
@@ -864,6 +1035,7 @@ function voiceDo(h, action, b) {
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
+  if (action === 'health') { const pr = PropertiesService.getScriptProperties(), st = hRead(pr, h._id); st.readsAt = 0; hSave(pr, h._id, st); return { ok: true, health: healthAfterRun(h, pr, new Date(), '', {}) }; }
   if (action === 'bills_tidy' || action === 'bills_check') { const bl0 = billsTick(h, PropertiesService.getScriptProperties(), new Date(), action === 'bills_check'), nw = bl0.filter(function (x) { return x._new; }).length; return { ok: true, added: nw, speech: action === 'bills_check' ? (nw ? nw + ' new' : 'Nothing new') : 'Done' }; }
   if (action === 'inbox_check') { const fresh = inboxTick(h, PropertiesService.getScriptProperties(), new Date(), true); return { ok: true, added: fresh.length, speech: fresh.length ? fresh.length + ' new' : 'Nothing new' }; }
   if (action === 'ping') return { ok: true, version: HELPER_VERSION, people: vPeople(h).map(function (p) { return p.name; }) };

@@ -46,6 +46,10 @@ function run(code,when,opt){
   function runQuery(parent,col,where){ const out=listDocsQuiet(parent+'/'+col).filter(d=>match(d,where,dec)); reads.n+=Math.max(1,out.length); return out; }
   function listDocsQuiet(p){ const pre=p+'/'; return Object.keys(DB).filter(k=>k.startsWith(pre)&&k.slice(pre.length).indexOf('/')<0).map(k=>Object.assign({},DB[k],{_id:k.split('/').pop()})); }
   function fetchMany(specs){ return specs.map(s=>{ reads.n++; if(s.kind==='doc') return DB[s.path]||null; return s.kind==='list'?listDocsQuiet(s.path):runQuery(s.parent,s.col,s.where); }); }
+  function fetchManyLoose(specs){ return fetchMany(specs); }
+  function readsToday(){ return {n:12345,day:'2026-11-16'}; }
+  const GmailApp={sendEmail:(to,subj,body)=>{ (opt.mail2=opt.mail2||[]).push(to+' | '+subj); }}; const Session={getEffectiveUser:()=>({getEmail:()=>'owner@x.com'})};
+  const Utilities={formatDate:(d,tz,f)=>f==='EEE'?['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]:d.toDateString()};
   function getDoc(p){ reads.n++; return DB[p]?Object.assign({},DB[p],{_id:p.split('/').pop()}):null; }
   function patch(p,f){ DB[p]=Object.assign({},DB[p]||{},JSON.parse(JSON.stringify(f))); }
   function send(h,hash,title,body,tag){ sent.push(hash+' | '+title+' | '+String(body).split('\\n').join(' / ')); }

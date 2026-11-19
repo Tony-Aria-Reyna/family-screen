@@ -8,7 +8,7 @@ const PEOPLE = __PEOPLE__;
 
 function post(body) {
   return new Promise(function (resolve, reject) {
-    const data = JSON.stringify(Object.assign({ key: VOICE_KEY }, body));
+    const data = JSON.stringify(Object.assign({ key: VOICE_KEY, via: 'alexa' }, body));
     const go = function (urlStr, payload, n) {
       const u = new URL(urlStr);
       const opts = { hostname: u.hostname, port: u.port || undefined, path: u.pathname + u.search, method: payload ? 'POST' : 'GET', headers: {} };

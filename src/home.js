@@ -353,6 +353,8 @@ function memoryContext(query,budget){
   return out.trim();
 }
 const akaOf=p=>[p.nick].concat(String(p.aka||'').split(',')).map(x=>String(x||'').trim()).filter(Boolean);
+// for Alexa: also the "who they are" box when it is a name of a word or two (Machan, Daddy), not a sentence
+const voiceAka=p=>{ const r=String(p.role||'').trim(), ok=r&&r.split(/\s+/).length<=2&&!/[,·(]/.test(r); return [...new Set((ok?[r]:[]).concat(akaOf(p)))]; };
 const whoLines=()=>eaters().map(p=>'- '+p.name+(p.role?': '+p.role:'')+(p.id===(traveller()||{}).id?' (flies for work as cabin crew, often away)':'')+(akaOf(p).length?'. Also called: '+akaOf(p).join(', '):'')).join('\n');
 const familyIntro=()=>`The family (Auckland, New Zealand). Who's who (a nickname in a calendar entry or a note means that person; "at X's" means at their place):\n${whoLines()}${S.famNote?'\n'+S.famNote:''}\nToday is ${fmtD(new Date(),{weekday:'long',day:'numeric',month:'long',year:'numeric'})}.`;
 const withMemory=(prompt,query)=>{ const mc=memoryContext(query||prompt); return familyIntro()+(mc?'\n\nThings the family has told you (use them, they matter):\n'+mc:'')+'\n\n'+prompt; };
@@ -888,7 +890,7 @@ function alexaCode(){
   return ALEXA_SKILL.replace('__URL__',(S.voiceUrl||'PASTE_YOUR_HELPER_WEB_APP_URL')).replace('__KEY__',(S.voiceKey||'')).replace('__PEOPLE__',JSON.stringify(alexaNames()));
 }
 function alexaModel(){
-  const people=alexaNames(), syn=n=>{ const p=eaters().find(q=>alexaNames().includes(n)&&String(q.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim().toLowerCase()===n.toLowerCase()); return p?akaOf(p).map(a=>a.replace(/[^A-Za-z0-9 '-]/g,'').trim()).filter(Boolean):[]; }, P={name:'PERSON',values:people.concat(['everyone']).map(n=>{ const sy=syn(n); return {name:sy.length?{value:n,synonyms:sy}:{value:n}}; })};
+  const people=alexaNames(), syn=n=>{ const p=eaters().find(q=>alexaNames().includes(n)&&String(q.name).replace(/[^A-Za-z0-9 '-]/g,'').replace(/\s+/g,' ').trim().toLowerCase()===n.toLowerCase()); return p?voiceAka(p).map(a=>a.replace(/[^A-Za-z0-9 '-]/g,'').trim()).filter(Boolean):[]; }, P={name:'PERSON',values:people.concat(['everyone']).map(n=>{ const sy=syn(n); return {name:sy.length?{value:n,synonyms:sy}:{value:n}}; })};
   const I=(name,slots,samples)=>({name,slots:slots||[],samples:samples||[]});
   const s=(n,t)=>({name:n,type:t});
   return JSON.stringify({interactionModel:{languageModel:{invocationName:voiceName(),types:people.length?[P]:[],intents:[

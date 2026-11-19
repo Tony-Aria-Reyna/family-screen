@@ -7,7 +7,7 @@ const PP={}; const G={gcalls:0,fail:false}; let now=new Date(2026,10,18,5,0,0);
 const mocks=`
  function listDocs(p){ const pre=p+'/'; return Object.keys(DB).filter(k=>k.startsWith(pre)&&k.slice(pre.length).indexOf('/')<0).map(k=>Object.assign({},DB[k],{_id:k.split('/').pop()})); }
  function runQuery(par,col,w){ return listDocs(par+'/'+col); }
- function fetchMany(specs){ return specs.map(s=>s.kind==='doc'?(DB[s.path]||null):listDocs(s.kind==='list'?s.path:s.parent+'/'+s.col)); }
+ function fetchManyLoose(specs){ return fetchMany(specs); } function fetchMany(specs){ return specs.map(s=>s.kind==='doc'?(DB[s.path]||null):listDocs(s.kind==='list'?s.path:s.parent+'/'+s.col)); }
  function recentFlights(hp){ return listDocs(hp+'/flights'); } function getDoc(p){ return DB[p]||null; } function patch(p,f){ DB[p]=Object.assign({},DB[p]||{},f); }
  function send(){} function syncRules(){return {ok:true};} function selfUpdate(){return null;} function trackFlights(){} function wakeWeather(){ return 'sunny, a high of 22 degrees'; }
  function gemini(k,parts){ G.gcalls++; if(G.fail) throw new Error('Gemini 503'); return JSON.stringify({lines:['Aria, Aria, kiwi '+G.gcalls+',','up you hop, the sun is high!','Pancakes wait with Machan near,','jump out, the day is here!']}); }
