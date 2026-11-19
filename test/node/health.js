@@ -18,7 +18,7 @@ function load(env, when){
   function runQuery(par,col){ return listDocs(par+'/'+col); }
   function getDoc(p){ return DB[p]||null; }
   function patch(p,f){ G.patches.push(p); DB[p]=Object.assign({},DB[p]||{},JSON.parse(JSON.stringify(f))); }
-  function readsToday(){ return {n:G.reads,day:'d'}; } function headers(){ return {}; }
+  function readsToday(){ return {n:G.reads,helper:G.reads-400,app:400,day:'d'}; } function headers(){ return {}; }
   function syncRules(){ return {ok:true}; } function selfUpdate(){ return null; } function trackFlights(){} function wakePrep(){} function billsTick(){ return []; } function inboxTick(){ return []; }
   const UrlFetchApp={fetch:(u,o)=>{ if(/fcm/.test(u)){ const tok=JSON.parse(o.payload).message.token; G.sent.push(tok+' | '+JSON.parse(o.payload).message.data.title); return {getResponseCode:()=>tok==='dead'?404:200,getContentText:()=>'{}'}; }
     if(/updateMask/.test(u)){ G.removed.push(decodeURIComponent(u.split('fieldPaths=')[1])); const h=DB['households/H']; Object.keys(h.devices).forEach(k=>{ if(h.devices[k].token==='dead') delete h.devices[k]; }); return {getResponseCode:()=>200,getContentText:()=>'{}'}; }

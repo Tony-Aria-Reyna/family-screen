@@ -76,9 +76,34 @@ export async function refreshVerified() {
 }
 export const me = () => user && user.email && user.email.toLowerCase();
 
+/* Reads this screen causes, so the helper can warn before the free 50,000 a day run out (Cloud Monitoring would need
+   billing switched on). The allowance runs by Pacific time. Saved now and then to usage/reads-<day>, one line per screen. */
+const pday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+let rc = { day: '', n: 0, sent: 0 };
+try { rc = Object.assign(rc, JSON.parse(localStorage.getItem('fs.reads') || '{}')); } catch (e) {}
+function tally(n) {
+  const d = pday(); if (rc.day !== d) rc = { day: d, n: 0, sent: 0 };
+  rc.n += Math.max(1, n || 0); try { localStorage.setItem('fs.reads', JSON.stringify(rc)); } catch (e) {}
+}
+// a listener's first answer from the server is billed in full; after that, only the entries that changed
+function listen(ref, next, fail) {
+  let first = true;
+  return onSnapshot(ref, snap => {
+    if (!(snap.metadata && snap.metadata.fromCache)) { tally(!snap.docs ? 1 : first || typeof snap.docChanges !== 'function' ? snap.docs.length : snap.docChanges().length); first = false; }
+    next(snap);
+  }, fail);
+}
+export const readsToday = () => (rc.day === pday() ? rc.n : 0);
+export async function sendReads() {
+  if (!hid || !me() || !rc.day || rc.n === rc.sent) return false;
+  let id = ''; try { id = localStorage.getItem('fs.rdev') || ''; if (!id) { id = Math.random().toString(36).slice(2, 10); localStorage.setItem('fs.rdev', id); } } catch (e) { id = 'screen'; }
+  try { await setDoc(doc(db, 'households', hid, 'usage', 'reads-' + rc.day), { [id]: { n: rc.n, by: me(), dev: deviceKind, at: Date.now() } }, { merge: true });
+    rc.sent = rc.n; localStorage.setItem('fs.reads', JSON.stringify(rc)); return true; } catch (e) { return false; }
+}
+
 export async function findHousehold() {
   const q = query(collection(db, 'households'), where('members', 'array-contains', me()));
-  const r = await getDocs(q);
+  const r = await getDocs(q); if (!(r.metadata && r.metadata.fromCache)) tally(r.docs.length);
   return r.empty ? null : r.docs[0].id;
 }
 export async function createHousehold(starter) {
@@ -97,7 +122,7 @@ export function start(householdId, state, changed) {
   denied.clear(); rulesOld = false;
   synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
   privOk = true;
-  unsub.push(onSnapshot(doc(db, 'households', hid), snap => {
+  unsub.push(listen(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
     const d = snap.data(); members = d.members || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
     const hidden = localHidden();
@@ -110,7 +135,7 @@ export function start(householdId, state, changed) {
   SOFT.forEach(listenSoft); if (me()) watchKey();
   for (const c of COLS) {
     S[c] = S[c] || [];
-    unsub.push(onSnapshot(collection(db, 'households', hid, c), snap => {
+    unsub.push(listen(collection(db, 'households', hid, c), snap => {
       let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
       if (PRIV.includes(c)) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
       mergeArray(S[c], list);
@@ -119,7 +144,7 @@ export function start(householdId, state, changed) {
     }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { denied.add(c); console.warn(c + ': database rules need updating'); onChange('rulesold', c); } else onChange('error', err); }));
   }
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
-  if (me()) for (const c of PRIV) unsub.push(onSnapshot(collection(db, 'households', hid, 'private', me(), c), snap => {
+  if (me()) for (const c of PRIV) unsub.push(listen(collection(db, 'households', hid, 'private', me(), c), snap => {
     const mine = snap.docs.map(x => Object.assign({ id: x.id }, x.data(), { priv: true }));
     mergeArray(S[c], S[c].filter(e => !e.priv).concat(mine));
     synced.priv[c].clear(); mine.forEach(x => synced.priv[c].set(x.id, JSON.stringify(clean(x))));
@@ -131,7 +156,7 @@ let privOk = true; const softOk = {}, softUnsub = {};
 function listenSoft(c) {
   if (softUnsub[c]) { try { softUnsub[c](); } catch (e) {} }
   S[c] = S[c] || []; softOk[c] = false;
-  softUnsub[c] = onSnapshot(collection(db, 'households', hid, c), snap => {
+  softUnsub[c] = listen(collection(db, 'households', hid, c), snap => {
     softOk[c] = true; mergeArray(S[c], snap.docs.map(x => Object.assign({ id: x.id }, x.data())));
     const m = synced.cols[c]; m.clear(); S[c].forEach(x => m.set(x.id, JSON.stringify(clean(x)))); onChange(c);
   }, () => { softOk[c] = false; mergeArray(S[c], []); synced.cols[c].clear(); onChange(c); });
@@ -220,7 +245,7 @@ export const saveSecret = data => setDoc(doc(db, 'households', hid, 'secrets', '
 let keyUnsub = null;
 function watchKey() {
   if (keyUnsub) { try { keyUnsub(); } catch (e) {} }
-  keyUnsub = onSnapshot(doc(db, 'households', hid, 'secrets', 'ai'), d => { S.aiKey = (d.exists() && d.data().gemini) || ''; S.claudeKey = (d.exists() && d.data().claude) || ''; onChange('aikey'); }, () => { S.aiKey = ''; S.claudeKey = ''; });
+  keyUnsub = listen(doc(db, 'households', hid, 'secrets', 'ai'), d => { S.aiKey = (d.exists() && d.data().gemini) || ''; S.claudeKey = (d.exists() && d.data().claude) || ''; onChange('aikey'); }, () => { S.aiKey = ''; S.claudeKey = ''; });
   unsub.push(keyUnsub);
 }
 export const saveDevice = (hash, data) => updateDoc(doc(db, 'households', hid), { ['devices.' + hash]: clean(data) });

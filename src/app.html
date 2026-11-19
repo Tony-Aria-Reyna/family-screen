@@ -3032,7 +3032,9 @@ function syncChanged(what,err){
   clearTimeout(rTimer); rTimer=setTimeout(()=>{ if(drag&&drag.live){ pendingRender=true; return; } renderAll(); gate(null); },60);
 }
 function startHome(id){ SYNC.setDevice(isPhone()?'phone':'fridge'); SYNC.start(id,S,syncChanged);
-  setTimeout(()=>{ const day=dk(new Date()), k='fs.opened|'+(SYNC.me()||''); if(lsGet(k,'')!==day) SYNC.markOpen(day).then(ok=>{ if(ok) lsSet(k,day); }); },6000); setTimeout(()=>refreshLinks(false),4000); setTimeout(refreshPushToken,8000); }
+  setTimeout(()=>{ const day=dk(new Date()), k='fs.opened|'+(SYNC.me()||''); if(lsGet(k,'')!==day) SYNC.markOpen(day).then(ok=>{ if(ok) lsSet(k,day); }); },6000); setTimeout(()=>refreshLinks(false),4000); setTimeout(refreshPushToken,8000);
+  // the reads this screen caused today go to the helper's health check now and then (one small write each time)
+  if(!window.__readsT){ window.__readsT=setInterval(()=>SYNC.sendReads(),20*60e3); document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') SYNC.sendReads(); }); setTimeout(()=>SYNC.sendReads(),90e3); } }
 
 /* ================= phone: header, calendar, swipes, back button ================= */
 const isPhone=()=>matchMedia('(max-width:900px)').matches;

@@ -42,7 +42,11 @@ async def main():
         print('8 ticked off by', g.get('doneBy'), '| at set', bool(g.get('doneAt')), '| added-by kept', g.get('by'))
         await P.wait_for_timeout(1000)
         db=json.loads(await P.evaluate("localStorage.getItem('mockdb')")); us=[k for k in db if '/usage/' in k]
-        print('9 opened marks:', us[:1], json.dumps(db[us[0]]) if us else '')
+        op=[k for k in us if '/reads-' not in k]; rdk=[k for k in us if '/reads-' in k]
+        print('9 opened marks:', op[:1], json.dumps(db[op[0]]) if op else '')
+        await P.evaluate("SYNC.sendReads()"); await P.wait_for_timeout(500)
+        db=json.loads(await P.evaluate("localStorage.getItem('mockdb')")); rdk=[k for k in db if '/usage/reads-' in k]
+        print('10 reads saved:', [(k.split('/')[-1], {d:v.get('n') for d,v in db[k].items()}) for k in rdk])
         print('errors:', errs)
         await b.close()
 asyncio.run(main())

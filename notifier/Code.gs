@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 24;
+const HELPER_VERSION = 25;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -65,6 +65,7 @@ function tick() {
       patch('households/' + h._id, f); props.setProperty(sk, JSON.stringify({ sig: sig, at: now.getTime() }));
     }
   }
+  readsFlush(props, now, 'T');
   // tidy up: forget reminders older than 4 days
   const cutoff = now.getTime() - 4 * 864e5;
   Object.keys(sent).forEach(k => { if (+sent[k] > 1 && +sent[k] < cutoff) props.deleteProperty(k); });
@@ -279,7 +280,7 @@ function weekAhead(h, props, now, pre) {
 }
 
 /* ---------- health: Tony hears about a problem before the family does ----------
-   Checked after every run: runs that fail, the database's free daily reads (asked of Cloud Monitoring once an hour),
+   Checked after every run: runs that fail, the database's free daily reads (counted by the helper and the screens, checked once an hour),
    Alexa answers that took too long, calendar feeds that stopped (at 7am), and phones that stopped getting alerts.
    Each kind of alert goes out at most once every few hours: a push to Tony's phones and an email to him. */
 const READ_WARN = 30000;   // of the free 50,000 a day
@@ -305,20 +306,34 @@ function healthGlobal(props, now, err) {
   if ((full || s.fails >= 3) && now.getTime() - (s.alerted || 0) > 6 * 3600e3) {
     s.alerted = now.getTime();
     try { GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), 'Family Screen: ' + (full ? 'the family database hit its daily limit' : 'the Reminder helper cannot reach the family database'),
-      (full ? 'Reminders, messages and Alexa may stop until the limit resets (about 9pm NZ summer time, 8pm winter).' : 'The last ' + s.fails + ' runs failed.') + '\n\nError: ' + err + '\n\n' + APP_URL); } catch (e) { Logger.log('Health email: ' + e); }
+      (full ? 'Reminders, messages and Alexa may stop until the limit resets at ' + resetTime(now) + '.' : 'The last ' + s.fails + ' runs failed.') + '\n\nError: ' + err + '\n\n' + APP_URL); } catch (e) { Logger.log('Health email: ' + e); }
   }
   props.setProperty('HEALTH_GLOBAL', JSON.stringify(s));
 }
-// document reads so far today (the free allowance resets at midnight Pacific time), from Cloud Monitoring
-function readsToday(now) {
-  const tz = 'America/Los_Angeles', day = Utilities.formatDate(now, tz, 'yyyy-MM-dd'), off = Utilities.formatDate(now, tz, 'XXX');
-  const start = day + 'T00:00:00' + off, secs = Math.max(60, Math.ceil((now.getTime() - Date.parse(start)) / 1000));
-  const q = 'filter=' + encodeURIComponent('metric.type="firestore.googleapis.com/document/read_ops_count"') + '&interval.startTime=' + encodeURIComponent(start) +
-    '&interval.endTime=' + encodeURIComponent(now.toISOString()) + '&aggregation.alignmentPeriod=' + secs + 's&aggregation.perSeriesAligner=ALIGN_SUM&aggregation.crossSeriesReducer=REDUCE_SUM';
-  const r = UrlFetchApp.fetch('https://monitoring.googleapis.com/v3/projects/' + PROJECT_ID + '/timeSeries?' + q, { headers: headers(), muteHttpExceptions: true });
-  if (r.getResponseCode() !== 200) throw new Error('Cloud Monitoring ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 160));
-  let n = 0; (JSON.parse(r.getContentText()).timeSeries || []).forEach(function (ts) { (ts.points || []).forEach(function (pt) { n += Number(pt.value && (pt.value.int64Value || pt.value.doubleValue) || 0); }); });
-  return { n: n, day: day };
+/* v25: database reads are counted here, because Cloud Monitoring only answers once billing is switched on (decision 5 keeps
+   the free plan). This helper counts its own reads; each screen counts its own and saves the total now and then in
+   usage/reads-<day>. The free 50,000 a day runs by Pacific time, so the count does too. It is an estimate, a little low. */
+var RD = 0;
+function rd(n) { RD += Math.max(1, Number(n) || 0); }
+function pday(now) { return Utilities.formatDate(now, 'America/Los_Angeles', 'yyyy-MM-dd'); }
+function readsFlush(props, now, k) {
+  if (!RD) return;
+  const key = 'RDS_' + k + '_' + pday(now);
+  try { props.setProperty(key, String(+(props.getProperty(key) || 0) + RD)); RD = 0;
+    if (k === 'T') props.deleteProperty('RDS_T_' + pday(new Date(now.getTime() - 3 * 864e5))), props.deleteProperty('RDS_P_' + pday(new Date(now.getTime() - 3 * 864e5))); } catch (e) {}
+}
+function readsToday(h, props, now) {
+  const day = pday(now); let helper = RD, app = 0;
+  ['T', 'P'].forEach(function (k) { helper += +(props.getProperty('RDS_' + k + '_' + day) || 0); });
+  const u = getDoc('households/' + h._id + '/usage/reads-' + day);
+  if (u) Object.keys(u).forEach(function (k) { const v = u[k]; if (v && typeof v === 'object' && v.n) app += Number(v.n) || 0; });
+  return { n: helper + app, helper: helper, app: app, day: day };
+}
+// when the daily allowance starts again, in NZ time (9pm in the NZ summer, 7pm in winter, 8pm in between)
+function resetTime(now) {
+  const m = String(Utilities.formatDate(now, 'America/Los_Angeles', 'XXX')).match(/([+-])(\d\d):(\d\d)/); if (!m) return '9pm';
+  const d = new Date(now.getTime()); d.setUTCHours(0, (m[1] === '-' ? 1 : -1) * (+m[2] * 60 + +m[3]), 0, 0); if (d.getTime() <= now.getTime()) d.setTime(d.getTime() + 864e5);
+  return String(Utilities.formatDate(d, 'Pacific/Auckland', 'h:mm a')).replace(':00', '').replace(' ', '').toLowerCase();
 }
 function noteDrop(hid, dev) {
   const props = PropertiesService.getScriptProperties(), k = 'DROPS_' + hid, l = JSON.parse(props.getProperty(k) || '[]');
@@ -336,11 +351,11 @@ function healthAfterRun(h, props, now, err, pre) {
   if (err) { s.fails = (s.fails || 0) + 1; s.lastErr = err; s.failsWeek = (s.failsWeek || 0) + 1; } else s.fails = 0;
   const full = /429|quota|RESOURCE_EXHAUSTED/i.test(err || '');
   if (err && (full || s.fails >= 3)) healthAlert(h, s, full ? 'limit' : 'fail', full ? 'the family database hit its daily limit' : 'the Reminder helper is failing',
-    full ? 'Reminders, messages and Alexa may stop until the limit resets at about 9pm (NZ summer time). Error: ' + err : 'The last ' + s.fails + ' runs failed. Error: ' + err, 6, now);
+    full ? 'Reminders, messages and Alexa may stop until the limit resets at ' + resetTime(now) + '. Error: ' + err : 'The last ' + s.fails + ' runs failed. Error: ' + err, 6, now);
   if (!s.readsAt || now.getTime() - s.readsAt > 55 * 60e3) {
     s.readsAt = now.getTime();
-    try { const rd = readsToday(now); s.reads = rd.n; s.readsDay = rd.day; s.readsErr = ''; s.readsPeak = Math.max(s.readsPeak || 0, rd.n);
-      if (rd.n > READ_WARN) healthAlert(h, s, 'reads', 'database reads are high today', rd.n.toLocaleString('en-NZ') + ' of the free 50,000 reads a day are used so far. If it reaches 50,000, the app and reminders stop until about 9pm.', 20, now); }
+    try { const r = readsToday(h, props, now); s.reads = r.n; s.readsHelper = r.helper; s.readsApp = r.app; s.readsDay = r.day; s.readsErr = ''; s.readsPeak = Math.max(s.readsPeak || 0, r.n);
+      if (r.n > READ_WARN) healthAlert(h, s, 'reads', 'database reads are high today', 'About ' + r.n.toLocaleString('en-NZ') + ' of the free 50,000 reads a day are used so far (the helper ' + (r.helper || 0).toLocaleString('en-NZ') + ', the screens ' + (r.app || 0).toLocaleString('en-NZ') + '). If it reaches 50,000, the app and reminders stop until ' + resetTime(now) + '.', 20, now); }
     catch (e) { s.readsErr = String(e && e.message || e).slice(0, 160); }
   }
   if (s.slow && s.slow.day === day && s.slow.n >= 2) healthAlert(h, s, 'slow', 'Alexa answers are slow', s.slow.n + ' Alexa answers today took longer than the 8 seconds Alexa allows (worst ' + Math.round((s.slow.worst || 0) / 1000) + ' s, last: ' + (s.slow.last || '') + ').', 20, now);
@@ -356,7 +371,7 @@ function healthAfterRun(h, props, now, err, pre) {
       try { GmailApp.sendEmail(em, 'Family Screen alerts stopped on your phone', 'Your phone stopped getting Family Screen reminders and messages. Open Family Screen on it and tap "Turn on alerts" if it asks.\n\n' + APP_URL); } catch (e) {} });
   }
   hSave(props, h._id, s);
-  return { fails: s.fails || 0, lastErr: s.fails ? s.lastErr || '' : '', reads: s.reads == null ? null : s.reads, readsDay: s.readsDay || '', readsAt: s.readsAt || 0, readsErr: s.readsErr || '',
+  return { fails: s.fails || 0, lastErr: s.fails ? s.lastErr || '' : '', reads: s.reads == null ? null : s.reads, readsHelper: s.readsHelper || 0, readsApp: s.readsApp || 0, readsDay: s.readsDay || '', readsAt: s.readsAt || 0, readsErr: s.readsErr || '',
     slow: s.slow && s.slow.day === day ? s.slow.n : 0, stale: s.stale || [], dropped: (s.dropped || []).map(function (d) { return d.label; }), log: (s.log || []).slice(0, 5) };
 }
 
@@ -584,7 +599,7 @@ function listDocs(path) {
   do {
     const r = UrlFetchApp.fetch(BASE + '/' + path + '?pageSize=300' + (token ? '&pageToken=' + encodeURIComponent(token) : ''), { headers: headers(), muteHttpExceptions: true });
     if (r.getResponseCode() !== 200) throw new Error('Reading ' + path + ': ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 200));
-    const j = JSON.parse(r.getContentText());
+    const j = JSON.parse(r.getContentText()); rd((j.documents || []).length);
     (j.documents || []).forEach(d => { const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; out.push(o); });
     token = j.nextPageToken || '';
   } while (token);
@@ -599,7 +614,7 @@ function runQuery(parent, col, where) {
   if (r.getResponseCode() !== 200) throw new Error('Reading ' + col + ': ' + r.getResponseCode() + ' ' + r.getContentText().slice(0, 200));
   const out = [];
   JSON.parse(r.getContentText()).forEach(x => { const d = x.document; if (!d) return; const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; out.push(o); });
-  return out;
+  rd(out.length); return out;
 }
 function mkDoc(d) { const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); if (!o.id) o.id = o._id; return o; }
 // several reads at once (Apps Script otherwise waits about a second for each): [{kind:'query'|'doc'|'list', ...}] in, an array of results out
@@ -611,11 +626,12 @@ function fetchReqs(specs) {
 }
 function readOne(s, r) {
   const code = r.getResponseCode(), what = s.path || s.col;
-  if (s.kind === 'doc' && code === 404) return null;
+  if (s.kind === 'doc' && code === 404) { rd(1); return null; }
   if (code !== 200) throw new Error('Reading ' + what + ': ' + code + ' ' + r.getContentText().slice(0, 120));
   const j = JSON.parse(r.getContentText());
-  if (s.kind === 'doc') return mkDoc(j);
-  if (s.kind === 'query') return j.filter(function (x) { return x.document; }).map(function (x) { return mkDoc(x.document); });
+  if (s.kind === 'doc') { rd(1); return mkDoc(j); }
+  if (s.kind === 'query') { const l = j.filter(function (x) { return x.document; }).map(function (x) { return mkDoc(x.document); }); rd(l.length); return l; }
+  rd((j.documents || []).length);
   return j.nextPageToken ? listDocs(s.path) : (j.documents || []).map(mkDoc);
 }
 function fetchMany(specs) { return UrlFetchApp.fetchAll(fetchReqs(specs)).map(function (r, i) { return readOne(specs[i], r); }); }
@@ -741,7 +757,7 @@ const BILL_CATS = ['Power', 'Gas', 'Internet', 'Phone', 'Water', 'Rates', 'Insur
 const money = c => '$' + (Number(c || 0) / 100).toFixed(2);
 const normB = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 function getDoc(path) {
-  const r = UrlFetchApp.fetch(BASE + '/' + path, { headers: headers(), muteHttpExceptions: true });
+  const r = UrlFetchApp.fetch(BASE + '/' + path, { headers: headers(), muteHttpExceptions: true }); rd(1);
   if (r.getResponseCode() === 404) return null;
   if (r.getResponseCode() !== 200) throw new Error('Reading ' + path + ': ' + r.getResponseCode());
   const d = JSON.parse(r.getContentText()); const o = dec({ mapValue: { fields: d.fields || {} } }); o._id = d.name.split('/').pop(); return o;
@@ -926,6 +942,7 @@ function doPost(e) {
   const t0 = Date.now(), act = String(b.action || '');
   try { const res = voiceDo(h, act, b); noteVoice(h, b, Date.now() - t0, false); return out(res); }
   catch (err) { noteVoice(h, b, Date.now() - t0, true); return out({ speech: 'Sorry, something went wrong at my end. ' + String(err && err.message || err).slice(0, 80) }); }
+  finally { try { readsFlush(PropertiesService.getScriptProperties(), new Date(), 'P'); } catch (e) {} }
 }
 const VOICE_MAX = 55;                                     // keep spoken answers short
 function vPeople(h) { return (h.people || []).filter(p => p.id !== 'all'); }
