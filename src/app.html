@@ -197,6 +197,14 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.stk{display:flex;flex-wrap:wrap;gap:6px}
+.stki{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;font:inherit;font-size:16px;color:var(--ink)}
+.stki small{color:var(--muted);font-size:13px}.stki small.old{color:#b45309;font-weight:700}
+.stki button{border:0;background:none;color:var(--muted);font-size:15px;padding:0 2px}
+.stki.gone{color:var(--muted);text-decoration:line-through}.stki.sauce.out{background:#fff8ec;border-color:#f3c98b}
+.ckph{position:relative;display:inline-block}.ckph img{width:64px;height:64px;object-fit:cover;border-radius:12px;display:block}
+.ckph button{position:absolute;top:-6px;right:-6px;border:0;border-radius:50%;width:22px;height:22px;background:#222;color:#fff;font-size:12px}
+small.ckok{color:#15803d;font-weight:700}small.ckgap{color:#b45309;font-weight:700}
 body.simple{overflow:hidden}
 #saver{position:fixed;inset:0;z-index:85;background:#000;color:#fff;cursor:none}
 #saver img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;animation:svfade 1.5s}
@@ -992,7 +1000,7 @@ function migrate(s){
 }
 function starter(){ const f=fresh(); ['events','flights','groceries','todos'].forEach(k=>f[k]=[]); f.people.forEach(p=>{ if(p.id==='p2') p.nick='Mummy'; }); return f; }
 let S=LOCAL?migrate(load()):Object.assign(starter(),{people:[],shops:[]});
-['recipes','meals','renewals','gifts','bills','memory','kids','inbox','msgs','docs'].forEach(k=>S[k]=S[k]||[]);
+['recipes','meals','renewals','gifts','bills','memory','kids','inbox','msgs','docs','stock'].forEach(k=>S[k]=S[k]||[]);
 (()=>{ const pr=lsGet('fs.prefs',{}); if(pr.view) S.view=pr.view; if(pr.shopTab) S.shopTab=pr.shopTab; })();
 let weekOff=0, monthOff=0;
 
@@ -2818,6 +2826,7 @@ function moreTiles(){ return [
   ['❓','What can I say?',()=>openHelp(),()=>'Alexa phrases'],
   ['👵','Big and simple',()=>openSimplePick(),()=>'日本語 or English'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
+  ['🧊','Kitchen stock',()=>openStock(),()=>{ const n=stockNow().length; return n?n+' things in the house':'freezer, fridge, sauces'; }],
   ['📁','Documents',()=>openVault(),()=>{ const n=(S.docs||[]).length; return n?n+' kept · who to call':'insurance and policies'; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
   ['📖','Recipes',()=>openRecipeBook(),()=>allRecipes().length+' recipes'],

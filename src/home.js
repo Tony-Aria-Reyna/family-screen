@@ -44,12 +44,12 @@ function openMeals(){
   const toShop=(S.meals||[]).filter(m=>days.includes(m.date)&&m.rid&&!m.shopped).length;
   L.innerHTML=`<div class="meals"><div class="mhead"><h2>🍽️ Meals</h2>
     <div class="mnav"><button data-wk="-1" aria-label="Previous week">‹</button><b>${label}</b><button data-wk="1" aria-label="Next week">›</button></div>
-    <div class="macts"><button id="mIdeas">✨ Ideas</button><button id="mBook">📖 Recipes</button><button id="mShop" ${toShop?'':'disabled'}>🛒 Shopping list${toShop?` (${toShop})`:''}</button></div>
+    <div class="macts"><button id="mCook">📸 What can we make?</button><button id="mStock">🧊 Kitchen stock</button><button id="mIdeas">✨ Ideas</button><button id="mBook">📖 Recipes</button><button id="mShop" ${toShop?'':'disabled'}>🛒 Shopping list${toShop?` (${toShop})`:''}</button></div>
     <button class="mclose" id="mClose" aria-label="Close">✕</button></div>
     <div class="mweek">${days.map(dayHTML).join('')}</div></div>`;
   L.querySelectorAll('[data-wk]').forEach(b=>b.onclick=()=>{ mealWeek+=+b.dataset.wk; openMeals(); });
   L.querySelector('#mClose').onclick=()=>{ closeMeals(); if(isPhone()) setTab('cal'); };
-  L.querySelector('#mIdeas').onclick=()=>openIdeas();
+  L.querySelector('#mIdeas').onclick=()=>openIdeas(); L.querySelector('#mCook').onclick=()=>openCook(); L.querySelector('#mStock').onclick=()=>openStock();
   L.querySelector('#mBook').onclick=()=>openRecipeBook();
   L.querySelector('#mShop').onclick=()=>shopForMeals(days);
   L.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const [k,s]=b.dataset.pick.split('|'); pickMeal(k,s); });
@@ -271,7 +271,7 @@ async function aiDirect(key,payload,onText,tried){
   tried=tried||{};
   const json=payload.json!==false, parts=[{text:String(payload.prompt||'').slice(0,120000)}];
   if(payload.url) parts[0].text+='\n\nWeb page to read: '+payload.url;
-  if(payload.file&&payload.file.data) parts.push({inline_data:{mime_type:payload.file.mime||'image/jpeg',data:payload.file.data}});
+  (payload.files||(payload.file?[payload.file]:[])).filter(f=>f&&f.data).forEach(f=>parts.push({inline_data:{mime_type:f.mime||'image/jpeg',data:f.data}}));
   const gc={temperature:0.4}; if(json) gc.responseMimeType='application/json'; if(!tried.think) gc.thinkingConfig={thinkingLevel:'low'};
   const body={contents:[{role:'user',parts}],generationConfig:gc}; if(payload.url&&!tried.url) body.tools=[{url_context:{}}];
   const model=await aiModel(key);
@@ -313,8 +313,8 @@ const aiLabel=()=>aiUsing()==='claude'?'Claude · '+CLAUDE_MODELS.find(m=>m[0]==
 async function aiClaude(key,payload,onText,tried){
   tried=tried||{};
   const json=payload.json!==false, content=[];
-  if(payload.file&&payload.file.data){ const mime=payload.file.mime||'image/jpeg';
-    content.push(mime==='application/pdf'?{type:'document',source:{type:'base64',media_type:mime,data:payload.file.data}}:{type:'image',source:{type:'base64',media_type:mime,data:payload.file.data}}); }
+  (payload.files||(payload.file?[payload.file]:[])).filter(f=>f&&f.data).forEach(f=>{ const mime=f.mime||'image/jpeg';
+    content.push(mime==='application/pdf'?{type:'document',source:{type:'base64',media_type:mime,data:f.data}}:{type:'image',source:{type:'base64',media_type:mime,data:f.data}}); });
   content.push({type:'text',text:String(payload.prompt||'').slice(0,120000)+(payload.url?'\n\nWeb page (you cannot open it; say so if you need its contents): '+payload.url:'')+(json?'\n\nReply with the JSON only: no other words, no code fence.':'')});
   const body={model:claudeModel(),max_tokens:16000,stream:true,messages:[{role:'user',content}]}; if(!tried.effort) body.output_config={effort:aiEffort()};
   const fail=(msg,fb)=>{ const e=new Error(msg); e.fallback=fb!==false; return e; };
@@ -1467,4 +1467,136 @@ async function vaultAdd(file){
     save(); renderAll(); toast('Saved: '+(d.title||'document')+(d.renews?' (renewal added to 📌 Renewals)':''));
   }catch(e){ if(e.message!=='quiet') toast('Couldn’t read that: '+e.message); }
   done(); return d;
+}
+
+/* ================= Kitchen stock and "What can we make?" =================
+   The hard part of dinner is knowing what's in the deep freezer and fridge. Two ways in:
+   - On the fly: a couple of photos of the fridge and freezer → the AI writes dinners from what it sees and lists the gaps.
+   - Kitchen stock: a kept list (deep freezer, fridge, pantry) plus a sauce shelf of staples; dinners use the oldest first.
+   A planned dinner's ingredients are assumed used once it has been cooked (8pm that day), with "put back" for mistakes. */
+const FOOD_DEFAULT='We like Japanese, Mexican and Kiwi food. Paleo-style: meat, fish, eggs, vegetables; minimal gluten (tamari instead of soy sauce, corn tortillas). About once a month a homemade sourdough or fresh pizza night is welcome.';
+const foodPrefs=()=>String(S.food||FOOD_DEFAULT);
+const STOCK_PLACES=[['freezer','🧊','Deep freezer'],['fridge','🥬','Fridge'],['pantry','🥫','Pantry']];
+const SAUCES=[['Japanese',['Tamari or coconut aminos','Mirin','Rice vinegar','Toasted sesame oil','Miso paste','Dashi powder','Fresh ginger','Kewpie mayo']],
+  ['Mexican',['Chipotle in adobo','Ground cumin','Smoked paprika','Dried oregano','Limes','Tinned tomatoes','Salsa verde','Corn tortillas']],
+  ['Kiwi',['Dijon mustard','Wholegrain mustard','Tomato paste','Stock','Balsamic vinegar','Honey','Worcestershire sauce (gluten-free)']],
+  ['Everyday',['Garlic','Fish sauce','Coconut milk','Olive oil','Avocado oil']]];
+const stockNow=()=>(S.stock||[]).filter(x=>x.where!=='sauce'&&!x.used);
+const sauceShelf=()=>(S.stock||[]).filter(x=>x.where==='sauce');
+const stockAge=x=>{ const d=Math.floor((Date.now()-(x.at||Date.now()))/864e5); return d<7?'':d<60?Math.floor(d/7)+' wk':Math.floor(d/30)+' mth'; };
+function stockAdd(items,where){ let n=0; S.stock=S.stock||[];
+  for(const it of items||[]){ const name=String(it.name||'').trim().slice(0,60); if(!name) continue; const w=STOCK_PLACES.some(p=>p[0]===it.where)?it.where:(where||'fridge');
+    const ex=S.stock.find(x=>!x.used&&x.where===w&&x.name.toLowerCase()===name.toLowerCase());
+    if(ex){ if(it.qty) ex.qty=String(it.qty).slice(0,30); continue; }
+    S.stock.push({id:uid(),name:name.charAt(0).toUpperCase()+name.slice(1),qty:String(it.qty||'').slice(0,30),where:w,at:Date.now()}); n++; }
+  if(n) save(); return n; }
+// dinners that have been cooked use up what they were planned from; week-old "used" lines are forgotten
+function stockSettle(){ const today=dk(new Date()), late=new Date().getHours()>=20; let ch=false;
+  (S.meals||[]).forEach(m=>{ if(m.uses&&m.uses.length&&!m.settled&&(m.date<today||(m.date===today&&late))){ m.settled=true; ch=true; (S.stock||[]).forEach(x=>{ if(m.uses.includes(x.id)&&!x.used) x.used=Date.now(); }); } });
+  const n=(S.stock||[]).length; S.stock=(S.stock||[]).filter(x=>!x.used||Date.now()-x.used<7*864e5); if(S.stock.length!==n) ch=true;
+  if(ch) save(); }
+setInterval(()=>{ try{ if(S.people.length) stockSettle(); }catch(e){} },30*60e3);
+function buyAdd(names){ let n=0; for(const raw of names||[]){ const name=String(raw||'').trim(); if(!name) continue;
+    if(S.groceries.some(g=>!g.done&&g.name.toLowerCase().startsWith(name.toLowerCase()))) continue; const sid=suggestShop(name);
+    S.groceries.push({id:uid(),name:name.charAt(0).toUpperCase()+name.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(name):'',done:false,meal:true}); n++; }
+  if(n) save(); return n; }
+// reading photos or a typed list into stock items
+async function stockRead(files,text,where){
+  if(!aiOK()){ if(files&&files.length) throw new Error('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.'); return String(text||'').split(/\n|,|;|、/).map(x=>({name:x.trim(),where})).filter(x=>x.name); }
+  const j=await aiAsk({json:true,files,file:files&&files[0],prompt:`List the food a New Zealand family has, from ${files&&files.length?'the attached photo(s) of their freezer, fridge, pantry or a handwritten list':'this typed list'}${text?': """'+String(text).slice(0,4000)+'"""':''}.
+Return JSON only: {"items":[{"name":"short everyday name, e.g. chicken thighs","qty":"rough amount if you can tell, e.g. 2 packs, 500 g, or empty","where":"freezer|fridge|pantry"}]}
+Only what you can actually see or read; no guesses about what is hidden. ${where?'Unless it is obvious otherwise, these are in the '+where+'.':''} Skip condiments and drinks unless they matter for cooking dinner.`});
+  return (j.items||[]).filter(x=>x&&x.name);
+}
+async function dinnerIdeas(o){
+  const stock=o.useStock?stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)):[], sh=sauceShelf(), people=o.people||Math.max(1,homeOn(dk(new Date())).length);
+  const prompt=`You are helping a New Zealand family (Auckland) decide dinner from what they ALREADY have, so nothing in the freezer or fridge is wasted.
+Their tastes: ${foodPrefs()}
+${o.files&&o.files.length?'Attached: '+o.files.length+' photo(s) of their fridge, freezer or pantry, taken just now. Work from what you can actually see.':''}
+${stock.length?'Their kitchen stock list (oldest first; use the oldest and the frozen things first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
+${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.'+(sh.some(x=>x.out)?' Run out of: '+sh.filter(x=>x.out).map(x=>x.name).join(', ')+'.':''):''}
+${o.text?'They also said: """'+String(o.text).slice(0,600)+'""".':''}
+Suggest 3 different dinners for ${people} people. Each must be built mainly from what they have, need at most 2 things from the supermarket (none is best), and fit their tastes. Salt, pepper and cooking oil can be assumed; nothing else can.
+Return JSON only: {"seen":[{"name":"...","qty":"","where":"freezer|fridge|pantry"}],"recipes":[ 3 objects shaped like ${RECIPE_SHAPE} plus "uses":["the things they have that it uses, named exactly as in the stock list or as seen"],"buy":["each thing they would need to buy, or empty list"],"thaw":"what to take out of the freezer and when, or empty" ]} with "serves": ${people}.
+"seen" lists what you could see in the photos (empty list when there are no photos). ${RECIPE_RULES}`;
+  const out=await aiAsk({prompt:withMemory(prompt,o.text||'dinner'),json:true,files:o.files,file:o.files&&o.files[0]});
+  const rs=(out.recipes||[]).map(raw=>{ const r=cleanRecipe(raw); r.uses=(raw.uses||[]).map(String).slice(0,20); r.buy=(raw.buy||[]).map(String).filter(Boolean).slice(0,6); r.thaw=String(raw.thaw||'').slice(0,140); return r; }).filter(r=>r.ing.length&&r.steps.length);
+  if(!rs.length) throw new Error('No dinners came back. Try again.');
+  return {recipes:rs,seen:(out.seen||[]).filter(x=>x&&x.name).slice(0,60)};
+}
+// on the fly: photos in, dinners and gaps out
+function openCook(){ stockSettle();
+  const st={files:[],text:'',people:Math.max(1,homeOn(dk(new Date())).length),useStock:stockNow().length>0};
+  modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
+    m.innerHTML=`<h2>📸 What can we make?</h2><p class="note">Take a couple of photos of the fridge and the freezer. You get three dinners made from what's there, and what (if anything) to pick up.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="save" id="ph" style="border-radius:14px;padding:14px 18px;font-weight:800">📷 ${st.files.length?'Add another photo':'Take or choose a photo'}</button>${st.files.map((f,i)=>`<span class="ckph"><img src="data:${f.mime};base64,${f.data}" alt=""><button data-rm="${i}" aria-label="Remove">✕</button></span>`).join('')}</div>
+      <input type="file" id="pf" accept="image/*" multiple hidden>
+      <div class="step">Anything else? <span style="font-weight:500">(optional)</span></div><input class="txt" id="tx" value="${esc(st.text)}" placeholder="e.g. feeling like Mexican, quick tonight, there's mince in the deep freezer">
+      <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">People <button id="pm">−</button> <b>${st.people}</b> <button id="pp">＋</button></span>
+        ${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Also use the Kitchen stock list (${stockNow().length})</label>`:''}</div>
+      <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go">🍽️ Find dinners</button></div>`;
+    const pf=m.querySelector('#pf'), tx=m.querySelector('#tx'); tx.oninput=()=>st.text=tx.value;
+    m.querySelector('#ph').onclick=()=>{ if(st.files.length>=4){ toast('Four photos is plenty'); return; } pf.click(); };
+    pf.onchange=async()=>{ for(const f of [...pf.files].slice(0,4-st.files.length)){ try{ st.files.push(await fileForAI(f)); }catch(e){ toast(e.message); } } pf.value=''; draw(); };
+    m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ st.files.splice(+b.dataset.rm,1); draw(); });
+    m.querySelector('#pm').onclick=()=>{ st.people=Math.max(1,st.people-1); draw(); }; m.querySelector('#pp').onclick=()=>{ st.people++; draw(); };
+    const us=m.querySelector('#us'); if(us) us.onchange=()=>st.useStock=us.checked;
+    m.querySelector('#c').onclick=close;
+    m.querySelector('#go').onclick=async()=>{ if(!st.files.length&&!st.text.trim()&&!(st.useStock&&stockNow().length)){ toast('Add a photo, or say what you have'); return; }
+      if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
+      close(); const done=aiBusy(st.files.length?'Looking in the fridge and freezer…':'Working out dinner…');
+      try{ const out=await dinnerIdeas(st); done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
+  }; draw(); });
+}
+function showCook(out){ const rs=out.recipes; let seenSaved=false;
+  const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
+    const m=planMeal(key,'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
+    const n=buyAdd(r.buy); save(); renderAll(); if($('#mealLayer').innerHTML) openMeals();
+    toast(r.name+(off?' is on tomorrow’s plan':' is on tonight’s plan')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
+    m.innerHTML=`<div class="tvhead"><h2>🍽️ You could make</h2><button class="save" id="x">Done</button></div>
+      ${out.seen.length?`<p class="note">I could see: ${esc(out.seen.slice(0,14).map(x=>x.name).join(', '))}${out.seen.length>14?' and '+(out.seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
+      <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji}</span><span class="mrt"><b>${esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb)}</small>
+          <small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
+        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ Have it tonight</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button></div></div>`).join('')}</div>`;
+    m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };
+    const sv=m.querySelector('#sv'); if(sv) sv.onclick=()=>{ const n=stockAdd(out.seen); seenSaved=true; toast(n+' things kept in Kitchen stock'); draw(); };
+    m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>openRecipe(rs[+b.dataset.i],{back:()=>showCook(out)}));
+    m.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{ const [i,off]=b.dataset.pl.split('|'); close(); plan(rs[+i],+off); });
+  }; draw(); });
+}
+function openStock(){ stockSettle(); let where='freezer';
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); let busy=false;
+    const draw=()=>{ const now=stockNow(), used=(S.stock||[]).filter(x=>x.used), sh=sauceShelf();
+    m.innerHTML=`<div class="tvhead"><h2>🧊 Kitchen stock</h2><button class="save" id="x">Done</button></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="din" style="border-radius:14px;padding:12px 16px;font-weight:800">🍽️ What's for dinner?</button><button class="xbtn" id="cook">📸 From photos of the fridge</button></div>
+      <div class="step">Add what's in the house</div>
+      <div class="opts">${STOCK_PLACES.map(p=>`<button class="opt sm ${where===p[0]?'on':''}" data-w="${p[0]}">${p[1]} ${p[2]}</button>`).join('')}</div>
+      <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off"><button class="aaic" id="scam" aria-label="Photo">📷</button><button class="save aago" id="sgo">Add</button></div><input type="file" id="sf" accept="image/*" multiple hidden></div>
+      <p class="note">Type or dictate a list, or 📷 a shelf or a handwritten list. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
+      ${STOCK_PLACES.map(p=>{ const l=now.filter(x=>x.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return l.length?`<div class="step">${p[1]} ${p[2]} <span style="font-weight:500">(${l.length})</span></div><div class="stk">${l.map(x=>`<span class="stki">${esc(x.name)}${x.qty?` <small>${esc(x.qty)}</small>`:''}${stockAge(x)?` <small class="old">${stockAge(x)}</small>`:''}<button data-used="${x.id}" aria-label="Used">✕</button></span>`).join('')}</div>`:''; }).join('')}
+      ${now.length?'':'<p class="note"><b>Nothing listed yet.</b> Start with the deep freezer.</p>'}
+      ${used.length?`<div class="step">Used lately <span style="font-weight:500">(tap to put back)</span></div><div class="stk">${used.map(x=>`<button class="stki gone" data-back="${x.id}">${esc(x.name)}</button>`).join('')}</div>`:''}
+      <div class="step">🥫 Sauce shelf <span style="font-weight:500">(tap when one runs out: it goes on the shopping list)</span></div>
+      ${sh.length?SAUCES.map(g=>g[0]).concat(['Ours']).map(g=>{ const l=sh.filter(x=>(x.grp||'Ours')===g); return l.length?`<div class="note" style="margin:6px 0 2px"><b>${g}</b></div><div class="stk">${l.map(x=>`<button class="stki sauce ${x.out?'out':''}" data-sc="${x.id}">${x.out?'🛒 ':'✓ '}${esc(x.name)}</button>`).join('')}</div>`:''; }).join('')+`<div class="row" style="margin-top:8px;gap:8px"><input class="txt" id="snew" placeholder="Add a sauce or staple" style="flex:1"><button class="xbtn" id="sadd">Add</button></div>`
+        :`<p class="note">Key sauces and staples for Japanese, Mexican and Kiwi cooking, gluten-light. Dinners assume these are in the house.</p><button class="xbtn" id="seed">＋ Start with the suggested list (${SAUCES.reduce((a,g)=>a+g[1].length,0)})</button>`}
+      <div class="step">How we like to eat</div><textarea class="txt" id="food" rows="3">${esc(foodPrefs())}</textarea><div class="row" style="margin-top:6px"><button class="xbtn" id="fsave">Save</button></div>`;
+    m.querySelector('#x').onclick=close;
+    m.querySelector('#din').onclick=async()=>{ if(!stockNow().length){ toast('Add what’s in the house first, or use photos'); return; } if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
+      close(); const done=aiBusy('Working out dinner…'); try{ const out=await dinnerIdeas({useStock:true}); done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
+    m.querySelector('#cook').onclick=()=>{ close(); openCook(); };
+    m.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ where=b.dataset.w; const v=m.querySelector('#sin').value; draw(); m.querySelector('#sin').value=v; });
+    const add=async(files)=>{ const inp=m.querySelector('#sin'), text=inp.value.trim(); if(busy||(!text&&!(files&&files.length))) return; busy=true; const done=aiOK()?aiBusy(files&&files.length?'Reading the photo…':'Sorting the list…'):()=>{};
+      try{ const items=await stockRead(files,text,where); const n=stockAdd(items,where); done(); toast(n?n+' thing'+(n>1?'s':'')+' added':'Nothing new found'); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); }
+      busy=false; if(m.isConnected) draw(); };
+    m.querySelector('#sgo').onclick=()=>add(); m.querySelector('#sin').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } };
+    const sf=m.querySelector('#sf'); m.querySelector('#scam').onclick=()=>sf.click();
+    sf.onchange=async()=>{ const fs=[]; for(const f of [...sf.files].slice(0,4)){ try{ fs.push(await fileForAI(f)); }catch(e){} } sf.value=''; if(fs.length) add(fs); };
+    m.querySelectorAll('[data-used]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.used); if(x){ x.used=Date.now(); save(); draw(); } });
+    m.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.back); if(x){ delete x.used; save(); draw(); } });
+    m.querySelectorAll('[data-sc]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.sc); if(!x) return; x.out=!x.out; if(x.out){ const n=buyAdd([x.name]); toast(x.name+(n?' added to the shopping list':' is already on the shopping list')); } save(); draw(); });
+    const seed=m.querySelector('#seed'); if(seed) seed.onclick=()=>{ SAUCES.forEach(g=>g[1].forEach(n=>S.stock.push({id:uid(),name:n,where:'sauce',grp:g[0],out:false,at:Date.now()}))); save(); draw(); toast('Tap any you don’t have and it goes on the shopping list'); };
+    const sa=m.querySelector('#sadd'); if(sa) sa.onclick=()=>{ const v=m.querySelector('#snew').value.trim(); if(!v) return; S.stock.push({id:uid(),name:v.slice(0,50),where:'sauce',grp:'Ours',out:false,at:Date.now()}); save(); draw(); };
+    m.querySelector('#fsave').onclick=()=>{ S.food=m.querySelector('#food').value.trim().slice(0,600); save(); toast('Saved. Every dinner idea follows this.'); };
+  }; draw(); });
 }
