@@ -22,6 +22,7 @@ async def main():
         await P.evaluate("SYNC.saveSecret({gemini:'AQ.testkey1234567890abcdefghij',at:Date.now()})"); await P.wait_for_timeout(600)
         await P.evaluate("openStock()"); await P.wait_for_timeout(300)
         await P.fill('#sin','2 kg chicken thighs, lamb chops'); await P.click('#sgo'); await P.wait_for_timeout(1200)
+        print('0 review sheet:', await P.locator('.srow').count(), 'rows'); await P.locator('[data-q="0"]').fill('1.5 kg'); await P.locator('[data-w="1"]').click(); await P.locator('[data-w="1"]').click(); await P.locator('[data-w="1"]').click(); await P.click('#ok'); await P.wait_for_timeout(500)
         print('1 stock from a typed list:', await P.evaluate("JSON.stringify(stockNow().map(x=>[x.name,x.qty,x.where]))"))
         await P.click('#seed'); await P.wait_for_timeout(300); n=await P.locator('[data-sc]').count()
         await P.locator('[data-sc]', has_text='Mirin').click(); await P.wait_for_timeout(300)
