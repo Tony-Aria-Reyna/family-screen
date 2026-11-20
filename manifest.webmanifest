@@ -45,5 +45,40 @@
         }
       ]
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Add photos to the family album",
+      "short_name": "Add photos",
+      "url": "./?open=album",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Add anything",
+      "short_name": "Add",
+      "url": "./?open=addany",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Shopping list",
+      "short_name": "Shopping",
+      "url": "./?open=shop",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }

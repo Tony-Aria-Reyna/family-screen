@@ -12,7 +12,7 @@ self.addEventListener('fetch', e => {
         const f = await req.formData(), c = await caches.open('fs-share');
         const meta = { title: String(f.get('title') || ''), text: String(f.get('text') || ''), url: String(f.get('url') || ''), at: Date.now(), files: [] };
         const files = f.getAll('file').filter(x => x && typeof x === 'object' && x.size);
-        for (let i = 0; i < Math.min(files.length, 3); i++) {
+        for (let i = 0; i < Math.min(files.length, 20); i++) {
           const x = files[i], k = 'share-file-' + i;
           await c.put(k, new Response(x, { headers: { 'Content-Type': x.type || 'application/octet-stream' } }));
           meta.files.push({ k, type: x.type || '', name: x.name || 'shared', size: x.size });

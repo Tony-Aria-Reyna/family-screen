@@ -1,5 +1,5 @@
 // Keeps the Family Screen app itself working with no internet. Family data is cached by Firebase separately.
-const VERSION = 'fs-mwoqrmxj';
+const VERSION = 'fs-mwor0x5t';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'earth-day.jpg', 'earth-night.jpg'].concat(["lib/globe-8f2384e0ca.js","lib/cards-23fbe90e1e.js"]);
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
@@ -12,7 +12,7 @@ self.addEventListener('fetch', e => {
         const f = await req.formData(), c = await caches.open('fs-share');
         const meta = { title: String(f.get('title') || ''), text: String(f.get('text') || ''), url: String(f.get('url') || ''), at: Date.now(), files: [] };
         const files = f.getAll('file').filter(x => x && typeof x === 'object' && x.size);
-        for (let i = 0; i < Math.min(files.length, 3); i++) {
+        for (let i = 0; i < Math.min(files.length, 20); i++) {
           const x = files[i], k = 'share-file-' + i;
           await c.put(k, new Response(x, { headers: { 'Content-Type': x.type || 'application/octet-stream' } }));
           meta.files.push({ k, type: x.type || '', name: x.name || 'shared', size: x.size });
