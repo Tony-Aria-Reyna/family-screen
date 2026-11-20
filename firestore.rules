@@ -8,6 +8,8 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && email() == 'tonyandreynanz@gmail.com'; }
     function invited() { return signedIn() && exists(/databases/$(database)/documents/invites/$(email())); }
     function isMember(hid) { return signedIn() && email() in get(/databases/$(database)/documents/households/$(hid)).data.members; }
+    // calendar-only accounts (Settings → Family accounts): listed in the household's "limited"
+    function isFull(hid) { return isMember(hid) && !(email() in get(/databases/$(database)/documents/households/$(hid)).data.get('limited', [])); }
 
     match /invites/{inviteEmail} {
       allow read: if isAdmin() || (signedIn() && email() == inviteEmail);
@@ -19,7 +21,10 @@ service cloud.firestore {
       allow read: if signedIn() && email() in resource.data.members;
       allow create: if (isAdmin() || invited())
                     && request.resource.data.members == [email()] && request.resource.data.owner == email();
-      allow update: if isMember(hid)
+      // a calendar-only account may only register its own phone for alerts and mark the calendar as changed
+      allow update: if isMember(hid) && !isFull(hid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devices', 'evAt']);
+      allow update: if isFull(hid)
+                    && (request.resource.data.get('limited', []) == resource.data.get('limited', []) || email() == resource.data.owner)
                     && request.resource.data.owner == resource.data.owner
                     && request.resource.data.owner in request.resource.data.members
                     && request.resource.data.members.size() > 0 && request.resource.data.members.size() <= 12
@@ -30,16 +35,18 @@ service cloud.firestore {
       allow delete: if signedIn() && email() == resource.data.owner;
 
       match /{col}/{id} {
-        allow read, write: if isMember(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs', 'usage', 'docs', 'stock'];
+        allow read, write: if isMember(hid) && col in ['events', 'usage'];
+        allow read: if isMember(hid) && col in ['flights', 'sources'];
+        allow read, write: if isFull(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs', 'usage', 'docs', 'stock'];
       }
       // Secrets (the Gemini key): only signed-in family members can read or write them, so each family device can
       // talk to Gemini directly. Never on GitHub or the website.
       match /secrets/{id} {
-        allow read, write: if isMember(hid);
+        allow read, write: if isFull(hid);
       }
       // Gift ideas: only the family members ticked in Settings (giftViewers) can read or change them
       match /gifts/{id} {
-        allow read, write: if isMember(hid) && email() in get(/databases/$(database)/documents/households/$(hid)).data.get('giftViewers', []);
+        allow read, write: if isFull(hid) && email() in get(/databases/$(database)/documents/households/$(hid)).data.get('giftViewers', []);
       }
       // Private entries: only the person they belong to can read or change them (not even other family members)
       match /private/{who}/{col}/{id} {

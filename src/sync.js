@@ -18,7 +18,7 @@ const NEWER = ['recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox
 let rulesOld = false; const denied = new Set();   // a list the database rules don't allow yet is skipped on its own, so the others keep syncing
 export const needsRules = () => rulesOld;
 
-let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null, devices = {}, notifier = null;
+let app, auth, db, hid = null, unsub = [], S = null, onChange = () => {}, synced = null, user = null, members = [], owner = null, limitedList = [], subbed = false, devices = {}, notifier = null;
 
 const clean = o => JSON.parse(JSON.stringify(o));                 // drops undefined + functions
 const stripPeople = ps => ps.map(p => { const c = Object.assign({}, p); delete c.show; return c; });
@@ -113,6 +113,11 @@ export async function createHousehold(starter) {
   return d.id;
 }
 export const getMembers = () => members.slice();
+// calendar-only accounts see the calendar (and Reyna's roster) and nothing else; the database rules enforce it
+export const getLimited = () => limitedList.slice();
+export const isLimited = () => !!me() && limitedList.includes(me());
+const LIM_COLS = ['events', 'flights', 'sources'], LIM_WRITE = ['events'];
+export const setLimited = (email, on) => updateDoc(doc(db, 'households', hid), { limited: on ? arrayUnion(email.toLowerCase()) : arrayRemove(email.toLowerCase()) });
 export const getOwner = () => owner;
 export const addMember = email => updateDoc(doc(db, 'households', hid), { members: arrayUnion(email.trim().toLowerCase()) });
 export const removeMember = email => updateDoc(doc(db, 'households', hid), { members: arrayRemove(email) });
@@ -121,19 +126,25 @@ export function start(householdId, state, changed) {
   stop(); hid = householdId; S = state; onChange = changed;
   denied.clear(); rulesOld = false;
   synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
-  privOk = true;
+  privOk = true; subbed = false;
   unsub.push(listen(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
-    const d = snap.data(); members = d.members || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
+    const d = snap.data(); members = d.members || []; limitedList = d.limited || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id)); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
     S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; S.aiKeyTail = d.aiKeyTail || ''; S.aiKeyAt = d.aiKeyAt || 0; S.voiceKey = d.voiceKey || ''; S.voiceUrl = d.voiceUrl || ''; S.voiceName = d.voiceName || ''; S.famNote = d.famNote || ''; S.aiProv = d.aiProv || ''; S.aiClaudeModel = d.aiClaudeModel || ''; S.aiEffort = d.aiEffort || ''; S.claudeKeyTail = d.claudeKeyTail || ''; S.wakeStyle = d.wakeStyle || ''; S.wakeSfx = d.wakeSfx !== false; S.billEmail = d.billEmail || ''; S.inboxEmail = d.inboxEmail || ''; S.inboxHelper = d.inboxHelper || null; S.billsRoot = d.billsRoot || ''; S.billFolders = d.billFolders || []; S.billsRootName = d.billsRootName || ''; S.billsHelper = d.billsHelper || null; S.billSheet = d.billSheet || ''; S.alexaFrom = d.alexaFrom || ''; S.evAt = d.evAt || 0; S.photoFolder = d.photoFolder || ''; S.food = d.food || ''; if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
     synced.settings = JSON.stringify(settingsOf(S));
+    if (!subbed) { subbed = true; subCols(); }
     onChange('settings');
   }, err => onChange('error', err)));
-  SOFT.forEach(listenSoft); if (me()) watchKey();
+}
+// the lists are opened once the family's record has said what this account may see
+function subCols() {
+  const lim = isLimited();
+  if (!lim) { SOFT.forEach(listenSoft); if (me()) watchKey(); }
   for (const c of COLS) {
+    if (lim && !LIM_COLS.includes(c)) { S[c] = S[c] || []; continue; }
     S[c] = S[c] || [];
     unsub.push(listen(collection(db, 'households', hid, c), snap => {
       let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
@@ -196,7 +207,8 @@ export async function refreshToken() { try { if (auth.currentUser) await auth.cu
 export function push() {
   if (!hid || !S) return;
   const ops = [];
-  const st = JSON.stringify(settingsOf(S));
+  const st = JSON.stringify(settingsOf(S)), lim = isLimited();
+  if (lim) synced.settings = st;
   if (st !== synced.settings) { ops.push(['update', doc(db, 'households', hid), JSON.parse(st)]); synced.settings = st; }
   // my private entries go to their own place (a separate batch, so a problem there never blocks the rest)
   const pops = [];
@@ -214,6 +226,7 @@ export function push() {
   const nops = [];
   for (const c of COLS.concat(SOFT.filter(c => softOk[c]))) {
     if (NEWER.includes(c) && (rulesOld || denied.has(c))) continue;
+    if (lim && !LIM_WRITE.includes(c)) continue;
     const ops0 = ops, ops1 = NEWER.includes(c) || SOFT.includes(c) ? nops : ops0;
     const m = synced.cols[c], seen = new Set();
     for (const x of (S[c] || [])) {

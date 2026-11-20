@@ -1,0 +1,33 @@
+# Calendar-only accounts: Tony marks Masako "Calendar only"; her screen shows the calendar and nothing else
+import asyncio, json
+from playwright.async_api import async_playwright
+U='http://localhost:5500/index.html'; ADMIN='tonyandreynanz@gmail.com'; MAS='masako@outlook.com'
+async def main():
+    async with async_playwright() as p:
+        b=await p.chromium.launch(); ctx=await b.new_context(timezone_id='Pacific/Auckland',locale='en-NZ')
+        errs=[]; T=await ctx.new_page(); T.on('pageerror',lambda e:errs.append('T '+str(e))); await T.set_viewport_size({'width':390,'height':844})
+        await T.goto(U); await T.wait_for_timeout(500)
+        await T.evaluate(f"localStorage.setItem('fs.askedMe',JSON.stringify(['{ADMIN}'])); SYNC.testSignIn('{ADMIN}')"); await T.wait_for_timeout(700)
+        await T.click('#gNew'); await T.wait_for_timeout(900)
+        await T.evaluate("S.todos.push({id:'t1',title:'Secret job',done:false}); S.events.push({id:'e1',title:'Swimming',date:dk(new Date()),time:'16:00',whos:['all'],dur:60}); save()")
+        await T.evaluate(f"SYNC.addMember('{MAS}')"); await T.wait_for_timeout(400)
+        await T.evaluate("openSettings()"); await T.wait_for_timeout(400)
+        await T.locator(f'[data-mlim="{MAS}"]').click(); await T.wait_for_timeout(600)
+        print('1 Tony sees:', (await T.locator('.prow', has_text=MAS).inner_text()).replace('\n',' '))
+        M=await ctx.new_page(); M.on('pageerror',lambda e:errs.append('M '+str(e))); await M.set_viewport_size({'width':390,'height':844})
+        await M.goto(U); await M.wait_for_timeout(500); await M.evaluate(f"SYNC.testSignIn('{MAS}')"); await M.wait_for_timeout(1800)
+        vis=await M.evaluate("['.tabbar [data-tab=todo]','.tabbar [data-tab=where]','#mealBtn','#moreBtn','#msgBtn','#askBtn','#ptSet','#ptAsk','#pcFab'].map(s=>{ const e=document.querySelector(s); return s+':'+(e&&getComputedStyle(e).display!=='none') })")
+        print('2 Masako limited:', await M.evaluate("SYNC.isLimited()"), '| tab', await M.evaluate("document.body.dataset.tab"), '|', vis)
+        print('3 sees the calendar entry, not the job:', await M.evaluate("S.events.some(e=>e.title==='Swimming')"), await M.evaluate("S.todos.some(t=>t.title==='Secret job')"))
+        await M.evaluate("setTab('todo')"); print('4 can’t switch to To do:', await M.evaluate("document.body.dataset.tab"))
+        await M.screenshot(path='/tmp/lim.png'); await M.click('#ptSet'); await M.wait_for_timeout(300); print('5 her settings:', (await M.locator('.modal').inner_text()).replace('\n',' / ')[:200])
+        await M.evaluate("closeModal()"); await M.click('#pcFab'); await M.wait_for_timeout(300); print('6 + opens the calendar form:', await M.locator('#evTitle').count())
+        await M.evaluate("closeModal(); setView('simple','p4','ja')"); await M.wait_for_timeout(400)
+        print('7 simple screen without jobs/shopping:', await M.evaluate("(()=>{ const j=document.querySelector('#simple .sjobs'); return !j||j.offsetParent===null })()"))
+        await M.evaluate("setView('')"); await M.evaluate("S.flights.push({id:'f1',who:S.people[1].id,from:'AKL',to:'NRT',dep:new Date(Date.now()+3600e3).toISOString(),arr:new Date(Date.now()+12*3600e3).toISOString(),num:'NZ99'}); renderAll()"); await M.wait_for_timeout(400)
+        print('8 Where button:', await M.evaluate("(()=>{ const b=document.querySelector('#ptMum'); return b&&getComputedStyle(b).display!=='none'?b.textContent:'hidden' })()"), '| Mummy anywhere on screen:', 'Mummy' in await M.evaluate("document.body.innerText"))
+        await M.evaluate("setTab('where')"); await M.wait_for_timeout(1500); print('9 Where tab allowed:', await M.evaluate("document.body.dataset.tab"), '| Mummy on Where:', 'Mummy' in await M.evaluate("document.body.innerText"))
+        await M.click('.tabbar [data-tab=cal]'); await M.wait_for_timeout(400); print('10 back to calendar:', await M.evaluate('document.body.dataset.tab')); await M.screenshot(path='/tmp/limcal.png')
+        print('errors:', errs)
+        await b.close()
+asyncio.run(main())

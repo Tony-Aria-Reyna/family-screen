@@ -1336,7 +1336,7 @@ function personalCard(){
 function wirePersonal(){ const a=$('#hPers'); if(a) a.onclick=()=>{ const n=typeof msgUnreadAll==='function'?msgUnreadAll():0; if(n) openMsgs(); else goDay(dk(new Date())); }; const b=$('#hBills'); if(b) b.onclick=()=>openBills(); }
 
 // the big, simple screen. fs.view = 'simple' on this device; fs.who = whose jobs it shows
-Object.assign(JA,{'Today':'今日','Tomorrow':'明日','Jobs':'やること','Shopping':'買い物','Messages':'メッセージ','Normal screen':'ふつうの画面','Nothing on':'予定はありません','Nothing to do':'やることはありません',
+Object.assign(JA,{'Settings':'設定','Calendar only':'カレンダーのみ','Alerts':'お知らせ','Turn on alerts':'お知らせをオンにする','Alerts are blocked in this phone’s settings.':'この電話の設定でお知らせが止められています。','Add Family Screen to the home screen first (Share → Add to Home Screen).':'まずホーム画面に追加してください（共有 → ホーム画面に追加）。','Alerts are on':'お知らせはオンです','Sign out':'サインアウト','Today':'今日','Tomorrow':'明日','Jobs':'やること','Shopping':'買い物','Messages':'メッセージ','Normal screen':'ふつうの画面','Nothing on':'予定はありません','Nothing to do':'やることはありません',
   'Nothing to buy':'買うものはありません','All day':'終日','Everyone':'みんな','new':'件 新着','Tap to tick it off':'タップで完了','Big and simple screen':'大きな文字のかんたん画面','Language':'言語',
   'Whose screen is this?':'だれの画面ですか？','English':'English','Ticked off':'完了しました','Undo':'元に戻す'});
 const simpleOn=()=>lsGet('fs.view','')==='simple';
@@ -1359,7 +1359,7 @@ function renderSimple(){
       <div class="sbtns"><button class="sbtn" id="sLang">${appLang()==='ja'?'English':'日本語'}</button><button class="sbtn" id="sMsg">✉️ ${esc(tr('Messages'))}${un?` <b class="sbadge">${un}</b>`:''}</button><button class="sbtn" id="sNormal">${esc(tr('Normal screen'))}</button></div></div>
     <div id="sAddSlot"></div>
     <div class="sgrid"><section><h3>${esc(tr('Today'))}</h3>${day(now)}<h3>${esc(tr('Tomorrow'))}</h3>${day(addDays(now,1))}</section>
-    <section><h3>${esc(tr('Jobs'))}</h3>${jobs.length?jobs.map(t=>`<button class="stick" data-st="todos:${t.id}"><span class="sbox"></span>${esc(t.title)}${t.due?`<small> ${esc(appLang()==='ja'?(kd(t.due).getMonth()+1)+'/'+kd(t.due).getDate():fmtD(kd(t.due),{day:'numeric',month:'short'}))}</small>`:''}</button>`).join(''):`<div class="snone">${esc(tr('Nothing to do'))}</div>`}
+    <section class="sjobs"><h3>${esc(tr('Jobs'))}</h3>${jobs.length?jobs.map(t=>`<button class="stick" data-st="todos:${t.id}"><span class="sbox"></span>${esc(t.title)}${t.due?`<small> ${esc(appLang()==='ja'?(kd(t.due).getMonth()+1)+'/'+kd(t.due).getDate():fmtD(kd(t.due),{day:'numeric',month:'short'}))}</small>`:''}</button>`).join(''):`<div class="snone">${esc(tr('Nothing to do'))}</div>`}
       <h3>${esc(tr('Shopping'))}</h3>${buy.length?buy.map(g=>`<button class="stick" data-st="groceries:${g.id}"><span class="sbox"></span>${esc(g.name)}<small> ${esc(shop(g.shop)?shop(g.shop).name:'')}</small></button>`).join(''):`<div class="snone">${esc(tr('Nothing to buy'))}</div>`}</section></div>`;
   const slot=el.querySelector('#sAddSlot'); if(typing) slot.replaceWith(typing); else { slot.outerHTML=addAnyHTML('sAdd',true); wireAddAny(el.querySelector('#sAdd')); }
   el.querySelector('#sLang').onclick=()=>{ setLang(appLang()==='ja'?'en':'ja'); const b=el.querySelector('#sAdd'); if(b) b.remove(); renderSimple(); };

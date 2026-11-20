@@ -197,6 +197,9 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+body.limited .tabbar button:not([data-tab="cal"]):not([data-tab="where"]),body.limited #mealBtn,body.limited #moreBtn,body.limited #msgBtn,body.limited #askBtn,body.limited .right,body.limited #ptAsk{display:none!important}
+body.limited .bigadd span{font-size:0}body.limited .bigadd span::after{content:'Add to calendar';font-size:15px}
+body.limited #simple .sjobs,body.limited #simple #sMsg,body.limited #simple #sAddSlot,body.limited #simple .addany{display:none}
 .stk{display:flex;flex-wrap:wrap;gap:6px}
 .stki{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;font:inherit;font-size:16px;color:var(--ink)}
 .stki small{color:var(--muted);font-size:13px}.stki small.old{color:#b45309;font-weight:700}
@@ -1067,7 +1070,8 @@ function orbStyle(h,m){
   const right=10+(1-f)*40, top=10+(1-Math.sin(Math.PI*f))*30;
   return {cls:isDay?'sun':'moon',style:`right:${right.toFixed(0)}px;top:${top.toFixed(0)}px`};
 }
-const tName=tp=>tp?(tp.nick||tp.name):'';
+// a calendar-only account (Masako) sees Reyna by her name, not as "Mummy"
+const tName=tp=>tp?((SYNC.isLimited&&SYNC.isLimited())?tp.name:(tp.nick||tp.name)):'';
 // taxi slots for the traveller's Auckland flights: pick-up before sign-on, drop-off after landing
 const taxiSet=()=>Object.assign({before:65,after:60},S.taxi||{});
 function taxiOf(f){
@@ -1533,7 +1537,7 @@ function mePerson(){ const e=!LOCAL&&SYNC.me&&SYNC.me(), p=e&&S.people.find(q=>q
 function linkMe(id){ const e=SYNC.me(); if(!e) return; S.people.forEach(q=>{ if(q.email===e) delete q.email; }); const q=person(id); if(q) q.email=e; save(); renderAll(); }
 function askWhoAmI(){
   const asked=[].concat(lsGet('fs.askedMe',[])||[]);
-  if(LOCAL||!SYNC.me||!SYNC.me()||mePerson()||!S.people.length||asked.includes(SYNC.me())) return;
+  if(LOCAL||!SYNC.me||!SYNC.me()||mePerson()||!S.people.length||asked.includes(SYNC.me())||(SYNC.isLimited&&SYNC.isLimited())) return;   // a calendar-only account can't change the family list: Tony links it in Who's who
   if($('#layer').innerHTML||$('#cookmode')||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)){ setTimeout(askWhoAmI,20000); return; }   // never interrupt something in progress
   lsSet('fs.askedMe',asked.concat([SYNC.me()]));
   modal((m,close)=>{ m.innerHTML=`<h2>👋 Which one is you?</h2><p class="note">You're signed in as <b>${esc(SYNC.me())}</b>. Linking it to your name means jobs you hand out show who they came from, and private entries know they're yours.</p>
@@ -2857,9 +2861,9 @@ function openSettings(at){
     ${LOCAL?'':`<div class="shd" id="s-health">🩺 Health</div><div id="hcard">${healthHTML()}</div>`}
     <div class="shd" id="s-family">👪 Family</div>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
-      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
+      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
-      <p class="note">After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
+      <p class="note"><b>📅 Calendar only</b> lets someone see and add calendar entries (and Reyna’s roster) and get reminders, but not jobs, shopping, meals, bills, messages, documents or Settings. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
       ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
       <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
       <div id="invList" class="note">Loading invites…</div>
@@ -2938,6 +2942,7 @@ function openSettings(at){
     if(!LOCAL){ wireHealth(m,draw,close); wireBillSetup(m,draw); wireInboxSetup(m,draw); }
     if(!LOCAL){
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
+      m.querySelectorAll('[data-mlim]').forEach(b=>b.onclick=async()=>{ const e=b.dataset.mlim, on=!SYNC.getLimited().includes(e); try{ await SYNC.setLimited(e,on); toast(on?e+' now sees the calendar only':e+' now sees everything'); setTimeout(draw,300); }catch(x){ toast('Only the person who set up the family can change that'); } });
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
       m.querySelector('#signOut').onclick=async()=>{ close(); await SYNC.signOut(); };
       const il=m.querySelector('#invList');
@@ -2953,6 +2958,20 @@ function openSettings(at){
   }; draw(); if(at) setTimeout(()=>{ const t=m.querySelector('#s-'+at); if(t) t.scrollIntoView({block:'start'}); },60); });
 }
 const SET_SECS=[['health','🩺 Health'],['family','👪 Family'],['mail','✉️ Email addresses'],['conn','🔗 Connections'],['dev','📱 This device'],['shops','🛒 Shops']];
+// a calendar-only account: the calendar, and nothing else on screen (the database rules stop the rest anyway)
+function applyLimited(){ const on=!!(SYNC.isLimited&&SYNC.isLimited()), was=document.body.classList.contains('limited');
+  document.body.classList.toggle('limited',on); if(on&&!was){ setTab('cal',true); renderAll(); } else if(!on&&was) renderAll(); }
+function openLimitedSettings(){ modal((m,close)=>{ const draw=()=>{ const st=alertsState();
+  m.innerHTML=`<h2>⚙️ ${esc(tr('Settings'))}</h2><p class="note">${esc(SYNC.me()||'')} · 📅 ${esc(tr('Calendar only'))}</p>
+    <div class="hlth ${st?'warn':''}"><h4>🔔 ${esc(tr('Alerts'))}</h4>${st==='off'?`<button class="save" id="lAl">${esc(tr('Turn on alerts'))}</button>`:st==='blocked'?`<p class="note">${esc(tr('Alerts are blocked in this phone’s settings.'))}</p>`:st==='ios'?`<p class="note">${esc(tr('Add Family Screen to the home screen first (Share → Add to Home Screen).'))}</p>`:`<p class="note">✓ ${esc(tr('Alerts are on'))}</p>`}</div>
+    <label class="small">${esc(tr('Language'))} <select id="lLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語</option></select></label>
+    <div class="opts" style="margin-top:10px"><button class="opt" id="lSimple">👵 ${esc(tr('Big and simple screen'))}</button><button class="opt" id="lOut">${esc(tr('Sign out'))}</button></div>
+    <div class="mact"><button class="save" id="ok">${esc(tr('Close'))}</button></div>`;
+  const al=m.querySelector('#lAl'); if(al) al.onclick=async()=>{ al.disabled=true; await turnOnPush(); setTimeout(draw,900); };
+  m.querySelector('#lLang').onchange=e=>{ setLang(e.target.value); renderAll(); draw(); };
+  m.querySelector('#lSimple').onclick=()=>{ close(); setView('simple',mePerson()||'',appLang()); };
+  m.querySelector('#lOut').onclick=async()=>{ close(); await SYNC.signOut(); };
+  m.querySelector('#ok').onclick=close; }; draw(); }); }
 /* 2.1 The Health card: is everything working, and a one-tap fix where there is one. Built from what the Reminder helper
    reports every run (notifier.health) and what this screen knows about itself. */
 let healthLive=null;
@@ -3045,7 +3064,7 @@ function showInstall(){
 }
 
 /* ================= phone layout: one section at a time ================= */
-function setTab(t,silent){ const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); if(t==='home') renderHome(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
+function setTab(t,silent){ if(document.body.classList.contains('limited')&&t!=='cal'&&t!=='where') t='cal'; const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); if(t==='home') renderHome(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
 
 /* ================= sign-in gate (synced mode) ================= */
 const GOOGLE_G='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
@@ -3143,6 +3162,7 @@ let pendingRender=false, rTimer=null;
 let privWarned=false, rulesWarned=false;
 let syncDead=false;
 function syncChanged(what,err){
+  if(what==='settings') applyLimited();
   if(syncDead) return;   // once this device has been shut out, nothing else may hide that screen
   if(what==='rulesold'){ const nw=['inbox','msgs'].includes(err); if(!rulesWarned&&!nw){ rulesWarned=true; toast('Some lists can’t sync yet: the reminder helper updates the database rules by itself within 15 minutes'); } return; }
   if(what==='privoff'){ if(!privWarned){ privWarned=true; toast('🔒 Private entries can’t save yet: update the reminder helper (⚙️ → 🔔 Notifications) and it fixes the database rules by itself'); } return; }
@@ -3166,7 +3186,7 @@ function renderPhoneTop(){
   const bg={dawn:'#ffd9cf',day:'#cfe9f8',dusk:'#e7c8ec',night:'#c6c9f3'}[ph]||'#fff';
   el.innerHTML=`<div><div class="pt-time">${t.txt}<small>${t.ap}</small></div><div class="pt-date">${fmtD(now,{weekday:'long',day:'numeric',month:'long'})}</div>${AWAY_TZ?`<div class="pt-nz">🇳🇿 NZ time · you ${fmtTime(now,DEVICE_TZ)}</div>`:''}</div>
     <button class="pt-mum" id="ptMum" style="background:${bg}">${mum}</button><button class="pt-set" id="ptAsk" aria-label="Ask">💬</button><button class="pt-set" id="ptSet" aria-label="Settings">⚙️</button>`;
-  $('#ptSet').onclick=()=>requirePin(openSettings); $('#ptAsk').onclick=()=>openAsk(); const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
+  $('#ptSet').onclick=()=>SYNC.isLimited&&SYNC.isLimited()?openLimitedSettings():requirePin(openSettings); $('#ptAsk').onclick=()=>openAsk(); const m=$('#ptMum'); if(m) m.onclick=()=>setTab('where');
 }
 /* ================= phone home: today on top, a live tile for each part of the app ================= */
 function renderHome(){
@@ -3447,8 +3467,8 @@ function runLaunch(){ const a=launchAct; if(!a) return; launchAct=null; try{ ses
     else if(a==='shop'){ if(isPhone()) setTab('shop'); } else if(a==='add') openAdd(); else if(a==='where'){ if(isPhone()) setTab('where'); else openGlobe(); }
     else if(a==='inbox') openInbox(); else if(a==='share') takeShare(); else if(a.indexOf('msg:')===0){ const th=a.slice(4), me=mePerson(); if(me&&isPhone()) msgAs=me; openMsgs(th==='fam'||th.split('|').includes(msgAs)?th:null); } },300); }
 function renderAll(){ if(!S.people.length) return; setTimeout(renderSimple,0); if($('#mealLayer').innerHTML&&!$('#layer').innerHTML) openMeals(); setTimeout(askWhoAmI,1500); if(launchAct) runLaunch(); if(LAY.hideT||LAY.hideS) setTimeout(applyLayout,0); if(S.events.some(e=>e.roster&&e.title==='LOF')){ S.events=S.events.filter(e=>!(e.roster&&e.title==='LOF')); save(); } renderClock(); renderBar(); renderCal(); renderTodo(); renderShop(); renderPhoneTop(); renderPCal(); renderHome(); updateFab(); if(typeof msgRefresh==='function') msgRefresh(); const tw=$('#tabWhere'); if(tw){ const tp=traveller(); tw.textContent=tp?tName(tp)+'?':'Where?'; } }
-$('#addBtn').onclick=()=>openAddAny();   // 2.3: one box for calendar, jobs and shopping; the full calendar form is a tap away inside it
-$('#setBtn').onclick=()=>requirePin(openSettings);
+$('#addBtn').onclick=()=>SYNC.isLimited&&SYNC.isLimited()?openAdd(null):openAddAny();   // 2.3: one box for calendar, jobs and shopping; the full calendar form is a tap away inside it
+$('#setBtn').onclick=()=>SYNC.isLimited&&SYNC.isLimited()?openLimitedSettings():requirePin(openSettings);
 $('#globeBtn').onclick=openGlobe;
 $('#mealBtn').onclick=openMeals;
 
