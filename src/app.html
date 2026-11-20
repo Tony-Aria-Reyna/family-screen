@@ -2862,8 +2862,8 @@ function openSettings(at){
     <div class="shd" id="s-family">👪 Family</div>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
-      <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button></div>
-      <p class="note"><b>📅 Calendar only</b> lets someone see and add calendar entries (and Reyna’s roster) and get reminders, but not jobs, shopping, meals, bills, messages, documents or Settings. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
+      <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button>${SYNC.me()===SYNC.getOwner()?'<button class="xbtn" id="mAddCal">＋ Add, 📅 calendar only</button>':''}</div>
+      <p class="note"><b>📅 Calendar only</b> accounts don’t need to confirm their email address when they sign in with email and password. It lets someone see and add calendar entries (and Reyna’s roster) and get reminders, but not jobs, shopping, meals, bills, messages, documents or Settings. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
       ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
       <p class="note">Family Screen is invite-only. Add the Google account of the person who'll set up their family. They sign in at ${esc(location.origin+location.pathname)} and tap “Set up our family”. Their family is kept completely separate from yours.</p>
       <div id="invList" class="note">Loading invites…</div>
@@ -2941,6 +2941,7 @@ function openSettings(at){
     m.querySelectorAll('[data-sgo]').forEach(b=>b.onclick=()=>{ const t=m.querySelector('#s-'+b.dataset.sgo); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); });
     if(!LOCAL){ wireHealth(m,draw,close); wireBillSetup(m,draw); wireInboxSetup(m,draw); }
     if(!LOCAL){
+      const mac=m.querySelector('#mAddCal'); if(mac) mac.onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addCalMember(v); toast('Added '+v+' (calendar only, no email confirmation needed)'); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelectorAll('[data-mlim]').forEach(b=>b.onclick=async()=>{ const e=b.dataset.mlim, on=!SYNC.getLimited().includes(e); try{ await SYNC.setLimited(e,on); toast(on?e+' now sees the calendar only':e+' now sees everything'); setTimeout(draw,300); }catch(x){ toast('Only the person who set up the family can change that'); } });
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
@@ -3149,10 +3150,12 @@ function mailErr(e,nw){ const c=(e&&e.code)||'';
   if(/operation-not-allowed/.test(c)) return 'Email sign-in isn’t switched on for this family yet.';
   return (nw?'Could not create the password':'Could not sign in')+(c?' ('+c.replace('auth/','')+')':'')+'. Please try again.'; }
 async function enterHome(again){
-  if(SYNC.needsVerify&&SYNC.needsVerify()){ gate('verify'); return; }
+  const unconfirmed=!!(SYNC.needsVerify&&SYNC.needsVerify());
   gate('loading');
-  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
+  // an unconfirmed address is let in only if the family has made it a calendar-only account; otherwise it confirms first
+  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else if(unconfirmed) gate('verify'); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
   catch(e){ const pd=e&&e.code==='permission-denied', tries=+again||0;
+    if(unconfirmed&&pd){ gate('verify'); return; }
     // 1.4: the sign-in pass is sometimes a moment behind the first question to the database (a new tab, a phone waking
     // up). Fetch a fresh pass and ask again, three times over about eight seconds, before saying anything is wrong.
     if((pd||/unavailable|deadline|network/.test(e&&e.code||''))&&tries<3){ await SYNC.refreshToken(); setTimeout(()=>enterHome(tries+1),[1200,2500,4500][tries]); return; }

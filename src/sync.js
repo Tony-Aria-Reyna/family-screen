@@ -102,7 +102,8 @@ export async function sendReads() {
 }
 
 export async function findHousehold() {
-  const q = query(collection(db, 'households'), where('members', 'array-contains', me()));
+  // an account that hasn't confirmed its address can only be a calendar-only one, so it is looked up in that list
+  const q = query(collection(db, 'households'), where(user && !user.emailVerified && usesPassword() ? 'limited' : 'members', 'array-contains', me()));
   const r = await getDocs(q); if (!(r.metadata && r.metadata.fromCache)) tally(r.docs.length);
   return r.empty ? null : r.docs[0].id;
 }
@@ -120,7 +121,8 @@ const LIM_COLS = ['events', 'flights', 'sources'], LIM_WRITE = ['events'];
 export const setLimited = (email, on) => updateDoc(doc(db, 'households', hid), { limited: on ? arrayUnion(email.toLowerCase()) : arrayRemove(email.toLowerCase()) });
 export const getOwner = () => owner;
 export const addMember = email => updateDoc(doc(db, 'households', hid), { members: arrayUnion(email.trim().toLowerCase()) });
-export const removeMember = email => updateDoc(doc(db, 'households', hid), { members: arrayRemove(email) });
+export const addCalMember = email => updateDoc(doc(db, 'households', hid), { members: arrayUnion(email.trim().toLowerCase()), limited: arrayUnion(email.trim().toLowerCase()) });
+export const removeMember = email => updateDoc(doc(db, 'households', hid), { members: arrayRemove(email), limited: arrayRemove(email) });
 
 export function start(householdId, state, changed) {
   stop(); hid = householdId; S = state; onChange = changed;

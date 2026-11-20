@@ -7,9 +7,13 @@ service cloud.firestore {
     function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function isAdmin() { return signedIn() && email() == 'tonyandreynanz@gmail.com'; }
     function invited() { return signedIn() && exists(/databases/$(database)/documents/invites/$(email())); }
-    function isMember(hid) { return signedIn() && email() in get(/databases/$(database)/documents/households/$(hid)).data.members; }
+    // a calendar-only account that signs in with email and password may skip confirming its address (Tony's choice for
+    // Masako); every other account must confirm it. Such an account still only gets the calendar.
+    function okFor(d) { return request.auth != null && ((request.auth.token.email_verified == true && email() in d.members)
+      || (request.auth.token.firebase.sign_in_provider == 'password' && email() in d.get('limited', []))); }
+    function isMember(hid) { return okFor(get(/databases/$(database)/documents/households/$(hid)).data); }
     // calendar-only accounts (Settings → Family accounts): listed in the household's "limited"
-    function isFull(hid) { return isMember(hid) && !(email() in get(/databases/$(database)/documents/households/$(hid)).data.get('limited', [])); }
+    function isFull(hid) { return isMember(hid) && request.auth.token.email_verified == true && !(email() in get(/databases/$(database)/documents/households/$(hid)).data.get('limited', [])); }
 
     match /invites/{inviteEmail} {
       allow read: if isAdmin() || (signedIn() && email() == inviteEmail);
@@ -18,7 +22,7 @@ service cloud.firestore {
     }
 
     match /households/{hid} {
-      allow read: if signedIn() && email() in resource.data.members;
+      allow read: if okFor(resource.data);
       allow create: if (isAdmin() || invited())
                     && request.resource.data.members == [email()] && request.resource.data.owner == email();
       // a calendar-only account may only register its own phone for alerts and mark the calendar as changed
