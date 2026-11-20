@@ -2,7 +2,7 @@
 <html lang="en-NZ">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>Family Screen</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#9fd8cf">
@@ -192,7 +192,8 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .chooser .opt{text-align:left;display:flex;align-items:center;gap:10px}
 
 /* ---------- modal ---------- */
-.scrim{position:fixed;inset:0;background:rgba(43,47,58,.35);display:grid;place-items:center;z-index:50;padding:16px}
+.scrim{position:fixed;inset:0;background:rgba(43,47,58,.35);display:grid;place-items:center;z-index:50;padding:16px;padding-bottom:calc(16px + var(--kb,0px))}
+body.kbup .scrim>.modal{max-height:calc(100vh - var(--kb,0px) - 24px)!important;min-height:0!important}body.kbup .scrim{place-items:end center}body.kbup .msgm .mbubs{flex:1 1 0;min-height:40px!important;overflow:auto}body.kbup .msgm{overflow:hidden}body.kbup .msgm .mquick{display:none}
 .modal{background:var(--card);border-radius:26px;width:min(920px,100%);max-height:94vh;overflow:auto;padding:22px 28px}
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
@@ -7197,7 +7198,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwpb1s1t';
+const FS_VERSION='fs-mwpcd5qh';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
@@ -7216,6 +7217,15 @@ let lastDay=dk(new Date()); setInterval(()=>{ if(dk(new Date())!==lastDay){ last
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 // tapping a notification while the app is already open: the service worker tells us what to show
 if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',e=>{ if(e.data&&e.data.open){ launchAct=e.data.open; if(S.people.length) runLaunch(); } });
+</script>
+<script>
+/* the on-screen keyboard: in full screen Android draws it over the page, so lift pop-ups above it and keep the typing box in view */
+(function(){ const vv=window.visualViewport; if(!vv) return; let last=0;
+  const fit=()=>{ const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)); if(Math.abs(kb-last)<40&&kb) return; last=kb;
+    document.documentElement.style.setProperty('--kb',(kb>80?kb:0)+'px'); document.body.classList.toggle('kbup',kb>80);
+    const a=document.activeElement; if(kb>80&&a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)) setTimeout(()=>{ try{ a.scrollIntoView({block:'nearest'}); }catch(e){} },60); };
+  vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit);
+  document.addEventListener('focusin',()=>setTimeout(fit,350)); document.addEventListener('focusout',()=>setTimeout(fit,350)); })();
 </script>
 </body>
 </html>
