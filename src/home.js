@@ -679,8 +679,8 @@ function openBills(tab){
   if(tab) billTab=tab;
   const all=S.bills||[];
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
-    const chk=all.filter(b=>b.status==='check').sort((a,b)=>(b.at||0)-(a.at||0)), due=all.filter(b=>b.status==='due').sort((a,b)=>(a.due||'9').localeCompare(b.due||'9')), paid=all.filter(b=>b.status==='paid').sort((a,b)=>(b.paidAt||0)-(a.paidAt||0));
-    const row=b=>`<button class="mrow bill" data-bill="${b.id}"><span class="me">${billIcon(b)}</span><span class="mrt"><b>${esc(b.biller)} · ${$m(b.amount)}</b><small>${b.status==='paid'?'paid '+fmtD(new Date(b.paidAt||Date.now()),{day:'numeric',month:'short'})+(b.paidHow?' · '+esc(b.paidHow):''):billDue(b)}${b.directDebit&&b.status!=='paid'?' · direct debit':''}${b.period?' · '+esc(b.period):''}</small></span>${b.status==='due'&&b.due?`<span class="bdot ${dueCls(b.due)}"></span>`:''}</button>`;
+    const chk=all.filter(b=>b.status==='check').sort((a,b)=>(b.at||0)-(a.at||0)), due=all.filter(b=>b.status==='due').sort((a,b)=>(a.due||'9').localeCompare(b.due||'9')), paid=all.filter(b=>b.status==='paid'||b.status==='rolled').sort((a,b)=>(b.paidAt||0)-(a.paidAt||0));
+    const row=b=>`<button class="mrow bill" data-bill="${b.id}"><span class="me">${billIcon(b)}</span><span class="mrt"><b>${esc(b.biller)} · ${$m(b.amount)}</b><small>${b.dishonoured?'⚠️ payment bounced: carried into the next bill':''}${b.status==='rolled'?'':b.status==='paid'?'paid '+fmtD(new Date(b.paidAt||Date.now()),{day:'numeric',month:'short'})+(b.paidHow?' · '+esc(b.paidHow):''):billDue(b)}${b.directDebit&&b.status!=='paid'?' · direct debit':''}${b.period?' · '+esc(b.period):''}</small></span>${b.status==='due'&&b.due?`<span class="bdot ${dueCls(b.due)}"></span>`:''}</button>`;
     let body='';
     if(billTab==='check') body=chk.length?`<p class="note">New bills read from the bills email. Check each one, choose where its PDF is filed, and confirm.</p>`+chk.map(row).join(''):'<p class="note">Nothing to check. New bills sent to the bills email appear here within about 10 minutes.</p>';
     if(billTab==='due') body=(due.length?due.map(row).join(''):'<p class="note">No bills waiting to be paid.</p>')+`<div class="mact"><button class="cancel" id="hand">＋ Add a paper bill</button></div>`;
@@ -688,12 +688,20 @@ function openBills(tab){
     if(billTab==='report') body=billReport();
     if(billTab==='setup') body=billSetupHTML();
     m.innerHTML=`<div class="tvhead"><h2>🧾 Bills</h2><button class="save" id="x">Done</button></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin:0 0 8px"><button class="save" id="bScan" style="border-radius:14px;padding:12px 16px;font-weight:800">📷 Scan a bill</button><button class="cancel" id="bPick" style="border-radius:14px;padding:12px 16px">🖼️ Photo or PDF</button><button class="cancel" id="hand2" style="border-radius:14px;padding:12px 16px">✏️ Type one in</button></div>
+      <input type="file" id="bfC" accept="image/*" capture="environment" hidden><input type="file" id="bfP" accept="image/*,application/pdf" hidden>
       <div class="opts mtabs">${[['check','🔎 To check',chk.length],['due','📅 To pay',due.length],['paid','✅ Paid',0],['report','📊 Report',0],['setup','⚙️ Setup',0]].map(([v,l,n])=>`<button class="opt sm ${billTab===v?'on':''}" data-bt="${v}">${l}${n?` <b>${n}</b>`:''}</button>`).join('')}</div>
       <div class="tvlist">${body}</div>`;
     m.querySelector('#x').onclick=close;
     m.querySelectorAll('[data-bt]').forEach(b=>b.onclick=()=>{ billTab=b.dataset.bt; draw(); });
     m.querySelectorAll('[data-bill]').forEach(b=>b.onclick=()=>{ close(); openBill(all.find(x=>x.id===b.dataset.bill)); });
     const hd=m.querySelector('#hand'); if(hd) hd.onclick=()=>{ close(); openBill(null); };
+    m.querySelector('#hand2').onclick=()=>{ close(); openBill(null); };
+    const bfC=m.querySelector('#bfC'), bfP=m.querySelector('#bfP');
+    m.querySelector('#bScan').onclick=()=>{ if(!aiOK()){ toast('Reading a bill needs AI: ⚙️ Settings → Connections → ✨ AI'); return; } bfC.click(); };
+    m.querySelector('#bPick').onclick=()=>{ if(!aiOK()){ toast('Reading a bill needs AI: ⚙️ Settings → Connections → ✨ AI'); return; } bfP.click(); };
+    bfC.onchange=bfP.onchange=async e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(!f) return; close(); let data; try{ data=await fileForAI(f); }catch(x){ toast(x.message); return; }
+      const r=await billFromFile(data); if(r&&r.bill) openBill(r.bill); else openBills(); };
     if(billTab==='report'){ const ys=m.querySelector('#by'); if(ys) ys.onchange=()=>{ billYear=+ys.value; draw(); }; }
     if(billTab==='setup') wireBillSetup(m,draw);
   }; draw(); });
@@ -738,6 +746,39 @@ function wireBillSetup(m,draw){
   m.querySelector('#bh').onclick=()=>{ closeModal(); openHelpers(); };
 }
 // one bill: check it (and choose its folder), mark it paid, or fix the details
+/* Read a bill from a photo or PDF: who, how much, when, direct debit or not, and anything carried over from before.
+   It goes into Bills to pay (or is recognised as one already there). A payment that bounced is caught: the earlier bill
+   that was marked paid is put right. If it isn't a direct debit, a job to pay it goes on the To do list too. */
+async function billFromFile(data){
+  const done=aiBusy('Reading the bill…');
+  try{
+    const mine=(S.bills||[]).slice(-40).map(b=>({id:b.id,biller:b.biller,amount:(b.amount||0)/100,due:b.due,status:b.status,paid:b.paidAt?dk(new Date(b.paidAt)):''}));
+    const j=await aiAsk({json:true,file:data,prompt:`Read this New Zealand household bill or statement. Return JSON only:
+{"isBill":true,"biller":"short name, e.g. Watercare","amount":"total to pay now, number","due":"YYYY-MM-DD","directDebit":true if it says it will be paid by direct debit or automatic payment,"account":"account number","period":"e.g. November","category":"one of ${BILL_CATS.join('|')}","summary":"one plain sentence on what this bill is made of",
+"carried":{"amount":number or 0,"why":"paid|unpaid|dishonoured|none"},"overdue":true or false}
+"carried" is the previous balance still owing on this bill: "dishonoured" if a payment was made but returned (bounced), "unpaid" if just not paid, "none" if nothing is carried over.
+Their bills already in the app: ${JSON.stringify(mine)}.`});
+    done();
+    if(!j||j.isBill===false||!j.biller) return {msg:'That doesn’t look like a bill'};
+    const amt=Math.round(parseFloat(String(j.amount).replace(/[$,\s]/g,''))*100)||0, due=/^\d{4}-\d\d-\d\d$/.test(j.due||'')?j.due:'';
+    const same=b=>String(b.biller||'').toLowerCase().replace(/\W/g,'')===String(j.biller).toLowerCase().replace(/\W/g,'');
+    let ex=(S.bills||[]).find(b=>same(b)&&b.due===due&&Math.abs((b.amount||0)-amt)<2), note='';
+    // a payment that bounced: the earlier bill isn't paid after all, and its amount is part of this one
+    const c=j.carried||{}, cAmt=Math.round((+c.amount||0)*100);
+    if(cAmt&&c.why==='dishonoured'){ const prev=(S.bills||[]).filter(b=>same(b)&&b!==ex&&Math.abs((b.amount||0)-cAmt)<2).sort((a,b)=>(b.paidAt||0)-(a.paidAt||0))[0];
+      if(prev){ prev.status='rolled'; prev.dishonoured=true; prev.summary='⚠️ The payment of '+$m(cAmt)+' was dishonoured (returned by the bank). It is carried into the '+j.biller+' bill due '+(due?fmtD(kd(due),{day:'numeric',month:'short'}):'next')+'.'; }
+      note='⚠️ '+$m(cAmt)+' from the last bill is included: that payment was dishonoured (bounced). '; }
+    else if(cAmt&&c.why==='unpaid') note='⚠️ Includes '+$m(cAmt)+' still owing from the last bill. ';
+    const b=ex||{id:'scan-'+uid(),at:Date.now(),date:dk(new Date())};
+    Object.assign(b,{biller:String(j.biller).slice(0,60),amount:amt,due,status:b.status==='paid'?'paid':'due',directDebit:!!j.directDebit,period:String(j.period||'').slice(0,40),category:BILL_CATS.includes(j.category)?j.category:'Other',summary:(note+String(j.summary||'')).slice(0,400)});
+    if(j.account) b.reference=String(j.account).slice(-4);
+    if(!ex){ S.bills=S.bills||[]; S.bills.push(b); }
+    let job='';
+    if(!b.directDebit&&b.status==='due'&&!S.todos.some(t=>!t.done&&t.billId===b.id)){ S.todos.push({id:uid(),title:'Pay '+b.biller+' '+$m(amt),done:false,due:due||undefined,billId:b.id}); job=' A job to pay it is on the To do list.'; }
+    save(); renderAll();
+    return {bill:b,msg:(ex?'Already in Bills: ':'Added to Bills: ')+b.biller+' '+$m(amt)+(due?' due '+fmtD(kd(due),{weekday:'short',day:'numeric',month:'short'}):'')+(b.directDebit?' (direct debit, nothing to do)':'')+'.'+(note?' '+note:'')+job};
+  }catch(e){ done(); if(e.message!=='quiet') toast('Couldn’t read the bill: '+e.message); return null; }
+}
 function openBill(b0){
   const isNew=!b0, b=b0?JSON.parse(JSON.stringify(b0)):{status:'due',by:'hand',biller:'',category:'Other',amount:0,due:dk(addDays(new Date(),14)),directDebit:false,period:'',reference:''};
   let folder=b.fileTo||(b.pdf&&b.pdf.driveId?suggestFolder(b):''), pickF=false, fq='';
@@ -1250,7 +1291,7 @@ function wireAddAny(box,after){
   const run=async(text,photo)=>{ if(busy) return; text=String(text||'').trim(); if(!text&&!photo) { inp.focus(); return; }
     busy=true; go.disabled=true; go.textContent='…'; res.innerHTML=`<div class="aanote">${esc(photo?tr('Reading the photo…'):tr('Sorting it…'))}</div>`;
     try{ const items=await sortAdds(text,photo); const added=applyAdds(items); inp.value=''; show(added,added.length?'':tr('Nothing to add was found.')); if(after) after(); }
-    catch(e){ show([],e.message==='quiet'?'':e.message); }
+    catch(e){ if(e.bill){ inp.value=''; res.innerHTML=`<div class="aadone"><span>🧾 ${esc(e.message)}</span><button class="cancel" id="aaBill">Open it</button></div>`; const ob=res.querySelector('#aaBill'); if(ob) ob.onclick=()=>openBill(e.bill); if(after) after(); } else show([],e.message==='quiet'?'':e.message); }
     busy=false; go.disabled=false; go.textContent=tr('Add'); };
   go.onclick=()=>run(inp.value);
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); run(inp.value); } };
@@ -1272,9 +1313,11 @@ async function sortAdds(text,photo){
   const shops=S.shops.map(s=>`${s.id} = ${s.name}`).join('; ');
   const prompt=`Sort what a family member ${photo?'wrote on the attached photo of a paper note or list'+(text?' (and typed: """'+text+'""")':''):'typed: """'+text+'"""'} into calendar entries, jobs and shopping.
 People (id = names): ${ppl}. Shops (id = name): ${shops}. Today is ${dk(new Date())} (${fmtD(new Date(),{weekday:'long'})}), New Zealand.
-Return JSON only: {"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":"person id or empty","shop":"shop id or empty"}]}
+Return JSON only: {"bill":true or false,"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":"person id or empty","shop":"shop id or empty"}]}
+"bill" is true when the photo or text is an invoice, statement or bill to pay (power, water, rates, phone, insurance and so on); then items can be empty.
 Rules: each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. Never translate. Leave out anything crossed out.`;
   const out=await aiAsk({prompt:withMemory(prompt,text),json:true,file:photo||undefined});
+  if(out&&out.bill&&photo){ const r=await billFromFile(photo); if(r){ const e=new Error(r.msg); e.bill=r.bill; throw e; } }
   const items=Array.isArray(out)?out:(out&&out.items)||[]; return items.filter(x=>x&&x.title);
 }
 // without AI: today/tomorrow/weekday and "3pm" make an entry, "buy …" or a list of food makes shopping, the rest are jobs
