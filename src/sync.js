@@ -118,6 +118,11 @@ export const getMembers = () => members.slice();
 export const getLimited = () => limitedList.slice();
 export const isLimited = () => !!me() && limitedList.includes(me());
 const LIM_COLS = ['events', 'flights', 'sources'], LIM_WRITE = ['events'];
+// a calendar-only person's own jobs, shopping, meal plan, recipes and kitchen stock: kept under private/<their email>/,
+// which the rules let nobody else read, and they never see the family's
+const LIM_OWN = ['todos', 'groceries', 'meals', 'recipes', 'stock'];
+const colRef = (c, lim) => lim && LIM_OWN.includes(c) ? collection(db, 'households', hid, 'private', me(), c) : collection(db, 'households', hid, c);
+const docRef = (c, id, lim) => lim && LIM_OWN.includes(c) ? doc(db, 'households', hid, 'private', me(), c, id) : doc(db, 'households', hid, c, id);
 export const setLimited = (email, on) => updateDoc(doc(db, 'households', hid), { limited: on ? arrayUnion(email.toLowerCase()) : arrayRemove(email.toLowerCase()) });
 export const getOwner = () => owner;
 export const addMember = email => updateDoc(doc(db, 'households', hid), { members: arrayUnion(email.trim().toLowerCase()) });
@@ -146,18 +151,18 @@ function subCols() {
   const lim = isLimited();
   if (!lim) { SOFT.forEach(listenSoft); if (me()) watchKey(); }
   for (const c of COLS) {
-    if (lim && !LIM_COLS.includes(c)) { S[c] = S[c] || []; continue; }
+    if (lim && !LIM_COLS.includes(c) && !LIM_OWN.includes(c)) { S[c] = S[c] || []; continue; }
     S[c] = S[c] || [];
-    unsub.push(listen(collection(db, 'households', hid, c), snap => {
+    unsub.push(listen(colRef(c, lim), snap => {
       let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
-      if (PRIV.includes(c)) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
+      if (PRIV.includes(c) && !(lim && LIM_OWN.includes(c))) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
       mergeArray(S[c], list);
       const m = synced.cols[c]; m.clear(); S[c].forEach(x => { if (!(PRIV.includes(c) && x.priv)) m.set(x.id, JSON.stringify(clean(x))); });
       onChange(c);
     }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { denied.add(c); console.warn(c + ': database rules need updating'); onChange('rulesold', c); } else onChange('error', err); }));
   }
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
-  if (me()) for (const c of PRIV) unsub.push(listen(collection(db, 'households', hid, 'private', me(), c), snap => {
+  if (me()) for (const c of PRIV.filter(c => !(lim && LIM_OWN.includes(c)))) unsub.push(listen(collection(db, 'households', hid, 'private', me(), c), snap => {
     const mine = snap.docs.map(x => Object.assign({ id: x.id }, x.data(), { priv: true }));
     mergeArray(S[c], S[c].filter(e => !e.priv).concat(mine));
     synced.priv[c].clear(); mine.forEach(x => synced.priv[c].set(x.id, JSON.stringify(clean(x))));
@@ -214,7 +219,7 @@ export function push() {
   if (st !== synced.settings) { ops.push(['update', doc(db, 'households', hid), JSON.parse(st)]); synced.settings = st; }
   // my private entries go to their own place (a separate batch, so a problem there never blocks the rest)
   const pops = [];
-  if (me()) for (const c of PRIV) {
+  if (me()) for (const c of PRIV.filter(c => !(lim && LIM_OWN.includes(c)))) {
     const pm = synced.priv[c], pseen = new Set();
     for (const x of S[c]) {
       if (!x.id || !x.priv) continue; pseen.add(x.id);
@@ -228,17 +233,17 @@ export function push() {
   const nops = [];
   for (const c of COLS.concat(SOFT.filter(c => softOk[c]))) {
     if (NEWER.includes(c) && (rulesOld || denied.has(c))) continue;
-    if (lim && !LIM_WRITE.includes(c)) continue;
+    if (lim && !LIM_WRITE.includes(c) && !LIM_OWN.includes(c)) continue;
     const ops0 = ops, ops1 = NEWER.includes(c) || SOFT.includes(c) ? nops : ops0;
     const m = synced.cols[c], seen = new Set();
     for (const x of (S[c] || [])) {
-      if (!x.id) continue; if (PRIV.includes(c) && x.priv) continue; seen.add(x.id);
+      if (!x.id) continue; if (PRIV.includes(c) && x.priv && !(lim && LIM_OWN.includes(c))) continue; seen.add(x.id);
       if (m.get(x.id) !== JSON.stringify(clean(x))) stamp(c, x, m.get(x.id));
       const body = clean(x); delete body.id;
       const j = JSON.stringify(clean(x));
-      if (m.get(x.id) !== j) { ops1.push(['set', doc(db, 'households', hid, c, x.id), body]); m.set(x.id, j); }
+      if (m.get(x.id) !== j) { ops1.push(['set', docRef(c, x.id, lim), body]); m.set(x.id, j); }
     }
-    for (const id of [...m.keys()]) if (!seen.has(id)) { ops1.push(['delete', doc(db, 'households', hid, c, id)]); m.delete(id); }
+    for (const id of [...m.keys()]) if (!seen.has(id)) { ops1.push(['delete', docRef(c, id, lim)]); m.delete(id); }
   }
   if (nops.length) { const b = writeBatch(db); nops.slice(0, 450).forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : b.delete(ref)); b.commit().catch(e => { if (e && e.code === 'permission-denied') { rulesOld = true; onChange('rulesold'); } else console.warn(e); }); }
   // 2.5 tells the helper its prepared "what's on" answers are out of date
