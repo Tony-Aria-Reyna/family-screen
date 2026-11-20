@@ -1455,7 +1455,7 @@ async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=awa
 async function saverOn(){
   const el=document.createElement('div'); el.id='saver'; document.body.appendChild(el);
   const pics=await saverPhotos(); let urls=[];
-  try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,40)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
+  try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
   const draw=()=>{ if(!document.getElementById('saver')) return; const now=new Date(), t=now.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'});
     const nx=itemsForDay(dk(now)).concat(itemsForDay(dk(addDays(now,1)))).filter(it=>it.k==='ev').map(it=>it.e).filter(e=>!e.time||e.date!==dk(now)||e.time>String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'))[0];
     const u=urls.length?urls[saverI++%urls.length]:'';
@@ -1464,11 +1464,11 @@ async function saverOn(){
   if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
 }
 function saverOff(){ clearInterval(saverT); const el=document.getElementById('saver'); if(el){ el.querySelectorAll('img').forEach(i=>{ try{ URL.revokeObjectURL(i.src); }catch(e){} }); el.remove(); } }
-// the photo frame's pictures: up to 40 from the family's Drive folder, fetched through the helper and kept on this screen
+// the photo frame's pictures: up to 150 from the family's Drive folder, fetched through the helper and kept on this screen
 async function saverFetch(force){
   if(!S.voiceUrl) return 0; lsSet('fs.photosAt',String(Date.now()));
   const c=await caches.open('fs-photos'), keys=[]; let n=0;
-  for(let page=0;page<4;page++){ const j=await helperDo('photos',{folder:S.photoFolder,page}); if(!j||!j.photos) break;
+  for(let page=0;page<15;page++){ const j=await helperDo('photos',{folder:S.photoFolder,page}); if(!j||!j.photos) break;
     for(const p of j.photos){ try{ if(!(await c.match('p/'+p.id))){ const bin=Uint8Array.from(atob(p.data),ch=>ch.charCodeAt(0)); await c.put('p/'+p.id,new Response(new Blob([bin],{type:p.mime||'image/jpeg'}))); } keys.push(p.id); n++; }catch(e){} }
     if(!j.more) break; }
   if(keys.length){ const old=await saverPhotos(); for(const k of old) if(!keys.includes(k)) try{ await c.delete('p/'+k); }catch(e){}
@@ -1715,7 +1715,7 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
    computer, or with Android's Share → Family Screen. They are made a sensible size and saved by the Reminder helper
    into "Family Screen photos" in the family's Google Drive; the fridge's night-time photo frame shows them. */
 async function albumAdd(files,status,quiet){
-  const list=[...files].filter(f=>/^image\//.test(f.type)).slice(0,30); if(!list.length){ toast('Those aren’t photos'); return 0; }
+  const list=[...files].filter(f=>/^image\//.test(f.type)).slice(0,150); if(!list.length){ toast('Those aren’t photos'); return 0; }
   if(!S.voiceUrl){ toast('The album needs the Reminder helper: ⚙️ Settings → Connections → 🧰 Helpers'); return 0; }
   let ok=0, err='';
   for(let i=0;i<list.length;i++){ if(status) status(`Saving ${i+1} of ${list.length}…`);
@@ -1723,7 +1723,7 @@ async function albumAdd(files,status,quiet){
       if(r&&r.error) err=r.error;
       if(r&&r.ok){ ok++; if(r.folder&&S.photoFolder!==r.folder) S.photoFolder=r.folder;
         try{ const c=await caches.open('fs-photos'), bin=Uint8Array.from(atob(d.data),ch=>ch.charCodeAt(0)); await c.put('p/'+r.id,new Response(new Blob([bin],{type:d.mime})));
-          const l=await saverPhotos(); l.unshift(r.id); await c.put('list',new Response(JSON.stringify(l.slice(0,40)),{headers:{'Content-Type':'application/json'}})); }catch(e){} } }
+          const l=await saverPhotos(); l.unshift(r.id); await c.put('list',new Response(JSON.stringify(l.slice(0,150)),{headers:{'Content-Type':'application/json'}})); }catch(e){} } }
     catch(e){} }
   if(ok){ S.photoRev=Date.now(); lsSet('fs.photosAt',String(Date.now())); save(); }   // tells the fridge and the other phones there are new photos
   if(!quiet) toast(ok?`${ok} photo${ok>1?'s':''} added to the family album`:/unknown|action/i.test(err)?'The Reminder helper needs updating first: ⚙️ Settings → 🧰 Helpers':'Couldn’t save the photos'+(err?': '+err:'. Try again.'));
@@ -1744,8 +1744,8 @@ async function pickStart(){ await gisLoad(); const tok=await photosToken(); cons
 async function pickFinish(p,status){
   const {tok,ses}=p, until=Date.now()+15*60e3; let s=ses;
   while(!s.mediaItemsSet){ if(Date.now()>until) throw new Error('Took too long. Try again.'); await new Promise(r=>setTimeout(r,4000)); s=await pickApi(tok,'sessions/'+ses.id); }
-  let items=[], pt=''; do{ const j=await pickApi(tok,'mediaItems?sessionId='+ses.id+'&pageSize=100'+(pt?'&pageToken='+pt:'')); items=items.concat(j.mediaItems||[]); pt=j.nextPageToken||''; }while(pt&&items.length<300);
-  items=items.filter(x=>x.type!=='VIDEO'&&x.mediaFile&&x.mediaFile.baseUrl).slice(0,30);
+  let items=[], pt=''; do{ const j=await pickApi(tok,'mediaItems?sessionId='+ses.id+'&pageSize=100'+(pt?'&pageToken='+pt:'')); items=items.concat(j.mediaItems||[]); pt=j.nextPageToken||''; }while(pt&&items.length<500);
+  items=items.filter(x=>x.type!=='VIDEO'&&x.mediaFile&&x.mediaFile.baseUrl).slice(0,150);
   let ok=0;
   for(let i=0;i<items.length;i++){ status&&status(`Bringing in ${i+1} of ${items.length}…`); const mf=items[i].mediaFile, url=mf.baseUrl+'=w1600-h1600';
     let done=false;
@@ -1763,7 +1763,7 @@ async function photoDel(id){
 function openAlbum(){ gisLoad().catch(()=>{}); modal((m,close)=>{ m.classList.add('wide','tvsheet'); let urls=[];
   let pids=[];
   const draw=async()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); urls=[]; pids=[];
-    const ids=await saverPhotos(); try{ const c=await caches.open('fs-photos'); for(const id of ids.slice(0,40)){ const r=await c.match('p/'+id); if(r){ urls.push(URL.createObjectURL(await r.blob())); pids.push(id); } } }catch(e){}
+    const ids=await saverPhotos(); try{ const c=await caches.open('fs-photos'); for(const id of ids.slice(0,150)){ const r=await c.match('p/'+id); if(r){ urls.push(URL.createObjectURL(await r.blob())); pids.push(id); } } }catch(e){}
     if(!m.isConnected) return;
     m.innerHTML=`<div class="tvhead"><h2>📸 Family album</h2><button class="save" id="x">Done</button></div>
       <div class="aldrop" id="drop"><b>＋ Add photos</b><small>${isPhone()?'Take one, or choose several from your phone':'Drag photos here, or tap to choose'}</small></div>

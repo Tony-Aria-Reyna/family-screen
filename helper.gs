@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 33;
+const HELPER_VERSION = 34;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -793,16 +793,16 @@ function photoFetch(b) {
 function photosPage(b) {
   const id = String(b.folder || '').replace(/[^\w-]/g, '') || albumFolder().getId();
   let files; try { files = DriveApp.getFolderById(id).getFiles(); } catch (e) { return { error: 'That folder can\'t be opened by the helper\'s Google account' }; }
-  const all = []; while (files.hasNext() && all.length < 200) { const f = files.next(); if (/^image\//.test(f.getMimeType())) all.push(f); }
+  const all = []; while (files.hasNext() && all.length < 400) { const f = files.next(); if (/^image\//.test(f.getMimeType())) all.push(f); }
   all.sort(function (a, c) { return c.getDateCreated() - a.getDateCreated(); });
-  const page = Math.max(0, Math.min(3, Number(b.page) || 0)), slice = all.slice(page * 10, page * 10 + 10), tok = ScriptApp.getOAuthToken(), out = [];
+  const page = Math.max(0, Math.min(14, Number(b.page) || 0)), slice = all.slice(page * 10, page * 10 + 10), tok = ScriptApp.getOAuthToken(), out = [];
   slice.forEach(function (f) { try {
       const meta = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.getId() + '?fields=thumbnailLink', { headers: { Authorization: 'Bearer ' + tok } }).getContentText());
       let blob = null; if (meta.thumbnailLink) { const r = UrlFetchApp.fetch(meta.thumbnailLink.replace(/=s\d+$/, '=s1280'), { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true }); if (r.getResponseCode() === 200) blob = r.getBlob(); }
       if (!blob && f.getSize() < 1500000) blob = f.getBlob();
       if (blob) out.push({ id: f.getId(), mime: blob.getContentType() || 'image/jpeg', data: Utilities.base64Encode(blob.getBytes()) });
     } catch (e) { Logger.log('Photo ' + f.getName() + ': ' + e); } });
-  return { photos: out, more: all.length > (page + 1) * 10 && page < 3 };
+  return { photos: out, more: all.length > (page + 1) * 10 && page < 14 };
 }
 /* ================= Family inbox =================
    One address for everything the family gets sent (a plus address of THIS Gmail account, set in the app: 📥 Inbox → Setup):
