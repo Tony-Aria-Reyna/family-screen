@@ -63,7 +63,7 @@ function whoHome(key){
       const n=homeOn(key).length; (S.meals||[]).filter(x=>x.date===key&&!x.serveSet).forEach(x=>x.serves=Math.max(1,n)); save(); draw(); });
     m.querySelector('#ok').onclick=()=>{ close(); openMeals(); }; }; draw(); });
 }
-function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); save(); return m; }
+function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; if(slot==='dinner'&&r&&r.name&&typeof foodNote==='function') foodNote('pick',r.name); const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); save(); return m; }
 // choose a meal for a day: favourites first, then everything, or ask for new ideas
 function pickMeal(key,slot,tab){
   let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true;
@@ -486,7 +486,7 @@ function openIdeas(plan){
     m.querySelector('#go').onclick=async()=>{ close(); const done=aiBusy('Asking Gemini for ideas…');
       const have=allRecipes().map(r=>r.name).slice(0,80).join('; '), favs=allRecipes().filter(r=>isFav(r.id)).map(r=>r.name).join('; ');
       const prompt=`You are helping a New Zealand family (Auckland) plan ${st.meal}s. Suggest ${st.n} different ${st.meal} recipes for ${st.people} people.
-Feeling like: ${st.moods.join(', ')||'anything family-friendly'}. ${st.extra?'Also: '+st.extra+'.':''}
+Feeling like: ${st.moods.join(', ')||'anything family-friendly'}. Their tastes: ${foodPrefs()} ${foodHistory()} ${st.extra?'Also: '+st.extra+'.':''}
 They already have these recipes, so suggest different ones: ${have}.${favs?' Their favourites (a hint to their taste): '+favs+'.':''}
 Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
 Return JSON only: {"recipes":[ ...${st.n} objects shaped like ${RECIPE_SHAPE} ]} with "serves": ${st.people}.
@@ -1221,7 +1221,7 @@ function openInbox(){
 const appLang=()=>lsGet('fs.lang','')==='ja'?'ja':'en';
 const JA={};
 function tr(s){ return appLang()==='ja'&&JA[s]!=null?JA[s]:s; }
-Object.assign(JA,{'＋ Add anything: milk, dentist Tue 3pm…':'＋ なんでも追加：牛乳、火曜3時 歯医者…','Add anything':'なんでも追加','Say it':'声で入力','Photo of a list':'メモの写真','Add':'追加','Undo':'元に戻す',
+Object.assign(JA,{'＋ Add anything: milk, dentist Tue 3pm…':'＋ なんでも追加：牛乳、火曜3時 歯医者…','Add anything':'なんでも追加','Say it':'声で入力','Photo of a list':'メモの写真','From my photos':'写真から選ぶ','Add':'追加','Undo':'元に戻す',
   'Taken off again':'取り消しました','Reading the photo…':'写真を読んでいます…','Sorting it…':'仕分けています…','Nothing to add was found.':'追加するものが見つかりませんでした。',
   'I didn’t catch that. Try again or type it.':'聞き取れませんでした。もう一度話すか、入力してください。','Voice isn’t available here. Type it instead.':'ここでは音声入力が使えません。入力してください。',
   'Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.':'写真を読むにはAIの設定が必要です：⚙️ 設定 → 接続 → ✨ AI','That photo couldn’t be read.':'その写真は読めませんでした。',
@@ -1238,8 +1238,8 @@ function aaPerson(name){ const k=String(name||'').trim().toLowerCase(); if(!k) r
   return S.people.find(p=>p.id!=='all'&&[p.name,p.nick,p.role].concat(String(p.aka||'').split(',')).some(x=>String(x||'').trim().toLowerCase()===k))||null; }
 function addAnyHTML(id,big){
   return `<div class="addany${big?' big':''}" id="${id}"><div class="aarow"><input type="text" class="aain" placeholder="${esc(tr('＋ Add anything: milk, dentist Tue 3pm…'))}" enterkeyhint="done" autocomplete="off" aria-label="${esc(tr('Add anything'))}">
-    ${AA_SR?`<button class="aaic aamic" aria-label="${esc(tr('Say it'))}">🎤</button>`:''}<button class="aaic aacam" aria-label="${esc(tr('Photo of a list'))}">📷</button><button class="save aago">${esc(tr('Add'))}</button></div>
-    <input type="file" accept="image/*" class="aafile" hidden><div class="aares"></div></div>`; }
+    ${AA_SR?`<button class="aaic aamic" aria-label="${esc(tr('Say it'))}">🎤</button>`:''}<button class="aaic aacam" aria-label="${esc(tr('Photo of a list'))}">📷</button><button class="aaic aagal" aria-label="${esc(tr('From my photos'))}">🖼️</button><button class="save aago">${esc(tr('Add'))}</button></div>
+    <input type="file" accept="image/*" class="aafile" hidden><input type="file" accept="image/*" capture="environment" class="aafilec" hidden><div class="aares"></div></div>`; }
 function wireAddAny(box,after){
   if(!box) return; const inp=box.querySelector('.aain'), go=box.querySelector('.aago'), res=box.querySelector('.aares'), file=box.querySelector('.aafile');
   let busy=false;
@@ -1257,8 +1257,10 @@ function wireAddAny(box,after){
   const mic=box.querySelector('.aamic'); if(mic) mic.onclick=()=>{ try{ const r=new AA_SR(); r.lang=appLang()==='ja'?'ja-JP':'en-NZ'; r.interimResults=true; mic.classList.add('on');
       r.onresult=ev=>{ const t=[...ev.results].map(x=>x[0].transcript).join(' '); inp.value=t; if(ev.results[ev.results.length-1].isFinal){ try{ r.stop(); }catch(x){} run(t); } };
       r.onerror=()=>{ mic.classList.remove('on'); show([],tr('I didn’t catch that. Try again or type it.')); }; r.onend=()=>mic.classList.remove('on'); r.start(); }catch(e){ show([],tr('Voice isn’t available here. Type it instead.')); } };
-  box.querySelector('.aacam').onclick=()=>{ if(!aiOK()){ show([],tr('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.')); return; } file.click(); };
-  file.onchange=async()=>{ const f=file.files&&file.files[0]; file.value=''; if(!f) return; let data; try{ data=await fileForAI(f); }catch(e){ show([],tr('That photo couldn’t be read.')); return; } run(inp.value,data); };
+  const filec=box.querySelector('.aafilec'), needAI=()=>{ if(!aiOK()){ show([],tr('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.')); return true; } return false; };
+  box.querySelector('.aacam').onclick=()=>{ if(!needAI()) filec.click(); };
+  box.querySelector('.aagal').onclick=()=>{ if(!needAI()) file.click(); };
+  file.onchange=filec.onchange=async e=>{ const inp=e.target, f=inp.files&&inp.files[0]; inp.value=''; if(!f) return; let data; try{ data=await fileForAI(f); }catch(x){ show([],tr('That photo couldn’t be read.')); return; } run(box.querySelector('.aain').value,data); };
 }
 function openAddAny(){ modal((m,close)=>{ m.innerHTML=`<div class="tvhead"><h2>${esc(tr('＋ Add anything'))}</h2><button class="cancel" id="x">${esc(tr('Close'))}</button></div>${addAnyHTML('mAdd',true)}
     <p class="note">${esc(tr('Shopping, jobs and calendar entries, in your own words. Several at once is fine, one per line. 📷 reads a photo of a paper list.'))}</p>
@@ -1476,6 +1478,11 @@ async function vaultAdd(file){
    A planned dinner's ingredients are assumed used once it has been cooked (8pm that day), with "put back" for mistakes. */
 const FOOD_DEFAULT='We like Japanese, Mexican and Kiwi food. Paleo-style: meat, fish, eggs, vegetables; minimal gluten (tamari instead of soy sauce, corn tortillas). About once a month a homemade sourdough or fresh pizza night is welcome.';
 const foodPrefs=()=>String(S.food||FOOD_DEFAULT);
+/* What the family has picked and turned down, kept with the family (last 40) and given to the AI with every dinner
+   question, so ideas drift towards what you actually cook. The AI itself isn't retrained: this is its notebook. */
+function foodNote(kind,name){ S.foodLog=(S.foodLog||[]).filter(x=>!(x.n===name&&x.k===kind)).concat([{k:kind,n:String(name).slice(0,60),at:Date.now()}]).slice(-40); save(); }
+function foodHistory(){ const l=S.foodLog||[], p=l.filter(x=>x.k==='pick').map(x=>x.n), n=l.filter(x=>x.k==='no').map(x=>x.n);
+  return (p.length?'Dinners they chose recently (cook more like these): '+p.slice(-20).join('; ')+'. ':'')+(n.length?'Dinners they turned down (avoid these and anything like them): '+n.slice(-20).join('; ')+'.':''); }
 const STOCK_PLACES=[['freezer','🧊','Deep freezer'],['fridge','🥬','Fridge'],['pantry','🥫','Pantry']];
 const SAUCES=[['Japanese',['Tamari or coconut aminos','Mirin','Rice vinegar','Toasted sesame oil','Miso paste','Dashi powder','Fresh ginger','Kewpie mayo']],
   ['Mexican',['Chipotle in adobo','Ground cumin','Smoked paprika','Dried oregano','Limes','Tinned tomatoes','Salsa verde','Corn tortillas']],
@@ -1512,6 +1519,7 @@ async function dinnerIdeas(o){
   const stock=o.useStock?stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)):[], sh=sauceShelf(), people=o.people||Math.max(1,homeOn(dk(new Date())).length);
   const prompt=`You are helping a New Zealand family (Auckland) decide dinner from what they ALREADY have, so nothing in the freezer or fridge is wasted.
 Their tastes: ${foodPrefs()}
+${foodHistory()}
 ${o.files&&o.files.length?'Attached: '+o.files.length+' photo(s) of their fridge, freezer or pantry, taken just now. Work from what you can actually see.':''}
 ${stock.length?'Their kitchen stock list (oldest first; use the oldest and the frozen things first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
 ${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.'+(sh.some(x=>x.out)?' Run out of: '+sh.filter(x=>x.out).map(x=>x.name).join(', ')+'.':''):''}
@@ -1529,15 +1537,16 @@ function openCook(){ stockSettle();
   const st={files:[],text:'',people:Math.max(1,homeOn(dk(new Date())).length),useStock:stockNow().length>0};
   modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
     m.innerHTML=`<h2>📸 What can we make?</h2><p class="note">Take a couple of photos of the fridge and the freezer. You get three dinners made from what's there, and what (if anything) to pick up.</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="save" id="ph" style="border-radius:14px;padding:14px 18px;font-weight:800">📷 ${st.files.length?'Add another photo':'Take or choose a photo'}</button>${st.files.map((f,i)=>`<span class="ckph"><img src="data:${f.mime};base64,${f.data}" alt=""><button data-rm="${i}" aria-label="Remove">✕</button></span>`).join('')}</div>
-      <input type="file" id="pf" accept="image/*" multiple hidden>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="save" id="phc" style="border-radius:14px;padding:14px 18px;font-weight:800">📷 ${st.files.length?'Another photo':'Take a photo'}</button><button class="cancel" id="ph" style="border-radius:14px;padding:14px 16px">🖼️ From my photos</button>${st.files.map((f,i)=>`<span class="ckph"><img src="data:${f.mime};base64,${f.data}" alt=""><button data-rm="${i}" aria-label="Remove">✕</button></span>`).join('')}</div>
+      <input type="file" id="pf" accept="image/*" multiple hidden><input type="file" id="pfc" accept="image/*" capture="environment" hidden>
       <div class="step">Anything else? <span style="font-weight:500">(optional)</span></div><input class="txt" id="tx" value="${esc(st.text)}" placeholder="e.g. feeling like Mexican, quick tonight, there's mince in the deep freezer">
       <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">People <button id="pm">−</button> <b>${st.people}</b> <button id="pp">＋</button></span>
         ${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Also use the Kitchen stock list (${stockNow().length})</label>`:''}</div>
       <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go">🍽️ Find dinners</button></div>`;
-    const pf=m.querySelector('#pf'), tx=m.querySelector('#tx'); tx.oninput=()=>st.text=tx.value;
+    const pf=m.querySelector('#pf'), pfc=m.querySelector('#pfc'), tx=m.querySelector('#tx'); tx.oninput=()=>st.text=tx.value;
     m.querySelector('#ph').onclick=()=>{ if(st.files.length>=4){ toast('Four photos is plenty'); return; } pf.click(); };
-    pf.onchange=async()=>{ for(const f of [...pf.files].slice(0,4-st.files.length)){ try{ st.files.push(await fileForAI(f)); }catch(e){ toast(e.message); } } pf.value=''; draw(); };
+    m.querySelector('#phc').onclick=()=>{ if(st.files.length>=4){ toast('Four photos is plenty'); return; } pfc.click(); };
+    pf.onchange=pfc.onchange=async e=>{ const inp=e.target; for(const f of [...inp.files].slice(0,4-st.files.length)){ try{ st.files.push(await fileForAI(f)); }catch(x){ toast(x.message); } } inp.value=''; draw(); };
     m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ st.files.splice(+b.dataset.rm,1); draw(); });
     m.querySelector('#pm').onclick=()=>{ st.people=Math.max(1,st.people-1); draw(); }; m.querySelector('#pp').onclick=()=>{ st.people++; draw(); };
     const us=m.querySelector('#us'); if(us) us.onchange=()=>st.useStock=us.checked;
@@ -1549,7 +1558,7 @@ function openCook(){ stockSettle();
   }; draw(); });
 }
 function showCook(out){ const rs=out.recipes; let seenSaved=false;
-  const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
+  const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); foodNote('pick',r.name); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
     const m=planMeal(key,'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
     const n=buyAdd(r.buy); save(); renderAll(); if($('#mealLayer').innerHTML) openMeals();
     toast(r.name+(off?' is on tomorrow’s plan':' is on tonight’s plan')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
@@ -1558,11 +1567,12 @@ function showCook(out){ const rs=out.recipes; let seenSaved=false;
       ${out.seen.length?`<p class="note">I could see: ${esc(out.seen.slice(0,14).map(x=>x.name).join(', '))}${out.seen.length>14?' and '+(out.seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
       <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji}</span><span class="mrt"><b>${esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb)}</small>
           <small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
-        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ Have it tonight</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button></div></div>`).join('')}</div>`;
+        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ Have it tonight</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button><button class="opt sm" data-no="${i}">👎 Not for us</button></div></div>`).join('')}</div>`;
     m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };
     const sv=m.querySelector('#sv'); if(sv) sv.onclick=()=>{ const n=stockAdd(out.seen); seenSaved=true; toast(n+' things kept in Kitchen stock'); draw(); };
     m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>openRecipe(rs[+b.dataset.i],{back:()=>showCook(out)}));
     m.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{ const [i,off]=b.dataset.pl.split('|'); close(); plan(rs[+i],+off); });
+    m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{ const r=rs[+b.dataset.no]; foodNote('no',r.name); rs.splice(+b.dataset.no,1); toast('Noted. Ideas like '+r.name+' won’t come up again.'); if(!rs.length){ close(); return; } draw(); });
   }; draw(); });
 }
 function openStock(){ stockSettle(); let where='freezer';
@@ -1572,15 +1582,16 @@ function openStock(){ stockSettle(); let where='freezer';
       <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="din" style="border-radius:14px;padding:12px 16px;font-weight:800">🍽️ What's for dinner?</button><button class="xbtn" id="cook">📸 From photos of the fridge</button></div>
       <div class="step">Add what's in the house</div>
       <div class="opts">${STOCK_PLACES.map(p=>`<button class="opt sm ${where===p[0]?'on':''}" data-w="${p[0]}">${p[1]} ${p[2]}</button>`).join('')}</div>
-      <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off"><button class="aaic" id="scam" aria-label="Photo">📷</button><button class="save aago" id="sgo">Add</button></div><input type="file" id="sf" accept="image/*" multiple hidden></div>
-      <p class="note">Type or dictate a list, or 📷 a shelf or a handwritten list. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
+      <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off"><button class="aaic" id="scam" aria-label="Take a photo">📷</button><button class="aaic" id="sgal" aria-label="From my photos">🖼️</button><button class="save aago" id="sgo">Add</button></div><input type="file" id="sf" accept="image/*" multiple hidden><input type="file" id="sfc" accept="image/*" capture="environment" hidden></div>
+      <p class="note">Type or dictate a list, 📷 take a photo of a shelf or a handwritten list, or 🖼️ choose one you've taken. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
       ${STOCK_PLACES.map(p=>{ const l=now.filter(x=>x.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return l.length?`<div class="step">${p[1]} ${p[2]} <span style="font-weight:500">(${l.length})</span></div><div class="stk">${l.map(x=>`<span class="stki">${esc(x.name)}${x.qty?` <small>${esc(x.qty)}</small>`:''}${stockAge(x)?` <small class="old">${stockAge(x)}</small>`:''}<button data-used="${x.id}" aria-label="Used">✕</button></span>`).join('')}</div>`:''; }).join('')}
       ${now.length?'':'<p class="note"><b>Nothing listed yet.</b> Start with the deep freezer.</p>'}
       ${used.length?`<div class="step">Used lately <span style="font-weight:500">(tap to put back)</span></div><div class="stk">${used.map(x=>`<button class="stki gone" data-back="${x.id}">${esc(x.name)}</button>`).join('')}</div>`:''}
       <div class="step">🥫 Sauce shelf <span style="font-weight:500">(tap when one runs out: it goes on the shopping list)</span></div>
       ${sh.length?SAUCES.map(g=>g[0]).concat(['Ours']).map(g=>{ const l=sh.filter(x=>(x.grp||'Ours')===g); return l.length?`<div class="note" style="margin:6px 0 2px"><b>${g}</b></div><div class="stk">${l.map(x=>`<button class="stki sauce ${x.out?'out':''}" data-sc="${x.id}">${x.out?'🛒 ':'✓ '}${esc(x.name)}</button>`).join('')}</div>`:''; }).join('')+`<div class="row" style="margin-top:8px;gap:8px"><input class="txt" id="snew" placeholder="Add a sauce or staple" style="flex:1"><button class="xbtn" id="sadd">Add</button></div>`
         :`<p class="note">Key sauces and staples for Japanese, Mexican and Kiwi cooking, gluten-light. Dinners assume these are in the house.</p><button class="xbtn" id="seed">＋ Start with the suggested list (${SAUCES.reduce((a,g)=>a+g[1].length,0)})</button>`}
-      <div class="step">How we like to eat</div><textarea class="txt" id="food" rows="3">${esc(foodPrefs())}</textarea><div class="row" style="margin-top:6px"><button class="xbtn" id="fsave">Save</button></div>`;
+      ${(S.foodLog||[]).length?`<div class="step">What the AI has learnt from your picks</div><div class="stk">${(S.foodLog||[]).slice().reverse().slice(0,16).map(x=>`<span class="stki">${x.k==='pick'?'👍':'👎'} ${esc(x.n)}<button data-fl="${esc(x.n)}|${x.k}" aria-label="Forget">✕</button></span>`).join('')}</div>`:''}
+      <div class="step">How we like to eat</div><p class="note" style="margin:0 0 6px">Tells the AI how your family eats. Every dinner idea follows it.</p><textarea class="txt" id="food" rows="5" style="font:inherit;font-size:17px;line-height:1.4;min-height:130px;resize:vertical">${esc(foodPrefs())}</textarea><div class="row" style="margin-top:6px"><button class="xbtn" id="fsave">Save</button></div>`;
     m.querySelector('#x').onclick=close;
     m.querySelector('#din').onclick=async()=>{ if(!stockNow().length){ toast('Add what’s in the house first, or use photos'); return; } if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
       close(); const done=aiBusy('Working out dinner…'); try{ const out=await dinnerIdeas({useStock:true}); done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
@@ -1590,13 +1601,14 @@ function openStock(){ stockSettle(); let where='freezer';
       try{ const items=await stockRead(files,text,where); const n=stockAdd(items,where); done(); toast(n?n+' thing'+(n>1?'s':'')+' added':'Nothing new found'); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); }
       busy=false; if(m.isConnected) draw(); };
     m.querySelector('#sgo').onclick=()=>add(); m.querySelector('#sin').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } };
-    const sf=m.querySelector('#sf'); m.querySelector('#scam').onclick=()=>sf.click();
-    sf.onchange=async()=>{ const fs=[]; for(const f of [...sf.files].slice(0,4)){ try{ fs.push(await fileForAI(f)); }catch(e){} } sf.value=''; if(fs.length) add(fs); };
+    const sf=m.querySelector('#sf'), sfc=m.querySelector('#sfc'); m.querySelector('#scam').onclick=()=>sfc.click(); m.querySelector('#sgal').onclick=()=>sf.click();
+    sf.onchange=sfc.onchange=async e=>{ const inp=e.target, fs=[]; for(const f of [...inp.files].slice(0,4)){ try{ fs.push(await fileForAI(f)); }catch(x){} } inp.value=''; if(fs.length) add(fs); };
     m.querySelectorAll('[data-used]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.used); if(x){ x.used=Date.now(); save(); draw(); } });
     m.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.back); if(x){ delete x.used; save(); draw(); } });
     m.querySelectorAll('[data-sc]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.sc); if(!x) return; x.out=!x.out; if(x.out){ const n=buyAdd([x.name]); toast(x.name+(n?' added to the shopping list':' is already on the shopping list')); } save(); draw(); });
     const seed=m.querySelector('#seed'); if(seed) seed.onclick=()=>{ SAUCES.forEach(g=>g[1].forEach(n=>S.stock.push({id:uid(),name:n,where:'sauce',grp:g[0],out:false,at:Date.now()}))); save(); draw(); toast('Tap any you don’t have and it goes on the shopping list'); };
     const sa=m.querySelector('#sadd'); if(sa) sa.onclick=()=>{ const v=m.querySelector('#snew').value.trim(); if(!v) return; S.stock.push({id:uid(),name:v.slice(0,50),where:'sauce',grp:'Ours',out:false,at:Date.now()}); save(); draw(); };
+    m.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const [n,k]=b.dataset.fl.split('|'); S.foodLog=(S.foodLog||[]).filter(x=>!(x.n===n&&x.k===k)); save(); draw(); });
     m.querySelector('#fsave').onclick=()=>{ S.food=m.querySelector('#food').value.trim().slice(0,600); save(); toast('Saved. Every dinner idea follows this.'); };
   }; draw(); });
 }
