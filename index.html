@@ -5631,8 +5631,10 @@ function saverPhotosNow(d){ const t=String(d.getHours()).padStart(2,'0')+':'+Str
 setInterval(hubTick,30e3);
 // someone added photos on another device: fetch them within a couple of minutes (fridge and computers; phones when the album opens)
 let photoPullAt=0;
-function photoPull(){ if(!S.voiceUrl||!navigator.onLine||isPhone()) return; const rev=+S.photoRev||0, have=+lsGet('fs.photosAt',0)||0;
-  if(rev>have&&Date.now()-photoPullAt>120e3){ photoPullAt=Date.now(); saverFetch(); } }
+async function photoPull(){ if(!S.voiceUrl||!navigator.onLine||isPhone()) return; const rev=+S.photoRev||0, have=+lsGet('fs.photosAt',0)||0;
+  const empty=(S.photoFolder||rev)&&!(await saverPhotos()).length;   // this screen lost its copy (or never had one): get them again
+  if((rev>have||empty)&&Date.now()-photoPullAt>(empty?600e3:120e3)){ photoPullAt=Date.now(); saverFetch(); } }
+setTimeout(photoPull,15e3);
 setInterval(photoPull,60e3);
 let saverT=null, saverI=0;
 async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=await c.match('list'); return r?await r.json():[]; }catch(e){ return []; } }
@@ -5959,7 +5961,7 @@ function openAlbum(){ gisLoad().catch(()=>{}); modal((m,close)=>{ m.classList.ad
       <div class="aldrop" id="drop"><b>＋ Add photos</b><small>${isPhone()?'Take one, or choose several from your phone':'Drag photos here, or tap to choose'}</small></div>
       <div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><button class="cancel" id="gp">🖼️ Pick from Google Photos</button><button class="cancel" id="sync">🔄 Get the latest</button>${!isPhone()?'<button class="cancel" id="try">🌙 Show the photo frame</button>':''}</div>
       <input type="file" id="alC" accept="image/*" capture="environment" hidden><input type="file" id="alP" accept="image/*" multiple hidden>
-      <p class="note" id="alS">${urls.length?urls.length+' photos on this screen. Everyone’s photos are kept in “Family Screen photos” in Google Drive.':'No photos yet. Add some from your phone and they appear here and on the fridge at night.'}</p>
+      <p class="note" id="alS">${urls.length?urls.length+' photos on this screen. Everyone’s photos are kept in “Family Screen photos” in Google Drive.':'No photos yet. Add some from your phone and they appear here and in the fridge’s photo frame.'}</p>
       <div class="algrid">${urls.map((u,i)=>`<img src="${u}" alt="" loading="lazy" data-pi="${i}">`).join('')}</div>${urls.length?'<p class="note">Tap a photo to see it big or delete it.</p>':''}`;
     m.querySelectorAll('[data-pi]').forEach(im=>im.onclick=()=>photoView(+im.dataset.pi));
     const st=t=>{ const e=m.querySelector('#alS'); if(e) e.textContent=t; }, go=async fs=>{ await albumAdd(fs,st); draw(); };
@@ -5970,7 +5972,7 @@ function openAlbum(){ gisLoad().catch(()=>{}); modal((m,close)=>{ m.classList.ad
     dz.ondrop=e=>{ e.preventDefault(); dz.classList.remove('on'); go([...(e.dataTransfer.files||[])]); };
     m.querySelector('#x').onclick=()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); close(); };
     m.querySelector('#sync').onclick=async()=>{ st('Getting the latest photos…'); await saverFetch(true); draw(); };
-    if((+S.photoRev||0)>(+lsGet('fs.photosAt',0)||0)&&!m.dataset.pulled){ m.dataset.pulled='1'; st('Getting the latest photos…'); saverFetch().then(()=>{ if(m.isConnected) draw(); }); }
+    if(((+S.photoRev||0)>(+lsGet('fs.photosAt',0)||0)||(!urls.length&&(S.photoFolder||S.photoRev)))&&!m.dataset.pulled){ m.dataset.pulled='1'; st('Getting the latest photos…'); saverFetch().then(()=>{ if(m.isConnected) draw(); }); }
     m.querySelector('#gp').onclick=async e=>{ const b=e.currentTarget; b.disabled=true; st('Signing in to Google Photos…');
       let p; try{ p=await pickStart(); }catch(err){ b.disabled=false; st(err.message==='closed'?'Cancelled.':'Couldn’t open Google Photos: '+err.message); return; }
       b.disabled=false; b.textContent='📲 Open Google Photos and tick your photos'; st('Tap the button, tick the photos you want (search a name to find faces), then tap Done. Come back here and they’ll arrive.');
@@ -7195,7 +7197,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwp6ugz9';
+const FS_VERSION='fs-mwpb1s1t';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

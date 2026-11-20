@@ -2,7 +2,7 @@
 const VERSION = '__VERSION__';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'earth-day.jpg', 'earth-night.jpg'].concat(__LIBS__);
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION && !/^fs-(photos|keep)/.test(x)).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const req = e.request;
   // 2.4 Android's Share menu → Family Screen: keep what was shared (text, link, up to 3 files) and open the app to sort it

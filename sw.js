@@ -1,8 +1,8 @@
 // Keeps the Family Screen app itself working with no internet. Family data is cached by Firebase separately.
-const VERSION = 'fs-mwp6ugz9';
+const VERSION = 'fs-mwpb1s1t';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'earth-day.jpg', 'earth-night.jpg'].concat(["lib/globe-8f2384e0ca.js","lib/cards-23fbe90e1e.js"]);
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION && !/^fs-(photos|keep)/.test(x)).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const req = e.request;
   // 2.4 Android's Share menu → Family Screen: keep what was shared (text, link, up to 3 files) and open the app to sort it
