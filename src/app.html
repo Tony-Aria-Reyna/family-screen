@@ -214,7 +214,12 @@ body.limited #simple #sMsg,body.limited #simple .sshop{display:none}
 .stk{display:flex;flex-wrap:wrap;gap:6px}
 .srv{display:flex;flex-direction:column;gap:6px}.srow{display:flex;gap:8px;align-items:center}.srow.off{opacity:.45}.srow.off .sn{text-decoration:line-through}
 .srow .sbx{width:44px;height:44px;flex:none;border-radius:12px;border:3px solid #10b981;background:#ecfdf5;color:#047857;font-size:22px;font-weight:900}.srow.off .sbx{border-color:#d1d5db;background:#fff}
-.srow .sn{flex:2;min-width:0;padding:9px 12px;font-size:18px}.srow .sq{flex:1;min-width:0;max-width:150px;padding:9px 12px;font-size:17px}
+.srow{flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}.srow .sn{flex:1 1 60%;min-width:0;padding:9px 12px;font-size:18px}
+.srow .sq{width:90px;flex:none;padding:9px 10px;font-size:18px;text-align:center}.srow .su{width:100px;flex:none;padding:9px 8px;font-size:17px}
+@media (max-width:600px){ .srow .sn{flex-basis:calc(100% - 110px)} .srow .sq{margin-left:52px} }
+@media (max-width:600px){ div.addany .aarow{flex-wrap:wrap} div.addany input.aain{flex:1 1 100%} div.addany .aago{flex:1} }
+.addany .aamic{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.addany .aamic.on{transform:scale(1.15);background:#fecaca}
+.modal.pchoose{width:min(420px,100%)}.opt.big{font-size:20px;padding:16px}
 .srow .swh{width:46px;height:44px;flex:none;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:22px}
 .stki{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;font:inherit;font-size:16px;color:var(--ink)}
 .stki small{color:var(--muted);font-size:13px}.stki small.old{color:#b45309;font-weight:700}

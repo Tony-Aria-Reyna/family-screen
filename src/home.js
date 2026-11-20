@@ -1262,7 +1262,7 @@ function openInbox(){
 const appLang=()=>lsGet('fs.lang','')==='ja'?'ja':'en';
 const JA={};
 function tr(s){ return appLang()==='ja'&&JA[s]!=null?JA[s]:s; }
-Object.assign(JA,{'＋ Add anything: milk, dentist Tue 3pm…':'＋ なんでも追加：牛乳、火曜3時 歯医者…','Add anything':'なんでも追加','Say it':'声で入力','Photo of a list':'メモの写真','From my photos':'写真から選ぶ','Add':'追加','Undo':'元に戻す',
+Object.assign(JA,{'＋ Add anything: milk, dentist Tue 3pm…':'＋ なんでも追加：牛乳、火曜3時 歯医者…','Add anything':'なんでも追加','Say it':'押しながら話す','Photo of a list':'メモの写真','From my photos':'写真から選ぶ','Add':'追加','Undo':'元に戻す',
   'Taken off again':'取り消しました','Reading the photo…':'写真を読んでいます…','Sorting it…':'仕分けています…','Nothing to add was found.':'追加するものが見つかりませんでした。',
   'I didn’t catch that. Try again or type it.':'聞き取れませんでした。もう一度話すか、入力してください。','Voice isn’t available here. Type it instead.':'ここでは音声入力が使えません。入力してください。',
   'Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.':'写真を読むにはAIの設定が必要です：⚙️ 設定 → 接続 → ✨ AI','That photo couldn’t be read.':'その写真は読めませんでした。',
@@ -1279,7 +1279,7 @@ function aaPerson(name){ const k=String(name||'').trim().toLowerCase(); if(!k) r
   return S.people.find(p=>p.id!=='all'&&[p.name,p.nick,p.role].concat(String(p.aka||'').split(',')).some(x=>String(x||'').trim().toLowerCase()===k))||null; }
 function addAnyHTML(id,big){
   return `<div class="addany${big?' big':''}" id="${id}"><div class="aarow"><input type="text" class="aain" placeholder="${esc(tr('＋ Add anything: milk, dentist Tue 3pm…'))}" enterkeyhint="done" autocomplete="off" aria-label="${esc(tr('Add anything'))}">
-    ${AA_SR?`<button class="aaic aamic" aria-label="${esc(tr('Say it'))}">🎤</button>`:''}<button class="aaic aacam" aria-label="${esc(tr('Photo of a list'))}">📷</button><button class="aaic aagal" aria-label="${esc(tr('From my photos'))}">🖼️</button><button class="save aago">${esc(tr('Add'))}</button></div>
+    ${AA_SR?`<button class="aaic aamic" aria-label="${esc(tr('Say it'))}">🎤</button>`:''}<button class="aaic aacam" aria-label="${esc(tr('Photo of a list'))}">📷</button><button class="save aago">${esc(tr('Add'))}</button></div>
     <input type="file" accept="image/*" class="aafile" hidden><input type="file" accept="image/*" capture="environment" class="aafilec" hidden><div class="aares"></div></div>`; }
 function wireAddAny(box,after){
   if(!box) return; const inp=box.querySelector('.aain'), go=box.querySelector('.aago'), res=box.querySelector('.aares'), file=box.querySelector('.aafile');
@@ -1295,12 +1295,9 @@ function wireAddAny(box,after){
     busy=false; go.disabled=false; go.textContent=tr('Add'); };
   go.onclick=()=>run(inp.value);
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); run(inp.value); } };
-  const mic=box.querySelector('.aamic'); if(mic) mic.onclick=()=>{ try{ const r=new AA_SR(); r.lang=appLang()==='ja'?'ja-JP':'en-NZ'; r.interimResults=true; mic.classList.add('on');
-      r.onresult=ev=>{ const t=[...ev.results].map(x=>x[0].transcript).join(' '); inp.value=t; if(ev.results[ev.results.length-1].isFinal){ try{ r.stop(); }catch(x){} run(t); } };
-      r.onerror=()=>{ mic.classList.remove('on'); show([],tr('I didn’t catch that. Try again or type it.')); }; r.onend=()=>mic.classList.remove('on'); r.start(); }catch(e){ show([],tr('Voice isn’t available here. Type it instead.')); } };
+  holdMic(box.querySelector('.aamic'),inp);
   const filec=box.querySelector('.aafilec'), needAI=()=>{ if(!aiOK()){ show([],tr('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.')); return true; } return false; };
-  box.querySelector('.aacam').onclick=()=>{ if(!needAI()) filec.click(); };
-  box.querySelector('.aagal').onclick=()=>{ if(!needAI()) file.click(); };
+  box.querySelector('.aacam').onclick=()=>{ if(!needAI()) photoChoice(filec,file); };
   file.onchange=filec.onchange=async e=>{ const inp=e.target, f=inp.files&&inp.files[0]; inp.value=''; if(!f) return; let data; try{ data=await fileForAI(f); }catch(x){ show([],tr('That photo couldn’t be read.')); return; } run(box.querySelector('.aain').value,data); };
 }
 function openAddAny(){ modal((m,close)=>{ m.innerHTML=`<div class="tvhead"><h2>${esc(tr('＋ Add anything'))}</h2><button class="cancel" id="x">${esc(tr('Close'))}</button></div>${addAnyHTML('mAdd',true)}
@@ -1554,7 +1551,7 @@ function buyAdd(names){ let n=0; for(const raw of names||[]){ const name=String(
 async function stockRead(files,text,where){
   if(!aiOK()){ if(files&&files.length) throw new Error('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.'); return String(text||'').split(/\n|,|;|、/).map(x=>({name:x.trim(),where})).filter(x=>x.name); }
   const j=await aiAsk({json:true,files,file:files&&files[0],prompt:`List the food a New Zealand family has, from ${files&&files.length?'the attached photo(s) of their freezer, fridge, pantry or a handwritten list':'this typed list'}${text?': """'+String(text).slice(0,4000)+'"""':''}.
-Return JSON only: {"items":[{"name":"short everyday name, e.g. chicken thighs","qty":"rough amount if you can tell, e.g. 2 packs, 500 g, or empty","where":"freezer|fridge|pantry"}]}
+Return JSON only: {"items":[{"name":"short everyday name, e.g. chicken thighs","qty":"number then unit, e.g. 2 pack, 500 g, 1.5 kg, 6 each; empty if not said","where":"freezer|fridge|pantry"}]}
 Only what you can actually see or read; no guesses about what is hidden. ${where?'Unless it is obvious otherwise, these are in the '+where+'.':''} Skip condiments and drinks unless they matter for cooking dinner.`});
   return (j.items||[]).filter(x=>x&&x.name);
 }
@@ -1621,24 +1618,45 @@ function showCook(out){ const rs=out.recipes; let seenSaved=false;
     m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{ const r=rs[+b.dataset.no]; foodNote('no',r.name); rs.splice(+b.dataset.no,1); toast('Noted. Ideas like '+r.name+' won’t come up again.'); if(!rs.length){ close(); return; } draw(); });
   }; draw(); });
 }
+/* one 📷 button: asks camera or photos */
+function photoChoice(cam,gal){ modal((m,close)=>{ m.classList.add('pchoose');
+  m.innerHTML=`<h2>📷 Add a photo</h2><div class="opts" style="flex-direction:column;align-items:stretch;gap:10px"><button class="opt big" id="pc1">📷 Take a photo</button><button class="opt big" id="pc2">🖼️ Choose from my photos</button></div><div class="mact"><button class="cancel" id="pc0">Cancel</button></div>`;
+  m.querySelector('#pc1').onclick=()=>{ close(); cam.click(); }; m.querySelector('#pc2').onclick=()=>{ close(); gal.click(); }; m.querySelector('#pc0').onclick=close; }); }
+/* 🎤 hold to talk: listens while held, writes what it heard into the box on release (nothing is sent anywhere until the
+   person taps the box's button). A quick tap shows how to use it. */
+function holdMic(btn,inp,lang){
+  if(!btn||!AA_SR) return; let r=null, base='', t0=0;
+  const stop=()=>{ if(!r) return; try{ r.stop(); }catch(x){} };
+  btn.onpointerdown=e=>{ e.preventDefault(); t0=Date.now(); base=inp.value.trim()?inp.value.trim()+', ':''; try{ r=new AA_SR(); r.lang=lang||(appLang()==='ja'?'ja-JP':'en-NZ'); r.interimResults=true; r.continuous=true;
+      r.onresult=ev=>{ inp.value=base+[...ev.results].map(x=>x[0].transcript).join(' '); };
+      r.onend=()=>{ btn.classList.remove('on'); r=null; inp.focus(); }; r.onerror=()=>{ btn.classList.remove('on'); r=null; };
+      r.start(); btn.classList.add('on'); try{ navigator.vibrate&&navigator.vibrate(20); }catch(x){} }catch(x){ toast('Voice isn’t available here. Type it instead.'); } };
+  btn.onpointerup=btn.onpointerleave=btn.onpointercancel=()=>{ if(!r) return; if(Date.now()-t0<400){ stop(); toast('Hold 🎤 down while you talk, then let go'); return; } stop(); };
+  btn.oncontextmenu=e=>e.preventDefault(); btn.onclick=e=>e.preventDefault();
+}
+const SUNITS=['','g','kg','ml','L','each','pack','bag','tray','tin','jar','bottle','box','loaf','bunch','dozen'];
+function splitQty(q){ const m=String(q||'').trim().match(/^([\d.,\/½¼¾]+)\s*(.*)$/); if(!m) return {n:'',u:String(q||'').trim()};
+  let u=m[2].trim().toLowerCase().replace(/^(grams?|gm)$/,'g').replace(/^(kilos?|kgs?|kilograms?)$/,'kg').replace(/^(litres?|liters?|l)$/,'L').replace(/^(mls?|millilitres?)$/,'ml').replace(/^(packs?|packets?)$/,'pack').replace(/^bags$/,'bag').replace(/^trays$/,'tray').replace(/^(tins?|cans?)$/,'tin').replace(/^jars$/,'jar').replace(/^bottles$/,'bottle').replace(/^boxes$/,'box').replace(/^loaves$/,'loaf').replace(/^bunches$/,'bunch').replace(/^(x|pieces?|items?)$/,'each');
+  return {n:m[1],u}; }
 /* Check what the AI heard before it goes on the list: tick or cross each, fix the name or amount, move it between
    freezer, fridge and pantry, then add them all at once. */
 function stockReview(items,where,back){
-  const rows=items.map(x=>({name:String(x.name||'').trim(),qty:String(x.qty||''),where:STOCK_PLACES.some(p=>p[0]===x.where)?x.where:(where||'fridge'),on:true})).filter(x=>x.name);
+  const rows=items.map(x=>Object.assign(splitQty(x.qty),{name:String(x.name||'').trim(),where:STOCK_PLACES.some(p=>p[0]===x.where)?x.where:(where||'fridge'),on:true})).filter(x=>x.name);
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const n=rows.filter(r=>r.on).length;
     m.innerHTML=`<div class="tvhead"><h2>✅ Check the list</h2><button class="cancel" id="bk">‹ Back</button></div>
-      <p class="note">Untick anything that's wrong, fix a name or amount, tap 🧊/🥬/🥫 to move it.</p>
+      <p class="note">Go down the list: untick anything wrong, fix the name, how many and the unit, and tap 🧊/🥬/🥫 to move it.</p>
       <div class="srv">${rows.map((r,i)=>`<div class="srow ${r.on?'':'off'}"><button class="sbx" data-t="${i}">${r.on?'✓':''}</button>
-        <input class="txt sn" data-n="${i}" value="${esc(r.name)}"><input class="txt sq" data-q="${i}" value="${esc(r.qty)}" placeholder="amount">
+        <input class="txt sn" data-n="${i}" value="${esc(r.name)}"><input class="txt sq" data-q="${i}" value="${esc(r.n)}" inputmode="decimal" placeholder="how many"><select class="txt su" data-u="${i}">${(SUNITS.includes(r.u)?SUNITS:SUNITS.concat([r.u])).map(u=>`<option value="${esc(u)}" ${u===r.u?'selected':''}>${u?esc(u):'—'}</option>`).join('')}</select>
         <button class="swh" data-w="${i}" title="${esc(STOCK_PLACES.find(p=>p[0]===r.where)[2])}">${STOCK_PLACES.find(p=>p[0]===r.where)[1]}</button></div>`).join('')}</div>
       <div class="mact"><button class="cancel" id="none">${n?'Untick all':'Tick all'}</button><button class="save" id="ok" ${n?'':'disabled'}>Add ${n} to the list</button></div>`;
     m.querySelector('#bk').onclick=()=>{ close(); if(back) back(); };
     m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ rows[+b.dataset.t].on=!rows[+b.dataset.t].on; draw(); });
     m.querySelectorAll('[data-n]').forEach(x=>x.oninput=()=>rows[+x.dataset.n].name=x.value);
-    m.querySelectorAll('[data-q]').forEach(x=>x.oninput=()=>rows[+x.dataset.q].qty=x.value);
+    m.querySelectorAll('[data-q]').forEach(x=>x.oninput=()=>rows[+x.dataset.q].n=x.value);
+    m.querySelectorAll('[data-u]').forEach(x=>x.onchange=()=>rows[+x.dataset.u].u=x.value);
     m.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ const r=rows[+b.dataset.w], k=STOCK_PLACES.findIndex(p=>p[0]===r.where); r.where=STOCK_PLACES[(k+1)%3][0]; draw(); });
     m.querySelector('#none').onclick=()=>{ const on=!rows.some(r=>r.on); rows.forEach(r=>r.on=on); draw(); };
-    m.querySelector('#ok').onclick=()=>{ const n=stockAdd(rows.filter(r=>r.on&&r.name.trim())); close(); toast(n+' thing'+(n===1?'':'s')+' added to Kitchen stock'); if(back) back(); };
+    m.querySelector('#ok').onclick=()=>{ const n=stockAdd(rows.filter(r=>r.on&&r.name.trim()).map(r=>({name:r.name,where:r.where,qty:[r.n,r.u].filter(Boolean).join(' ')}))); close(); toast(n+' thing'+(n===1?'':'s')+' added to Kitchen stock'); if(back) back(); };
   }; draw(); });
 }
 function openStock(w0){ stockSettle(); let where=w0||'freezer';
@@ -1648,8 +1666,8 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
       <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="din" style="border-radius:14px;padding:12px 16px;font-weight:800">🍽️ What's for dinner?</button><button class="xbtn" id="cook">📸 From photos of the fridge</button></div>
       <div class="step">Add what's in the house</div>
       <div class="opts">${STOCK_PLACES.map(p=>`<button class="opt sm ${where===p[0]?'on':''}" data-w="${p[0]}">${p[1]} ${p[2]}</button>`).join('')}</div>
-      <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off">${AA_SR?'<button class="aaic aamic" id="smic" aria-label="Say it">🎤</button>':''}<button class="aaic" id="scam" aria-label="Take a photo">📷</button><button class="aaic" id="sgal" aria-label="From my photos">🖼️</button><button class="save aago" id="sgo">Add</button></div><input type="file" id="sf" accept="image/*" multiple hidden><input type="file" id="sfc" accept="image/*" capture="environment" hidden></div>
-      <p class="note">🎤 Say everything in one go, type a list, 📷 take a photo of a shelf or a handwritten list, or 🖼️ choose one you've taken. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
+      <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off">${AA_SR?'<button class="aaic aamic" id="smic" aria-label="Hold to talk">🎤</button>':''}<button class="aaic" id="scam" aria-label="Photo">📷</button><button class="save aago" id="sgo">✨ List it</button></div><input type="file" id="sf" accept="image/*" multiple hidden><input type="file" id="sfc" accept="image/*" capture="environment" hidden></div>
+      <p class="note">Hold 🎤 and say everything, let go, then tap ✨ List it. Or type a list, or 📷 a shelf or a handwritten list. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
       ${STOCK_PLACES.map(p=>{ const l=now.filter(x=>x.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return l.length?`<div class="step">${p[1]} ${p[2]} <span style="font-weight:500">(${l.length})</span></div><div class="stk">${l.map(x=>`<span class="stki">${esc(x.name)}${x.qty?` <small>${esc(x.qty)}</small>`:''}${stockAge(x)?` <small class="old">${stockAge(x)}</small>`:''}<button data-used="${x.id}" aria-label="Used">✕</button></span>`).join('')}</div>`:''; }).join('')}
       ${now.length?'':'<p class="note"><b>Nothing listed yet.</b> Start with the deep freezer.</p>'}
       ${used.length?`<div class="step">Used lately <span style="font-weight:500">(tap to put back)</span></div><div class="stk">${used.map(x=>`<button class="stki gone" data-back="${x.id}">${esc(x.name)}</button>`).join('')}</div>`:''}
@@ -1669,12 +1687,9 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
         inp.value=''; close(); stockReview(items,where,()=>openStock(where)); return; }
       catch(e){ done(); if(e.message!=='quiet') toast(e.message); }
       busy=false; if(m.isConnected) draw(); };
-    const mic=m.querySelector('#smic'); if(mic) mic.onclick=()=>{ try{ const r=new AA_SR(); r.lang='en-NZ'; r.interimResults=true; r.continuous=true; mic.classList.add('on'); const inp=m.querySelector('#sin'); let base=inp.value?inp.value+', ':'';
-        r.onresult=ev=>{ inp.value=base+[...ev.results].map(x=>x[0].transcript).join(' '); };
-        r.onerror=()=>mic.classList.remove('on'); r.onend=()=>{ mic.classList.remove('on'); if(inp.value.trim()) add(); };
-        mic.onclick=()=>{ try{ r.stop(); }catch(x){} }; r.start(); toast('Listening… say everything, then tap 🎤 again'); }catch(e){ toast('Voice isn’t available here. Type it instead.'); } };
+    holdMic(m.querySelector('#smic'),m.querySelector('#sin'),'en-NZ');
     m.querySelector('#sgo').onclick=()=>add(); m.querySelector('#sin').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } };
-    const sf=m.querySelector('#sf'), sfc=m.querySelector('#sfc'); m.querySelector('#scam').onclick=()=>sfc.click(); m.querySelector('#sgal').onclick=()=>sf.click();
+    const sf=m.querySelector('#sf'), sfc=m.querySelector('#sfc'); m.querySelector('#scam').onclick=()=>photoChoice(sfc,sf);
     sf.onchange=sfc.onchange=async e=>{ const inp=e.target, fs=[]; for(const f of [...inp.files].slice(0,4)){ try{ fs.push(await fileForAI(f)); }catch(x){} } inp.value=''; if(fs.length) add(fs); };
     m.querySelectorAll('[data-used]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.used); if(x){ x.used=Date.now(); save(); draw(); } });
     m.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.back); if(x){ delete x.used; save(); draw(); } });
