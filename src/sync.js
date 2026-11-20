@@ -139,12 +139,14 @@ export const linkAccounts = (emails, on) => updateDoc(doc(db, 'households', hid)
    delete only the ones I made. */
 let linkIds = [], guestIds = [], onlyGuest = false; const guests = {};
 const gId = (g, id) => 'g~' + g + '~' + id, isG = id => typeof id === 'string' && id.indexOf('g~') === 0, gOf = id => id.split('~')[1], rawOf = id => id.split('~').slice(2).join('~');
+const hiddenG = () => { try { return JSON.parse(localStorage.getItem('fs.hiddenG') || '[]'); } catch (e) { return []; } };
+export const setHiddenG = l => { try { localStorage.setItem('fs.hiddenG', JSON.stringify(l)); } catch (e) {} };
 const gLabel = G => { const o = (G.people || []).find(p => p.email && p.email === G.owner); return o ? o.name + '’s family' : 'Other family'; };
 export function guestPeople() {
   const out = [];
   for (const g of guestIds) { const G = guests[g]; if (!G || !G.people) continue;
     for (const p of G.people) { if (p.email && S && S.people.some(q => q.email === p.email)) continue;
-      out.push({ id: gId(g, p.id), name: p.id === 'all' ? gLabel(G) : p.name, color: p.color, show: true, guest: g, traveller: !!p.traveller, email: p.email || '', family: gLabel(G) }); } }
+      out.push({ id: gId(g, p.id), name: p.id === 'all' ? gLabel(G) : p.name, color: p.color, show: !hiddenG().includes(gId(g, p.id)), guest: g, traveller: !!p.traveller, email: p.email || '', family: gLabel(G) }); } }
   return out;
 }
 export const guestPerson = id => isG(id) ? guestPeople().find(p => p.id === id) : undefined;
@@ -156,8 +158,10 @@ function whoOut(g, id) {
 }
 function mergeGuest(c) {
   if (!S) return; let all = [];
+  // anything in their calendar that is a copy of one of ours (same id) is ours already: shown once
+  const ownIds = new Set(S[c].filter(x => !x.g).map(x => x.id));
   for (const g of guestIds) { const G = guests[g]; if (!G || !G.people || !G[c]) continue;
-    all = all.concat(G[c].map(x => { const o = Object.assign({}, x, { id: gId(g, x.id), g });
+    all = all.concat(G[c].filter(x => !ownIds.has(x.id)).map(x => { const o = Object.assign({}, x, { id: gId(g, x.id), g });
       if (c === 'events') { o.whos = (x.whos || []).map(w => whoIn(g, w)); delete o.todoId; } else o.who = whoIn(g, x.who);
       return o; })); }
   mergeArray(S[c], S[c].filter(x => !x.g).concat(all));
@@ -208,8 +212,13 @@ export const addMember = email => updateDoc(doc(db, 'households', hid), { member
 export const addCalMember = email => updateDoc(doc(db, 'households', hid), { members: arrayUnion(email.trim().toLowerCase()), limited: arrayUnion(email.trim().toLowerCase()) });
 export const removeMember = email => updateDoc(doc(db, 'households', hid), { members: arrayRemove(email), limited: arrayRemove(email) });
 
+let lastHid = null;
 export function start(householdId, state, changed) {
-  stop(); hid = householdId; S = state; onChange = changed;
+  stop(); S = state; onChange = changed;
+  // a different household on this phone (Masako moving to her own): forget what was on screen, or it would be saved
+  // into the new household as copies
+  if (lastHid && lastHid !== householdId) COLS.concat(SOFT).forEach(c => { if (Array.isArray(S[c])) S[c].length = 0; });
+  hid = lastHid = householdId;
   denied.clear(); rulesOld = false;
   synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
   privOk = true; subbed = false;
@@ -228,7 +237,7 @@ export function start(householdId, state, changed) {
 // the lists are opened once the family's record has said what this account may see
 function subCols() {
   const lim = isLimited();
-  if (!lim) { SOFT.forEach(listenSoft); if (me()) watchKey(); guestIds.forEach(listenGuest); }
+  if (!lim) { SOFT.forEach(listenSoft); if (me()) watchKey(); guestIds = guestIds.filter(g => g !== hid); guestIds.forEach(listenGuest); }
   for (const c of COLS) {
     if (lim && !LIM_COLS.includes(c) && !LIM_OWN.includes(c)) { S[c] = S[c] || []; continue; }
     S[c] = S[c] || [];

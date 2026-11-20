@@ -1138,13 +1138,14 @@ function renderClock(){
 
 /* ================= people bar + calendar navigation ================= */
 // Whose entries this device shows. Remembered per device (never synced), so hiding someone here doesn't hide them anywhere else.
-const hiddenPeople=()=>S.people.filter(p=>!p.show);
-function showEveryone(){ S.people.forEach(p=>p.show=true); savePrefs(); renderAll(); toast('Showing everyone'); }
-function toggleShow(id){ const p=person(id); if(!p) return; p.show=!p.show; if(!S.people.some(x=>x.show)){ p.show=true; toast('Keep at least one person showing'); return; } savePrefs(); renderAll(); }
+const hiddenPeople=()=>S.people.concat(guestPeople()).filter(p=>!p.show);
+function showEveryone(){ S.people.forEach(p=>p.show=true); if(!LOCAL&&SYNC.setHiddenG) SYNC.setHiddenG([]); savePrefs(); renderAll(); toast('Showing everyone'); }
+function toggleShow(id){ const p=person(id); if(!p) return;
+  if(p.guest){ const h=hiddenPeople().filter(x=>x.guest).map(x=>x.id); SYNC.setHiddenG(h.includes(id)?h.filter(x=>x!==id):h.concat([id])); renderAll(); return; } p.show=!p.show; if(!S.people.some(x=>x.show)){ p.show=true; toast('Keep at least one person showing'); return; } savePrefs(); renderAll(); }
 function openWhoFilter(){
   modal((m,close)=>{ const draw=()=>{
     m.innerHTML=`<h2>👥 Whose calendar to show</h2><p class="note">Just for this device. Hiding someone here doesn't hide them anywhere else.</p>
-      <div class="opts" style="flex-direction:column;align-items:stretch">${S.people.map(p=>`<button class="opt ${p.show?'on':''}" data-who="${p.id}"><span class="tick">${p.show?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')}</div>
+      <div class="opts" style="flex-direction:column;align-items:stretch">${S.people.concat(guestPeople()).map(p=>`<button class="opt ${p.show?'on':''}" data-who="${p.id}"><span class="tick">${p.show?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')}</div>
       <div class="mact">${hiddenPeople().length?'<button class="cancel" id="all">Show everyone</button>':''}<button class="save" id="ok">Done</button></div>`;
     m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ toggleShow(b.dataset.who); draw(); });
     const a=m.querySelector('#all'); if(a) a.onclick=()=>{ showEveryone(); draw(); };
@@ -1153,7 +1154,7 @@ function openWhoFilter(){
 }
 const filterNote=()=>{ const h=hiddenPeople(); return h.length?`<div class="fnote">👁️ Hiding ${esc(h.map(p=>p.name).join(', '))}<button data-showall>Show everyone</button></div>`:''; };
 function renderBar(){
-  $('#bar').innerHTML=S.people.map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')+(hiddenPeople().length?'<button class="chip showall" data-showall>👁️ Show everyone</button>':'');
+  $('#bar').innerHTML=S.people.concat(guestPeople()).map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')+(hiddenPeople().length?'<button class="chip showall" data-showall>👁️ Show everyone</button>':'');
   $('#bar').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>toggleShow(b.dataset.p));
   $('#bar').querySelectorAll('[data-showall]').forEach(b=>b.onclick=showEveryone);
   renderCalHead();
@@ -2864,7 +2865,7 @@ function openSettings(at){
     ${LOCAL?'':`<div class="shd" id="s-health">🩺 Health</div><div id="hcard">${healthHTML()}</div>`}
     <div class="shd" id="s-family">👪 Family</div>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
-      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`${SYNC.getLimited().includes(e)&&CONFIG&&CONFIG.admin?`<button class="xbtn" data-mown="${esc(e)}">🏠 Own household</button>`:''}<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
+      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`${e!==SYNC.getOwner()&&CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<button class="xbtn" data-mown="${esc(e)}">🏠 Own household</button>`:''}<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button>${SYNC.me()===SYNC.getOwner()?'<button class="xbtn" id="mAddCal">＋ Add, 📅 calendar only</button>':''}</div>
       <p class="note"><b>📅 Calendar only</b> accounts don’t need to confirm their email address when they sign in with email and password. It lets someone see and add calendar entries (and Reyna’s roster) and get reminders, and gives them their own separate jobs, shopping list and meal plan that nobody else sees. They don’t see the family’s jobs, shopping, meals, bills, messages, documents or Settings. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
       ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
@@ -2946,7 +2947,7 @@ function openSettings(at){
     if(!LOCAL){
       const mac=m.querySelector('#mAddCal'); if(mac) mac.onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addCalMember(v); toast('Added '+v+' (calendar only, no email confirmation needed)'); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
-      m.querySelectorAll('[data-mown]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.addInvite(b.dataset.mown); toast('Done. On their phone they reopen Family Screen and tap “Set up our family”. Both calendars stay linked.'); }catch(x){ toast('Could not invite that account'); } });
+      m.querySelectorAll('[data-mown]').forEach(b=>b.onclick=async()=>{ try{ if(!SYNC.getLimited().includes(b.dataset.mown)) await SYNC.setLimited(b.dataset.mown,true); await SYNC.addInvite(b.dataset.mown); toast('Done. On their phone they reopen Family Screen and tap “Set up our family”. Both calendars stay linked.'); }catch(x){ toast('Could not invite that account'); } });
       m.querySelectorAll('[data-mlim]').forEach(b=>b.onclick=async()=>{ const e=b.dataset.mlim, on=!SYNC.getLimited().includes(e); try{ await SYNC.setLimited(e,on); toast(on?e+' now sees the calendar only':e+' now sees everything'); setTimeout(draw,300); }catch(x){ toast('Only the person who set up the family can change that'); } });
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
       m.querySelector('#signOut').onclick=async()=>{ close(); await SYNC.signOut(); };
@@ -2984,6 +2985,11 @@ const agoTxt=t=>{ const m=Math.round((Date.now()-t)/60e3); return m<2?'just now'
 // the next Pacific-time midnight, when the free reads start again
 function readsReset(){ const now=new Date(), p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hourCycle:'h23',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(now).reduce((o,x)=>(o[x.type]=x.value,o),{});
   return new Date(now.getTime()-((+p.hour%24)*3600+(+p.minute)*60+(+p.second))*1000-now.getMilliseconds()+864e5); }
+// the same entry or flight saved twice (same title, day, time and people; or same flight): the extra copies
+function dupOf(){ const seen=new Map(), extra=[];
+  const k=x=>x.from?['f',x.who,x.from,x.to,x.start].join('|'):['e',String(x.title||'').trim().toLowerCase(),x.date,x.time||'',(x.whos||[]).slice().sort().join(','),x.rpt?JSON.stringify(x.rpt):''].join('|');
+  for(const c of ['events','flights']) for(const x of S[c]){ if(x.g||x.priv) continue; const key=k(x); if(seen.has(key)) extra.push([c,x.id]); else seen.set(key,1); }
+  return extra; }
 function healthItems(){
   const out=[], nt=SYNC.getNotifier&&SYNC.getNotifier(), hl=healthLive||(nt&&nt.health)||{}, latestV=NOTIFIER?+((NOTIFIER.code.match(/HELPER_VERSION = (\d+)/)||[])[1]||0):0;
   const n=x=>Number(x||0).toLocaleString('en-NZ');
@@ -3004,6 +3010,7 @@ function healthItems(){
   if((hl.dropped||[]).length) out.push({bad:1,t:'Stopped getting alerts: '+hl.dropped.join(', '),d:'Opening Family Screen on that phone turns them back on.'});
   if(S.billsHelper&&S.billsHelper.error) out.push({bad:1,t:'Bills by email had a problem',d:String(S.billsHelper.error).slice(0,160),fix:'mail',fl:'Email addresses'});
   if(S.inboxHelper&&S.inboxHelper.error) out.push({bad:1,t:'The family inbox had a problem',d:String(S.inboxHelper.error).slice(0,160),fix:'mail',fl:'Email addresses'});
+  { const d=dupOf(); if(d.length) out.push({bad:1,t:d.length+' calendar entr'+(d.length===1?'y is':'ies are')+' in twice',d:'The extra copies can be removed; one of each stays.',fix:'dups',fl:'Remove the copies'}); }
   if(SYNC.privateOk&&!SYNC.privateOk()) out.push({bad:1,t:'Private entries can’t be read on this device',d:'Sign out and back in on this device.'});
   return out;
 }
@@ -3015,6 +3022,7 @@ function wireHealth(m,draw,close){
   m.querySelectorAll('[data-hfix]').forEach(b=>b.onclick=async()=>{ const k=b.dataset.hfix;
     if(k==='alerts'){ b.disabled=true; b.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome();
       setTimeout(()=>{ const hc=m.isConnected&&m.querySelector('#hcard'); if(hc){ hc.innerHTML=healthHTML(); wireHealth(m,draw,close); } },900); }
+    else if(k==='dups'){ const d=dupOf(); d.forEach(([c,id])=>{ S[c]=S[c].filter(x=>x.id!==id); }); save(); renderAll(); toast(d.length+' copies removed'); const hc=m.querySelector('#hcard'); if(hc){ hc.innerHTML=healthHTML(); wireHealth(m,draw,close); } }
     else if(k==='install'){ close(); showInstall(); }
     else if(k==='helpers'){ close(); openHelpers(); }
     else if(k==='sync'){ close(); openSync(); }

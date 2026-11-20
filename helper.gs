@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 28;
+const HELPER_VERSION = 29;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -34,7 +34,9 @@ function tick() {
   let homes;
   try { homes = listDocs('households'); healthGlobal(props, now, ''); }
   catch (e) { healthGlobal(props, now, String(e && e.message || e)); throw e; }
+  const lent = lentDevices(homes);
   for (const h of homes) {
+    const hl = lent[h._id] ? Object.assign({}, h, { devices: Object.assign({}, h.devices || {}, lent[h._id]) }) : h;   // only for calendar reminders
     let err = '', pre = {};
     try {
       // v24: every read this run needs goes out at once (Apps Script otherwise waits about a second for each)
@@ -45,7 +47,7 @@ function tick() {
       if (mailDue(props, 'BILL', h, now)) { try { data.bills = billsTick(h, props, now, true); } catch (e) { Logger.log('Bills: ' + e); } }
       else if (nine) data.bills = pre.bills;
       let inboxNew = []; if (mailDue(props, 'INBOX', h, now)) { try { inboxNew = inboxTick(h, props, now, true); } catch (e) { Logger.log('Inbox: ' + e); } }
-      const msgs = planNotifications(h, data, now, k => !!sent[k]);
+      const msgs = planNotifications(hl, data, now, k => !!sent[k]);
       inboxArrivals(h, inboxNew, msgs);
       try { msgPush(h, pre.msgs); } catch (e) { Logger.log('Messages: ' + e); }
       try { wakePrep(h, props, now); } catch (e) { Logger.log('Wake: ' + e); }
@@ -53,7 +55,7 @@ function tick() {
       try { weekAhead(h, props, now, pre); } catch (e) { Logger.log('Week ahead: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
       try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
-      for (const m of msgs) { send(h, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
+      for (const m of msgs) { send(hl, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
     let health = null; try { health = healthAfterRun(h, props, now, err, pre); } catch (e) { Logger.log('Health: ' + e); }
@@ -388,6 +390,7 @@ function planNotifications(h, all, now, already) {
     const mine = x => !x._owner || (dev.email && x._owner === String(dev.email).toLowerCase());
     data = { events: all.events.filter(mine), todos: all.todos.filter(mine), flights: all.flights, renewals: all.renewals || [], bills: all.bills || [] };
     const lead = (dev.lead || 30) * 60e3;
+    if (dev.lent) data = { events: data.events, todos: [], flights: [], renewals: [], bills: [] };   // a linked household's phone: calendar reminders only
     // 1) reminders before timed entries (today and early tomorrow)
     if (dev.remind !== false) for (const e of data.events) {
       if (!e.time || e.done || !follows(dev, e.whos)) continue;
@@ -670,6 +673,22 @@ function patch(path, fields) {
   const body = { fields: {} }; Object.keys(fields).forEach(k => { if (fields[k] !== undefined) body.fields[k] = enc(fields[k]); });
   UrlFetchApp.fetch(BASE + '/' + path + '?' + mask, { method: 'patch', contentType: 'application/json', payload: JSON.stringify(body), headers: headers(), muteHttpExceptions: true });
 }
+/* linked households: someone listed in a family (by email) who lives in another household with its own phone (Masako)
+   gets that family's reminders for entries made for them. Their phone is lent to the family's run for calendar
+   reminders only: no morning summary, jobs, bills or flight alerts. */
+function lentDevices(homes) {
+  const out = {};
+  for (const h of homes) {
+    const full = (h.members || []).filter(e => (h.limited || []).indexOf(e) < 0);
+    for (const p of h.people || []) { const em = String(p.email || '').toLowerCase(); if (!em || full.indexOf(em) >= 0) continue;
+      for (const o of homes) { if (o._id === h._id) continue;
+        const devs = o.devices || {};
+        for (const hash of Object.keys(devs)) { const d = devs[hash]; if (!d || !d.token || String(d.email || '').toLowerCase() !== em) continue;
+          (out[h._id] = out[h._id] || {})['L-' + o._id + '-' + hash] = { token: d.token, email: em, lang: d.lang || '', label: d.label || '', people: [p.id], lead: d.lead || 30, remind: true, morning: false, jobs: false, flights: false, lent: true };
+        } } }
+  }
+  return out;
+}
 function send(h, hash, title, body, tag) {
   const dev = (h.devices || {})[hash]; if (!dev || !dev.token) return;
   if (dev.lang === 'ja') { const j = jaAlert(h, title, body); title = j[0]; body = j[1]; }
@@ -679,6 +698,7 @@ function send(h, hash, title, body, tag) {
   const code = r.getResponseCode();
   if (code === 404 || (code === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) {
     // that phone uninstalled or turned notifications off: forget it, and remember it for the health check
+    if (dev.lent) return;   // a phone from a linked household: that household's own run looks after it
     try { noteDrop(h._id, dev); } catch (e) {}
     UrlFetchApp.fetch(BASE + '/households/' + h._id + '?updateMask.fieldPaths=' + encodeURIComponent('devices.`' + hash + '`'), { method: 'patch', contentType: 'application/json', payload: JSON.stringify({ fields: {} }), headers: headers(), muteHttpExceptions: true });
   } else if (code !== 200) throw new Error('Sending: ' + code + ' ' + r.getContentText().slice(0, 200));
