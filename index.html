@@ -4339,16 +4339,22 @@ function openRecipe(r,opt){
   }; draw(); });
 }
 function saveRecipe(r){ S.recipes=S.recipes||[]; if(!(S.recipes||[]).some(x=>x.id===r.id)){ const c=JSON.parse(JSON.stringify(r)); c.id=c.id&&!c.id.startsWith('ai-')?c.id:'r-'+uid(); c.at=Date.now(); S.recipes.push(c); r.id=c.id; } save(); return r; }
+// what's in the kitchen, for the AI: oldest first so things get used up
+function stockLine(){ const st=stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)).slice(0,60), sa=sauceShelf(); if(!st.length&&!sa.length) return '';
+  return (st.length?'In their fridge, freezer and pantry now (oldest first): '+st.map(x=>x.name+(x.qty?' ('+x.qty+(x.unit?' '+x.unit:'')+')':'')).join(', ')+'. Build most of the recipes around these, the oldest first, so little extra needs buying. ':'')+(sa.length?'Sauces and staples on hand: '+sa.map(x=>x.name).join(', ')+'. ':'')+'\n'; }
+// is this ingredient already in the kitchen? (whole-word match either way: "chicken thighs" covers "chicken thigh", not "chicken stock")
+function inStock(name){ const w=t=>String(t).toLowerCase().replace(/[^a-z ]/g,' ').split(' ').filter(x=>x.length>2).map(x=>x.replace(/(es|s)$/,'')), a=w(name); if(!a.length) return null;
+  return (S.stock||[]).filter(x=>!x.used).find(x=>{ const b=w(x.name); return b.length&&(b.every(t=>a.includes(t))||a.every(t=>b.includes(t))); })||null; }
 // ---- shopping list from meals
 function addIngredients(list,after){
   const agg=new Map();
   for(const {r,serves} of list){ const k=serves/(r.serves||4); for(const i of r.ing||[]){ const key=i[2].toLowerCase()+'|'+(i[1]||''); const a=agg.get(key)||{name:i[2],u:i[1]||'',q:0,pantry:i[3]==='p',from:[]}; a.q+=scaleQ(i[0],k,i[1])||0; if(!a.from.includes(r.name)) a.from.push(r.name); agg.set(key,a); } }
   const items=[...agg.values()].sort((a,b)=>a.pantry-b.pantry||a.name.localeCompare(b.name));
   const onList=n=>S.groceries.some(g=>!g.done&&g.name.toLowerCase().startsWith(n.toLowerCase()));
-  items.forEach(x=>x.on=!x.pantry&&!onList(x.name));
+  items.forEach(x=>{ x.have=inStock(x.name); x.on=!x.pantry&&!onList(x.name)&&!x.have; });
   modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
-    m.innerHTML=`<h2>🛒 Add to the shopping list</h2><p class="note">Pantry staples and things already on the list are left unticked. Tap to change.</p>
-      <div class="tvlist">${items.map((x,i)=>`<button class="mrow ing ${x.on?'on':''}" data-i="${i}"><span class="box">${x.on?'✓':''}</span><span class="mrt"><b>${esc(x.name)}</b><small>${esc(fmtQty(x.q,x.u))}${x.pantry?' · pantry':''}${onList(x.name)?' · already on the list':''}${list.length>1?' · '+esc(x.from.join(', ')):''}</small></span></button>`).join('')}</div>
+    m.innerHTML=`<h2>🛒 Add to the shopping list</h2><p class="note">Things in your Kitchen stock, pantry staples and things already on the list are left unticked. Check the amounts and tap to change.</p>
+      <div class="tvlist">${items.map((x,i)=>`<button class="mrow ing ${x.on?'on':''}" data-i="${i}"><span class="box">${x.on?'✓':''}</span><span class="mrt"><b>${esc(x.name)}</b><small>${esc(fmtQty(x.q,x.u))}${x.have?' · 🧊 have: '+esc(x.have.name+(x.have.qty?' ('+x.have.qty+(x.have.unit?' '+x.have.unit:'')+')':'')):''}${x.pantry?' · pantry':''}${onList(x.name)?' · already on the list':''}${list.length>1?' · '+esc(x.from.join(', ')):''}</small></span></button>`).join('')}</div>
       <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="s">Add ${items.filter(x=>x.on).length} items</button></div>`;
     m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const x=items[+b.dataset.i]; x.on=!x.on; draw(); });
     m.querySelector('#c').onclick=close;
@@ -4696,7 +4702,7 @@ function openIdeas(plan){
       const prompt=`You are helping a New Zealand family (Auckland) plan ${st.meal}s. Suggest ${st.n} different ${st.meal} recipes for ${st.people} people.
 Feeling like: ${st.moods.join(', ')||'anything family-friendly'}. Their tastes: ${foodPrefs()} ${foodHistory()} ${st.extra?'Also: '+st.extra+'.':''}
 They already have these recipes, so suggest different ones: ${have}.${favs?' Their favourites (a hint to their taste): '+favs+'.':''}
-Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
+${stockLine()}Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
 Return JSON only: {"recipes":[ ...${st.n} objects shaped like ${RECIPE_SHAPE} ]} with "serves": ${st.people}.
 ${RECIPE_RULES}`;
       try{ const out=await aiAsk({prompt:withMemory(prompt,st.moods.join(' ')+' '+st.extra),json:true}); done(); const rs=(out.recipes||[]).map(cleanRecipe).filter(r=>r.ing.length&&r.steps.length); if(!rs.length) throw new Error('No ideas came back. Try again.'); showIdeas(rs,plan); }
@@ -7504,7 +7510,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwplvd39';
+const FS_VERSION='fs-mwpmdcsn';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
