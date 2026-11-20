@@ -36,7 +36,7 @@ function openMeals(){
   const tile=(key,slot,big)=>{ const ms=mealsOn(key,slot), sl=MEAL_SLOTS.find(s=>s[0]===slot);
     if(!ms.length) return `<button class="mtile add ${big?'big':''}" data-pick="${key}|${slot}">＋ ${sl[1]}</button>`;
     return ms.map(m=>{ const r=m.rid&&recipeById(m.rid);
-      return `<button class="mtile ${big?'big':''} ${m.shopped?'shopped':''}" data-meal="${m.id}"><span class="me">${r?r.emoji||'🍽️':'📝'}</span><span class="mn">${esc(r?r.name:m.note||'')}</span>${r?`<small>${big?esc(sl[1])+' · ':''}serves ${m.serves||r.serves}${m.shopped?' · 🛒✓':''}</small>`:''}</button>`; }).join(''); };
+      return `<button class="mtile ${big?'big':''} ${m.shopped?'shopped':''} ${mealJust&&mealJust.id===m.id?'just':''}" data-meal="${m.id}"><span class="me">${r?r.emoji||'🍽️':'📝'}</span><span class="mn">${esc(r?r.name:m.note||'')}</span>${r?`<small>${big?esc(sl[1])+' · ':''}serves ${m.serves||r.serves}${m.shopped?' · 🛒✓':''}</small>`:''}</button>`; }).join(''); };
   const dayHTML=key=>{ const d=kd(key), home=homeOn(key);
     return `<div class="mday ${key===today?'today':''} ${key<today?'past':''}"><div class="mdl"><b>${fmtD(d,{weekday:'short'})}</b> <span>${fmtD(d,{day:'numeric',month:'short'})}</span>
       <button class="mhome" data-home="${key}" title="Who's home">${home.map(p=>`<i style="background:${p.color}"></i>`).join('')}<small>${home.length} home</small></button></div>
@@ -55,6 +55,7 @@ function openMeals(){
   L.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const [k,s]=b.dataset.pick.split('|'); pickMeal(k,s); });
   L.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ const m=(S.meals||[]).find(x=>x.id===b.dataset.meal); if(!m) return; const r=m.rid&&recipeById(m.rid); if(r) openRecipe(r,{meal:m}); else editNoteMeal(m); });
   L.querySelectorAll('[data-home]').forEach(b=>b.onclick=()=>whoHome(b.dataset.home));
+  if(mealJust&&Date.now()-mealJust.at<8000){ const t=L.querySelector('.mtile.just'); if(t) setTimeout(()=>{ try{ t.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} },120); }
 }
 function whoHome(key){
   modal((m,close)=>{ const draw=()=>{ const home=homeOn(key).map(p=>p.id);
@@ -63,7 +64,8 @@ function whoHome(key){
       const n=homeOn(key).length; (S.meals||[]).filter(x=>x.date===key&&!x.serveSet).forEach(x=>x.serves=Math.max(1,n)); save(); draw(); });
     m.querySelector('#ok').onclick=()=>{ close(); openMeals(); }; }; draw(); });
 }
-function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; if(slot==='dinner'&&r&&r.name&&typeof foodNote==='function') foodNote('pick',r.name); const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); save(); return m; }
+let mealJust=null;
+function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; mealJust={key,at:Date.now()}; { const mon=d=>{ const x=kd(d); return addDays(x,-((x.getDay()+6)%7)); }, t=new Date(); t.setHours(0,0,0,0); mealWeek=Math.round((mon(key)-mon(dk(t)))/(7*864e5)); } if(slot==='dinner'&&r&&r.name&&typeof foodNote==='function') foodNote('pick',r.name); const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); mealJust.id=m.id; save(); return m; }
 // choose a meal for a day: favourites first, then everything, or ask for new ideas
 function pickMeal(key,slot,tab){
   let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true;
@@ -1694,7 +1696,7 @@ function openCook(){ stockSettle();
 function showCook(out){ const rs=out.recipes; let seenSaved=false;
   const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); foodNote('pick',r.name); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
     const m=planMeal(key,'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
-    const n=buyAdd(r.buy); save(); renderAll(); if($('#mealLayer').innerHTML) openMeals();
+    const n=buyAdd(r.buy); save(); renderAll(); openMeals();
     toast(r.name+(off?' is on tomorrow’s plan':' is on tonight’s plan')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
     m.innerHTML=`<div class="tvhead"><h2>🍽️ You could make</h2><button class="save" id="x">Done</button></div>
