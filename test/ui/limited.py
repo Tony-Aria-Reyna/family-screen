@@ -16,7 +16,7 @@ async def main():
         print('1 Tony sees:', (await T.locator('.prow', has_text=MAS).inner_text()).replace('\n',' '))
         M=await ctx.new_page(); M.on('pageerror',lambda e:errs.append('M '+str(e))); await M.set_viewport_size({'width':390,'height':844})
         await M.goto(U); await M.wait_for_timeout(500); await M.evaluate(f"SYNC.testSignIn('{MAS}')"); await M.wait_for_timeout(1800)
-        vis=await M.evaluate("['.tabbar [data-tab=home]','.tabbar [data-tab=todo]','.tabbar [data-tab=where]','#moreBtn','#msgBtn','#askBtn','#ptSet','#ptAsk','#pcFab'].map(s=>{ const e=document.querySelector(s); return s+':'+(e&&getComputedStyle(e).display!=='none') })")
+        vis=await M.evaluate("['.tabbar [data-tab=home]','.tabbar [data-tab=todo]','.tabbar [data-tab=shop]','.tabbar [data-tab=where]','#moreBtn','#msgBtn','#askBtn','#ptSet','#ptAsk','#pcFab'].map(s=>{ const e=document.querySelector(s); return s+':'+(e&&getComputedStyle(e).display!=='none') })")
         print('2 Masako limited:', await M.evaluate("SYNC.isLimited()"), '| tab', await M.evaluate("document.body.dataset.tab"), '|', vis)
         print('3 sees the calendar entry, not the job:', await M.evaluate("S.events.some(e=>e.title==='Swimming')"), await M.evaluate("S.todos.some(t=>t.title==='Secret job')"))
         await M.evaluate("setTab('todo')"); print('4 her own To do tab:', await M.evaluate("document.body.dataset.tab"), '| Home blocked:', await M.evaluate("(setTab('home'),document.body.dataset.tab)"))

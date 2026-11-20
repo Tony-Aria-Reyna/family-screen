@@ -197,9 +197,9 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
-body.limited .tabbar button[data-tab="home"],body.limited #mIdeas,body.limited #mCook,body.limited #moreBtn,body.limited #msgBtn,body.limited #askBtn,body.limited #ptAsk{display:none!important}
+body.limited .tabbar button[data-tab="home"],body.limited .tabbar button[data-tab="shop"],body.limited #shopPanel,body.limited #mIdeas,body.limited #mCook,body.limited #moreBtn,body.limited #msgBtn,body.limited #askBtn,body.limited #ptAsk{display:none!important}
 body.limited .bigadd span{font-size:0}body.limited .bigadd span::after{content:'Add to calendar';font-size:15px}
-body.limited #simple #sMsg{display:none}
+body.limited #simple #sMsg,body.limited #simple .sshop{display:none}
 .stk{display:flex;flex-wrap:wrap;gap:6px}
 .stki{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;font:inherit;font-size:16px;color:var(--ink)}
 .stki small{color:var(--muted);font-size:13px}.stki small.old{color:#b45309;font-weight:700}
@@ -3065,7 +3065,7 @@ function showInstall(){
 }
 
 /* ================= phone layout: one section at a time ================= */
-function setTab(t,silent){ if(document.body.classList.contains('limited')&&t==='home') t='cal'; const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); if(t==='home') renderHome(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
+function setTab(t,silent){ if(document.body.classList.contains('limited')&&(t==='home'||t==='shop')) t='cal'; const was=document.body.dataset.tab; document.body.dataset.tab=t; if(isPhone()){ if(t==='where'&&was!=='where') setTimeout(openGlobe,0); if(t!=='where'&&$('#spaceLayer').innerHTML) closeGlobe(); if(t==='meals'&&was!=='meals') setTimeout(openMeals,0); if(t!=='meals'&&$('#mealLayer').innerHTML) closeMeals(); window.scrollTo(0,0); if(t==='cal') renderPCal(); if(t==='home') renderHome(); } document.querySelectorAll('.tabbar [data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===t)); try{ sessionStorage.setItem('fs.tab',t); }catch(e){} }
 
 /* ================= sign-in gate (synced mode) ================= */
 const GOOGLE_G='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';

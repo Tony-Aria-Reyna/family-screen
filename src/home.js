@@ -1360,7 +1360,7 @@ function renderSimple(){
     <div id="sAddSlot"></div>
     <div class="sgrid"><section><h3>${esc(tr('Today'))}</h3>${day(now)}<h3>${esc(tr('Tomorrow'))}</h3>${day(addDays(now,1))}</section>
     <section class="sjobs"><h3>${esc(tr('Jobs'))}</h3>${jobs.length?jobs.map(t=>`<button class="stick" data-st="todos:${t.id}"><span class="sbox"></span>${esc(t.title)}${t.due?`<small> ${esc(appLang()==='ja'?(kd(t.due).getMonth()+1)+'/'+kd(t.due).getDate():fmtD(kd(t.due),{day:'numeric',month:'short'}))}</small>`:''}</button>`).join(''):`<div class="snone">${esc(tr('Nothing to do'))}</div>`}
-      <h3>${esc(tr('Shopping'))}</h3>${buy.length?buy.map(g=>`<button class="stick" data-st="groceries:${g.id}"><span class="sbox"></span>${esc(g.name)}<small> ${esc(shop(g.shop)?shop(g.shop).name:'')}</small></button>`).join(''):`<div class="snone">${esc(tr('Nothing to buy'))}</div>`}</section></div>`;
+      <h3 class="sshop">${esc(tr('Shopping'))}</h3><div class="sshop">${buy.length?buy.map(g=>`<button class="stick" data-st="groceries:${g.id}"><span class="sbox"></span>${esc(g.name)}<small> ${esc(shop(g.shop)?shop(g.shop).name:'')}</small></button>`).join(''):`<div class="snone">${esc(tr('Nothing to buy'))}</div>`}</div></section></div>`;
   const slot=el.querySelector('#sAddSlot'); if(typing) slot.replaceWith(typing); else { slot.outerHTML=addAnyHTML('sAdd',true); wireAddAny(el.querySelector('#sAdd')); }
   el.querySelector('#sLang').onclick=()=>{ setLang(appLang()==='ja'?'en':'ja'); const b=el.querySelector('#sAdd'); if(b) b.remove(); renderSimple(); };
   el.querySelector('#sNormal').onclick=()=>setView('');
