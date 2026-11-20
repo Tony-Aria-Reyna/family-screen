@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 30;
+const HELPER_VERSION = 31;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -516,8 +516,12 @@ function flightAlerts(h, f, prev, cur) {
     if (Math.abs(late) >= 15 && step >= 15 && !cur.on) {
       const tz = tzOf(f.to), when = Utilities.formatDate(new Date(cur.arr), tz, 'h:mma').toLowerCase();
       const nz = tz === 'Pacific/Auckland' ? '' : ' (' + Utilities.formatDate(new Date(cur.arr), 'Pacific/Auckland', 'h:mma').toLowerCase() + ' NZ)';
+      // coming home to Auckland: the pick-up (or taxi) moves with the landing, so say the new time
+      const tx = Object.assign({ after: 60 }, h.taxi || {}), home = f.to === 'AKL' && tx.after > 0;
+      const pick = home ? Utilities.formatDate(new Date(cur.arr + tx.after * 60e3), 'Pacific/Auckland', 'h:mma').toLowerCase() : '';
+      const was = home && cur.arrS ? Utilities.formatDate(new Date(cur.arrS + tx.after * 60e3), 'Pacific/Auckland', 'h:mma').toLowerCase() : '';
       out.push({ tag: 'fl' + f.id, title: (late > 0 ? '⏰ ' : '⏩ ') + name + ' running ' + Math.abs(late) + ' min ' + (late > 0 ? 'late' : 'early'),
-        body: (who ? who + ' now lands ' : 'Now lands ') + cityOf(f.to) + ' about ' + when + nz + '.', who: f.who });
+        body: (who ? who + ' now lands ' : 'Now lands ') + cityOf(f.to) + ' about ' + when + nz + '.' + (home ? ' 🚕 Pick-up now about ' + pick + (was && was !== pick ? ' (was ' + was + ')' : '') + '.' : ''), who: f.who });
       cur.told = late;
     } else if (Math.abs(cur.told) >= 15 && Math.abs(late) < 10 && !cur.on) {
       out.push({ tag: 'fl' + f.id, title: '✅ ' + name + ' is back on time', body: (who ? who + "'s" : 'The') + ' flight has caught up.', who: f.who });

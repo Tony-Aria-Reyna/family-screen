@@ -1524,11 +1524,14 @@ ${o.files&&o.files.length?'Attached: '+o.files.length+' photo(s) of their fridge
 ${stock.length?'Their kitchen stock list (oldest first; use the oldest and the frozen things first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
 ${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.'+(sh.some(x=>x.out)?' Run out of: '+sh.filter(x=>x.out).map(x=>x.name).join(', ')+'.':''):''}
 ${o.text?'They also said: """'+String(o.text).slice(0,600)+'""".':''}
+${(()=>{ const mine=(S.recipes||[]).filter(r=>(r.meal||'dinner')==='dinner').sort((a,b)=>isFav(b.id)-isFav(a.id)).slice(0,40);
+  return mine.length?'Their own saved recipes (⭐ = favourite), with main ingredients: '+mine.map(r=>(isFav(r.id)?'⭐ ':'')+r.name+' ['+(r.ing||[]).filter(i=>i[3]!=='p').slice(0,6).map(i=>i[2]).join(', ')+']').join('; ')+'. If any of their own recipes can be made mostly from what they have, make it one of the three (favourites first), using its exact name and "saved":true; the others are new ideas.':''; })()}
 Suggest 3 different dinners for ${people} people. Each must be built mainly from what they have, need at most 2 things from the supermarket (none is best), and fit their tastes. Salt, pepper and cooking oil can be assumed; nothing else can.
 Return JSON only: {"seen":[{"name":"...","qty":"","where":"freezer|fridge|pantry"}],"recipes":[ 3 objects shaped like ${RECIPE_SHAPE} plus "uses":["the things they have that it uses, named exactly as in the stock list or as seen"],"buy":["each thing they would need to buy, or empty list"],"thaw":"what to take out of the freezer and when, or empty" ]} with "serves": ${people}.
 "seen" lists what you could see in the photos (empty list when there are no photos). ${RECIPE_RULES}`;
   const out=await aiAsk({prompt:withMemory(prompt,o.text||'dinner'),json:true,files:o.files,file:o.files&&o.files[0]});
-  const rs=(out.recipes||[]).map(raw=>{ const r=cleanRecipe(raw); r.uses=(raw.uses||[]).map(String).slice(0,20); r.buy=(raw.buy||[]).map(String).filter(Boolean).slice(0,6); r.thaw=String(raw.thaw||'').slice(0,140); return r; }).filter(r=>r.ing.length&&r.steps.length);
+  const own=n=>(S.recipes||[]).find(r=>r.name.trim().toLowerCase()===String(n||'').trim().toLowerCase());
+  const rs=(out.recipes||[]).map(raw=>{ const sv=raw.saved&&own(raw.name), r=sv?Object.assign(JSON.parse(JSON.stringify(sv)),{serves:sv.serves||people,yours:true}):cleanRecipe(raw); r.uses=(raw.uses||[]).map(String).slice(0,20); r.buy=(raw.buy||[]).map(String).filter(Boolean).slice(0,6); r.thaw=String(raw.thaw||'').slice(0,140); return r; }).filter(r=>r.ing.length&&r.steps.length);
   if(!rs.length) throw new Error('No dinners came back. Try again.');
   return {recipes:rs,seen:(out.seen||[]).filter(x=>x&&x.name).slice(0,60)};
 }
@@ -1565,7 +1568,7 @@ function showCook(out){ const rs=out.recipes; let seenSaved=false;
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
     m.innerHTML=`<div class="tvhead"><h2>🍽️ You could make</h2><button class="save" id="x">Done</button></div>
       ${out.seen.length?`<p class="note">I could see: ${esc(out.seen.slice(0,14).map(x=>x.name).join(', '))}${out.seen.length>14?' and '+(out.seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
-      <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji}</span><span class="mrt"><b>${esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb)}</small>
+      <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji||'🍽️'}</span><span class="mrt"><b>${r.yours?(isFav(r.id)?'⭐ ':'📖 ')+'Your '+esc(r.name):esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb||'')}</small>
           <small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
         <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ Have it tonight</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button><button class="opt sm" data-no="${i}">👎 Not for us</button></div></div>`).join('')}</div>`;
     m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };

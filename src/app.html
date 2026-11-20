@@ -197,6 +197,17 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .modal h2{margin:0 0 4px;font-size:30px}
 .step{font-size:17px;color:var(--muted);margin:16px 0 8px;font-weight:700}
 .snav{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.shops.shut{display:none}.shfilt{font:inherit;font-size:16px;font-weight:700;background:#f3efe6;border:0;border-radius:12px;padding:8px 14px;margin:8px 0 4px;color:var(--ink)}
+.item .gx{margin-left:auto;border:0;background:#f3efe6;border-radius:10px;width:38px;height:38px;font-size:17px;color:var(--muted);flex:none}
+.clrall{display:block;width:calc(100% - 8px);margin:14px 4px 6px;font:inherit;font-size:17px;font-weight:800;background:#fff;border:2px dashed var(--line);border-radius:14px;padding:12px;color:var(--muted)}
+.bigback{font:inherit;font-size:20px;font-weight:800;background:#eef6f4;border:2px solid #b8dcd5;color:var(--ink);border-radius:14px;padding:10px 18px;margin:-4px 0 10px}
+.modal.evsheet{width:min(640px,100%)}.evt{font-size:30px;margin:4px 0 12px;line-height:1.2}
+.evd{display:flex;flex-direction:column;gap:12px;font-size:19px}.evrow{display:flex;gap:12px;align-items:flex-start}.evrow>span:first-child{width:28px;flex:none;text-align:center}
+.evwho{display:flex;flex-wrap:wrap;gap:6px}.linkb{font:inherit;background:none;border:0;padding:0;color:#0f766e;text-decoration:underline;text-align:left}
+.evclash{background:#fff4e5;border:2px solid #f3c98b;border-radius:14px;padding:10px 14px;font-weight:700;color:#92400e;margin:8px 0;display:flex;flex-direction:column;gap:4px}
+.mvbox{display:flex;flex-direction:column;gap:6px;background:#f6f3ec;border-radius:18px;padding:16px 18px;font-size:22px}.mvbox small{display:block;color:var(--muted);font-size:15px;font-weight:700;text-transform:uppercase}
+.mvbox .to{color:#0f766e}.mvarrow{font-size:26px;color:var(--muted)}.mact .big{font-size:21px;padding:16px 22px}
+.ghost{font-size:18px!important;font-weight:800}
 body.limited .tabbar button[data-tab="home"],body.limited .tabbar button[data-tab="shop"],body.limited #shopPanel,body.limited #mIdeas,body.limited #mCook,body.limited #moreBtn,body.limited #msgBtn,body.limited #askBtn,body.limited #ptAsk{display:none!important}
 body.limited .bigadd span{font-size:0}body.limited .bigadd span::after{content:'Add to calendar';font-size:15px}
 body.limited #simple #sMsg,body.limited #simple .sshop{display:none}
@@ -522,6 +533,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .rrow.off{opacity:.45}
 .away-ev{background:repeating-linear-gradient(135deg,var(--c) 0 10px,color-mix(in srgb,var(--c) 55%,#fff) 10px 20px)}
 .modal.wide{width:min(1180px,97vw)}
+.modal>.mact{position:sticky;bottom:-22px;background:var(--card);margin:14px -28px -22px;padding:12px 28px 16px;border-top:1px solid var(--line);z-index:3}
 .addgrid{display:grid;grid-template-columns:1.2fr 1fr;gap:0 30px}
 .whatwhere{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
 @media (min-width:901px){
@@ -1198,6 +1210,66 @@ function rptText(r){
   return t;
 }
 // when someone taps one date of a repeating entry
+/* ---- tapping an entry shows what it is; changing it is a separate, deliberate step ---- */
+function openEvent(ev,occ){
+  const key=occ||ev.date, d=kd(key), who=(ev.whos||[]).map(id=>person(id)).filter(Boolean), mine=!ev.g||ev.by===(SYNC.me&&SYNC.me());
+  const fam=ev.g&&!LOCAL?((SYNC.guestFamilies().find(x=>x.id===ev.g)||{}).label||'the other family'):'';
+  const addedBy=ev.by&&!LOCAL?(S.people.concat(guestPeople()).find(p=>p.email===ev.by)||{}).name:'';
+  const cl=clashesFor(Object.assign({},ev,{date:key}));
+  modal((m,close)=>{ m.classList.add('evsheet');
+    m.innerHTML=`<button class="bigback" id="bk">‹ Back</button>
+      <h2 class="evt">${ev.priv?LOCK:''}${esc(ev.title)}</h2>
+      <div class="evd"><div class="evrow"><span>📅</span><b>${fmtD(d,{weekday:'long',day:'numeric',month:'long'})}</b></div>
+        <div class="evrow"><span>🕒</span><b>${ev.time?esc(tRange(ev)):'All day'}</b>${ev.time&&ev.dur?` <small>(${esc(durTxt(ev.dur))})</small>`:''}</div>
+        ${ev.rpt?`<div class="evrow"><span>🔁</span>${esc(rptText(ev.rpt))}</div>`:''}
+        ${who.length?`<div class="evrow"><span>👥</span><div class="evwho">${who.map(p=>`<span class="chip"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`).join('')}</div></div>`:''}
+        ${ev.addr?`<div class="evrow"><span>📍</span><button class="linkb" data-nav="${esc(ev.addr)}">${esc(ev.addr)}</button></div>`:''}
+        ${ev.src?`<div class="evrow"><span>🔗</span><small>From a connected calendar: change it there.</small></div>`:''}
+        ${fam?`<div class="evrow"><span>🏠</span><small>In ${esc(fam)}’s calendar${addedBy?' · added by '+esc(addedBy):''}</small></div>`:addedBy?`<div class="evrow"><span>✍️</span><small>Added by ${esc(addedBy)}</small></div>`:''}
+        ${cl.length?`<div class="evclash">⚠️ Clashes with ${cl.map(c=>esc(c.who.name)+'’s '+esc(c.e.title)+' ('+esc(tRange(c.e))+')').join(', ')}</div>`:''}</div>
+      <div class="mact">${mine&&!ev.src?'<button class="cancel" id="ed">✏️ Change it</button>':''}<button class="save" id="ok">Done</button></div>`;
+    m.querySelector('#bk').onclick=close; m.querySelector('#ok').onclick=close;
+    const ed=m.querySelector('#ed'); if(ed) ed.onclick=()=>{ close(); if(ev.rpt) openOccurrence(ev,key); else openAdd(ev); };
+  });
+}
+/* ---- double bookings: someone already has a timed entry that overlaps (Everyone counts as everybody) ---- */
+function clashesFor(x){
+  if(!x||!x.time||!x.date) return [];
+  const s=toMin(x.time), e=s+(x.dur||60), all=(x.whos||[]).includes('all'), out=[], seen=new Set();
+  for(const o of S.events){ if(o===x||(x.id&&o.id===x.id)||!o.time||!vis(o)||!occursOn(o,x.date)) continue;
+    const os=toMin(o.time), oe=os+(o.dur||60); if(os>=e||oe<=s) continue;
+    const oall=(o.whos||[]).includes('all');
+    for(const w of (all||oall)?S.people.filter(p=>p.id!=='all').map(p=>p.id).filter(id=>all||(x.whos||[]).includes(id)).filter(id=>oall||(o.whos||[]).includes(id)):(x.whos||[]).filter(id=>(o.whos||[]).includes(id))){
+      const p=person(w); if(!p||seen.has(o.id+w)) continue; seen.add(o.id+w); out.push({who:p,e:o}); } }
+  return out;
+}
+function clashAsk(cl,go,back){
+  modal((m,close)=>{ m.innerHTML=`<h2 style="font-size:28px">⚠️ Double booked</h2>
+    <div class="evclash" style="font-size:19px">${cl.map(c=>`<div><b>${esc(c.who.name)}</b> already has <b>${esc(c.e.title)}</b>, ${esc(tRange(c.e))}</div>`).join('')}</div>
+    <div class="mact"><button class="cancel" id="n">Go back</button><button class="save" id="y">Keep both</button></div>`;
+    m.querySelector('#n').onclick=()=>{ close(); if(back) back(); }; m.querySelector('#y').onclick=()=>{ close(); go(); }; });
+}
+/* ---- press and hold an entry, drag it to another day or time, then confirm in big writing ---- */
+function movable(el,ev,occ){
+  if(!ev||ev.rpt||ev.src||(ev.g&&ev.by!==(SYNC.me&&SYNC.me()))) return;
+  liftable(el,{label:()=>'✋ Moving: '+ev.title,targets:'[data-drop],[data-tlday]',drop:(tgt,st)=>{
+    const day=tgt.dataset.tlday||tgt.dataset.drop||tgt.dataset.fwcol; if(!day) return;
+    let time=ev.time; const grid=tgt.matches('[data-fwcol]')?{el:tgt,h:60}:tgt.matches('[data-tlday]')?{el:tgt,h:HOUR}:null;
+    if(grid&&ev.time&&st){ const r=grid.el.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.round((st.y-r.top)/grid.h*4)*15)); time=fromMin(mm); }
+    if(day===(occ||ev.date)&&time===ev.time) return;
+    confirmMove(ev,day,time); }});
+}
+function confirmMove(ev,day,time){
+  const to=Object.assign({},ev,{date:day,time}), cl=clashesFor(to);
+  const when=(d,t,dur)=>fmtD(kd(d),{weekday:'long',day:'numeric',month:'long'})+(t?', '+t12(t)+(dur?'–'+t12(endOf(t,dur)):''):', all day');
+  modal((m,close)=>{ m.innerHTML=`<h2 style="font-size:32px;margin-bottom:6px">Move this?</h2>
+    <p style="font-size:24px;font-weight:800;margin:4px 0 14px">${esc(ev.title)}</p>
+    <div class="mvbox"><div><small>From</small><b>${esc(when(ev.date,ev.time,ev.dur))}</b></div><div class="mvarrow">⬇</div><div class="to"><small>To</small><b>${esc(when(day,time,ev.dur))}</b></div></div>
+    ${cl.length?`<div class="evclash" style="font-size:18px">⚠️ ${cl.map(c=>esc(c.who.name)+' already has '+esc(c.e.title)+', '+esc(tRange(c.e))).join('; ')}</div>`:''}
+    <div class="mact"><button class="cancel big" id="n">✕ No, leave it</button><button class="save big" id="y">✓ Yes, move it</button></div>`;
+    m.querySelector('#n').onclick=close;
+    m.querySelector('#y').onclick=()=>{ ev.date=day; ev.time=time; save(); close(); renderCal(); toast('Moved to '+when(day,time,ev.dur)); }; });
+}
 function openOccurrence(e,key){
   modal((m,close)=>{
     m.innerHTML=`<h2>🔁 ${esc(e.title)}</h2><p class="note">${esc(rptText(e.rpt))}. You tapped ${fmtD(kd(key),{weekday:'long',day:'numeric',month:'long'})}.</p>
@@ -1241,7 +1313,7 @@ function dayBlocks(key){
       if(!e.time){ all.push({bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁':'',names].filter(Boolean).join(' '),addr:e.addr,attr:`data-ev="${e.id}" data-occ="${key}"`}); continue; }
       const [h,m]=e.time.split(':').map(Number), s=h*60+m;
       timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e)+(AWAY_TZ&&e.time?' NZ':'')+evHere(e,key),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
-    else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:a?`💼 ${tName(person(it.who))} in ${a[0]} ${a[3]}`:'✈️ Flying',sub:'All day',attr:'data-where="1"'}); }
+    else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:it.part?(/^home/.test(it.part)?`🏠 ${tName(person(it.who))} ${it.part}`:`✈️ ${tName(person(it.who))} away ${it.part}`):a?`💼 ${tName(person(it.who))} away · ${a[0]} ${a[3]}`:`✈️ ${tName(person(it.who))} away · flying`,sub:'All day',attr:'data-where="1"'}); }
     else if(it.k==='taxi'){ const f=it.f, a0=it.kind==='pick'?it.t:it.t2, b0=it.kind==='pick'?it.t2:it.t, c=col(f.who);
       const s=Math.max(0,mins(a0)), e=Math.min(1440,mins(b0));
       timed.push({s,e:Math.max(e,s+30),bg:`repeating-linear-gradient(135deg,${c} 0 9px,#ffffffb0 9px 18px)`,title:taxiLbl(it),sub:tName(person(f.who))+' · '+taxiSub(it),attr:`data-fl="${f.id}"`}); }
@@ -1273,7 +1345,7 @@ function timelineHTML(key){
   };
 }
 function wireTimeline(box,key){
-  box.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  box.querySelectorAll('[data-ev]').forEach(b=>{ b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } openEvent(ev,b.dataset.occ); }; movable(b,S.events.find(x=>x.id===b.dataset.ev),b.dataset.occ); });
   box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
   box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>{ if(isPhone()) setTab('where'); else openGlobe(); });
   const tl=box.querySelector('.tl');
@@ -1283,13 +1355,13 @@ function wireTimeline(box,key){
 // week view: a red "now" line in today's column, between what's been and what's still to come
 // Swipe left / right on a day's detail to go to the next / previous day (phone day panel and fridge day view)
 (()=>{ let st=null;
-  document.addEventListener('touchstart',e=>{ const t=e.touches[0], z=e.target.closest&&e.target.closest('#pcSheet,#pwSheet,#cal .fday');
-    st=z&&e.touches.length===1&&!e.target.closest('.wheel,input,textarea,.scrim')?{z,x:t.clientX,y:t.clientY,t:Date.now()}:null; },{passive:true});
+  document.addEventListener('touchstart',e=>{ const t=e.touches[0], z=e.target.closest&&e.target.closest('#pcSheet,#pwSheet,#cal .fday,#cal .fweek,#cal .mbody,#pcGrid');
+    st=z&&e.touches.length===1&&!e.target.closest('.wheel,input,textarea,.scrim,.lifted')&&!drag?{z,x:t.clientX,y:t.clientY,t:Date.now()}:null; },{passive:true});
   document.addEventListener('touchend',e=>{ if(!st) return; const t=e.changedTouches[0], dx=t.clientX-st.x, dy=t.clientY-st.y, z=st.z; st=null;
-    if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.7||Date.now()-st0()>800) return;
-    const next=dx<0, id=z.id==='pcSheet'?(next?'#psNext':'#psPrev'):z.id==='pwSheet'?(next?'#pwDNext':'#pwDPrev'):(next?'#next':'#prev');
+    if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.7||Date.now()-st0()>800||(drag&&drag.live)) return;
+    const next=dx<0, id=z.id==='pcSheet'?(next?'#psNext':'#psPrev'):z.id==='pwSheet'?(next?'#pwDNext':'#pwDPrev'):z.id==='pcGrid'?(next?'#pcNext':'#pcPrev'):(next?'#next':'#prev');
     const b=$(id); if(!b) return; suppressClick=false; b.click(); suppressClick=true; setTimeout(()=>suppressClick=false,350);
-    const box=$(z.id==='pcSheet'?'#pcSheet':z.id==='pwSheet'?'#pwSheet':'#cal .fday'); if(box){ box.classList.remove('slideL','slideR'); void box.offsetWidth; box.classList.add(next?'slideL':'slideR'); } },{passive:true});
+    const box=$(z.id==='pcSheet'?'#pcSheet':z.id==='pwSheet'?'#pwSheet':z.id==='pcGrid'?'#pcGrid':'#cal > *'); if(box){ box.classList.remove('slideL','slideR'); void box.offsetWidth; box.classList.add(next?'slideL':'slideR'); } },{passive:true});
   let t0=0; const st0=()=>t0; document.addEventListener('touchstart',()=>{ t0=Date.now(); },{passive:true,capture:true});
 })();
 function placeWeekNow(){
@@ -1326,8 +1398,12 @@ function itemsForDay(key){
     if(tx&&tx.pick&&dk(tx.pick)===key) out.push({k:'taxi',kind:'pick',sort:hhmm(tx.pick),f,t:tx.pick,t2:tx.signOn});
     if(tx&&tx.drop&&dk(tx.drop)===key) out.push({k:'taxi',kind:'drop',sort:hhmm(tx.drop),f,t:tx.drop,t2:tx.land}); }
   // whole days away: show where they are, so a trip reads as one continuous stretch until they land
-  for(const pid of new Set(S.flights.map(f=>f.who))){ if(flyers.has(pid)||!shown([pid])) continue;
-    const w=whereAt(pid,new Date(key+'T12:00')); if(w) out.push({k:'away',sort:'00:00',who:pid,w}); }
+  for(const pid of new Set(S.flights.map(f=>f.who))){ if(!shown([pid])) continue;
+    if(!flyers.has(pid)){ const w=whereAt(pid,new Date(key+'T12:00')); if(w) out.push({k:'away',sort:'00:00',who:pid,w}); continue; }
+    // the day they fly: still one bar, saying when they leave or when they're home
+    const am=whereAt(pid,new Date(key+'T00:30')), pm=whereAt(pid,new Date(key+'T23:30'));
+    if(am||pm){ const fl=S.flights.filter(f=>f.who===pid), out1=!am&&fl.find(f=>dk(fS(f))===key&&f.from===HOME_AP), back=am&&!pm&&fl.find(f=>dk(fE(f))===key&&f.to===HOME_AP);
+      out.push({k:'away',sort:'00:00',who:pid,w:pm||am,part:out1?'from '+fmtTime(fS(out1),'Pacific/Auckland'):back?'home '+fmtTime(homeAt(back),'Pacific/Auckland'):''}); } }
   return out.sort((a,b)=>a.sort.localeCompare(b.sort));
 }
 // where a person is at a moment, from their flights: null = home
@@ -1351,7 +1427,7 @@ function evHTML(it,compact){
     return `<button class="ev${e.todoId?' task':''}${ck}${e.done?' done-ev':''}" style="background:${evBg(e.whos)}" data-ev="${e.id}" data-occ="${it.key}"><small>${e.rpt?'🔁 ':''}${tRange(e)}${AWAY_TZ&&e.time?' NZ':''}${evHere(e,it.key)}${names?' · '+esc(names):''}${ck?' · done?':''}</small>${tk}${esc(e.title)}${e.note?`<small>${esc(e.note)}</small>`:''}${e.addr?`<small class="addr" data-nav="${esc(e.addr)}">📍 ${esc(e.addr)}</small>`:''}</button>`;
   }
   if(it.k==='away'){
-    const c=col(it.who), a=it.w.code?AIRPORTS[it.w.code]:null, txt=a?`💼 In ${esc(a[0])} ${a[3]}`:`✈️ Flying ${esc(it.w.air.from)}→${esc(it.w.air.to)}`;
+    const c=col(it.who), a=it.w.code?AIRPORTS[it.w.code]:null, nmT=esc(tName(person(it.who))), txt=it.part?(/^home/.test(it.part)?`🏠 ${nmT} ${esc(it.part)}`:`✈️ ${nmT} away ${esc(it.part)}`):a?`💼 ${nmT} away · ${esc(a[0])} ${a[3]}`:`✈️ ${nmT} away · flying ${esc(it.w.air.from)}→${esc(it.w.air.to)}`;
     if(compact) return `<div class="mpill" style="background:${c};opacity:.75">${txt}</div>`;
     return `<button class="ev away-ev" style="--c:${c}" data-where="1"><small>All day · ${esc(nm(it.who))}</small>${txt}</button>`;
   }
@@ -1412,7 +1488,7 @@ function renderCal(){
   if(isPhone()&&$('#pcal')) renderPCal();
   cal.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd({date:b.dataset.add}));
   cal.querySelectorAll('.day h3').forEach(h=>h.onclick=()=>openFridgeDay(h.parentElement.dataset.drop));
-  cal.querySelectorAll('[data-ev]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } if(ev.rpt) openOccurrence(ev,b.dataset.occ); else openAdd(ev); });
+  cal.querySelectorAll('[data-ev]').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } openEvent(ev,b.dataset.occ); }; movable(b,S.events.find(x=>x.id===b.dataset.ev),b.dataset.occ); });
   cal.querySelectorAll('[data-where]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openGlobe(); });
   cal.querySelectorAll('[data-fl]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openFlight(S.flights.find(x=>x.id===b.dataset.fl)); });
 }
@@ -1449,7 +1525,7 @@ function onMove(e){
   if(!st.live){ if(st.mouse&&moved>6) goLive(st); else if(!st.mouse&&moved>10){ endDrag(); } return; }
   place(st);
 }
-function onUp(){ const st=drag; if(!st) return; const over=st.over, live=st.live; endDrag(); if(pendingRender){ pendingRender=false; setTimeout(renderAll,450); } if(live){ suppressClick=true; setTimeout(()=>suppressClick=false,400); if(over) st.opts.drop(over); } }
+function onUp(){ const st=drag; if(!st) return; const over=st.over, live=st.live; endDrag(); if(pendingRender){ pendingRender=false; setTimeout(renderAll,450); } if(live){ suppressClick=true; setTimeout(()=>suppressClick=false,400); if(over) st.opts.drop(over,st); } }
 function onCancel(){ endDrag(); }
 function endDrag(){
   const st=drag; if(!st) return; clearTimeout(st.timer);
@@ -1705,16 +1781,17 @@ function editCard(idx){
   });
 }
 function renderShop(){ keepInput('sIn',renderShop_); }
+let shopFilterOpen=false;
 function renderShop_(){
   // things added by voice arrive without an aisle: tidy them up here, where the aisle list lives
   let tidied=false;
   for(const g of S.groceries||[]) if(g.voice){ delete g.voice; if(!g.aisle&&shop(g.shop)&&shop(g.shop).aisles) g.aisle=guessAisle(g.name); tidied=true; }
   if(tidied) save();
   const p=$('#shopPanel'), tab=S.shopTab, cur=tab==='all'?null:shop(tab), left=S.groceries.filter(x=>!x.done).length;
-  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="clr" id="gClear">Clear ticked</button><button class="hidep" data-hidep="S" title="Minimise the shopping list" aria-label="Minimise">»</button></div>
+  let h=`<div class="ph"><h2>🛒 Shopping</h2><span class="n">${left}</span><span class="tip">Hold an item and drag it to another shop</span><button class="hidep" data-hidep="S" title="Minimise the shopping list" aria-label="Minimise">»</button></div>
   ${cardRowHTML()}
   <form class="addrow" id="sForm"><input id="sIn" placeholder="Add an item…" autocomplete="off" enterkeyhint="done"><button aria-label="Add">＋</button></form>
-  <div class="shops"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
+  ${shopFilterOpen||tab!=='all'?'':`<button class="shfilt" id="shF">🔽 Filter by shop</button>`}<div class="shops ${shopFilterOpen||tab!=='all'?'':'shut'}"><button data-shop="all" class="${tab==='all'?'on':''}">All shops</button>${S.shops.map(s=>{ const n=S.groceries.filter(g=>g.shop===s.id&&!g.done).length; return `<button data-shop="${s.id}" data-shopdrop="${s.id}" class="${tab===s.id?'on':''}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}${n?' · '+n:''}</button>`; }).join('')}</div>
   <div class="list">`;
   const groups=[];
   if(!cur){ for(const s of S.shops){ const it=S.groceries.filter(g=>g.shop===s.id); if(it.length) groups.push([s,it,s.id]); } }
@@ -1722,9 +1799,10 @@ function renderShop_(){
   else { const it=S.groceries.filter(g=>g.shop===cur.id); if(it.length) groups.push([cur,it,cur.id]); }
   for(const [g,items,sid] of groups){
     h+=`<div data-shopdrop="${sid}"><div class="grp"><span class="tag" style="background:${g.color}"></span>${esc(g.name)}</div>`+
-      items.sort((a,b)=>a.done-b.done).map(x=>`<div class="item ${x.done?'done':''}" data-lift data-g="${x.id}"><span class="box">${x.done?'✓':''}</span><span class="nm">${esc(x.name)}</span>${!cur&&shop(x.shop).aisles&&x.aisle?`<span class="sub">${esc(x.aisle)}</span>`:''}</div>`).join('')+'</div>';
+      items.sort((a,b)=>a.done-b.done).map(x=>`<div class="item ${x.done?'done':''}" data-lift data-g="${x.id}"><span class="box">${x.done?'✓':''}</span><span class="nm">${esc(x.name)}</span>${!cur&&shop(x.shop).aisles&&x.aisle&&!x.done?`<span class="sub">${esc(x.aisle)}</span>`:''}${x.done?`<button class="gx" data-gx="${x.id}" data-nolift aria-label="Take it off the list">✕</button>`:''}</div>`).join('')+'</div>';
   }
   if(!groups.length) h+='<p class="note" style="padding:12px">Nothing on this list yet.</p>';
+  { const nd=S.groceries.filter(x=>x.done&&(!cur||x.shop===cur.id)).length; if(nd) h+=`<button class="clrall" id="gClear">✕ Clear ${nd} ticked item${nd>1?'s':''}</button>`; }
   h+='</div>';
   if(pending){
     const sug=suggestShop(pending);
@@ -1732,7 +1810,9 @@ function renderShop_(){
     <div class="row"><button class="linkbtn" id="pCancel">Cancel</button><span class="note">Next time it goes straight to the shop you pick.</span></div></div>`;
   }
   p.innerHTML=h;
-  p.querySelectorAll('[data-shop]').forEach(b=>b.onclick=()=>{ S.shopTab=b.dataset.shop; save(); renderShop(); });
+  p.querySelectorAll('[data-shop]').forEach(b=>b.onclick=()=>{ S.shopTab=b.dataset.shop; if(b.dataset.shop==='all') shopFilterOpen=false; save(); renderShop(); });
+  const sf=p.querySelector('#shF'); if(sf) sf.onclick=()=>{ shopFilterOpen=true; renderShop(); };
+  p.querySelectorAll('[data-gx]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); S.groceries=S.groceries.filter(x=>x.id!==b.dataset.gx); save(); renderShop(); });
   $('#sForm').onsubmit=e=>{ e.preventDefault(); const v=$('#sIn').value.trim(); if(!v) return;
     const k=v.toLowerCase();
     if(S.itemShop[k]&&S.shops.some(s=>s.id===S.itemShop[k])&&S.shopTab==='all'){ $('#sIn').value=''; addToShop(v,S.itemShop[k]); toast(`Added to ${shop(S.itemShop[k]).name}`); renderShop(); $('#sIn').focus(); return; }
@@ -1749,7 +1829,7 @@ function renderShop_(){
       onEnd:()=>{ const tr=document.getElementById('tray'); if(tr) tr.remove(); }});
   });
   p.querySelectorAll('[data-card]').forEach(b=>b.onclick=()=>openWallet(+b.dataset.card)); const ca=p.querySelector('#cardAdd'); if(ca) ca.onclick=()=>requirePin(openCards);
-  $('#gClear').onclick=()=>{ S.groceries=S.groceries.filter(x=>!x.done); save(); renderShop(); };
+  const gc=$('#gClear'); if(gc) gc.onclick=()=>{ S.groceries=S.groceries.filter(x=>!(x.done&&(!cur||x.shop===cur.id))); save(); renderShop(); };
 }
 
 /* ================= time wheels (like the Android alarm) ================= */
@@ -1789,7 +1869,7 @@ function timePicker(box,st){
     area.innerHTML=`<div class="tdial"><div class="tdl">Starts</div><div id="d0"></div></div>
       <div class="tdial"><div class="tdl">Finishes</div><div id="d1"></div></div>
       <div class="tlen"><b id="lenTxt">${lenTxt()}</b><span class="tquick">${[30,60,90,120].map(n=>`<button class="opt sm ${st.dur===n?'on':''}" data-q="${n}">${durTxt(n)}</button>`).join('')}</span></div>
-      <div class="note" style="margin-top:4px">Tap the time to type it.</div>`;
+      <div class="note" style="margin-top:4px">Tap the hour or the minutes to type them.</div>`;
     const refresh=()=>{ area.querySelector('#lenTxt').textContent=lenTxt(); area.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('on',+b.dataset.q===st.dur)); };
     const dial=(el,get,set,which)=>{
       let [H,M]=get().split(':').map(Number);
@@ -1799,20 +1879,20 @@ function timePicker(box,st){
           <div class="opts apbox"><button class="opt ${H<12?'on':''}" data-ap="am">am</button><button class="opt ${H>=12?'on':''}" data-ap="pm">pm</button></div><button class="opt sm okt">✓</button></div>`;
         const hh=el.querySelector('.hh'), mm=el.querySelector('.mm');
         const read=()=>{ const h=Math.min(12,Math.max(1,parseInt(hh.value)||12)), m=Math.min(59,Math.max(0,parseInt(mm.value)||0)); H=(h%12)+(H>=12?12:0); M=m; put(); };
-        hh.oninput=()=>{ if(hh.value.length>=2) mm.focus(); read(); }; mm.oninput=read;
+        hh.oninput=()=>{ if(hh.value.length>=2&&st.typeFocus!=='mm') mm.focus(); read(); }; mm.oninput=read;
         hh.onfocus=()=>hh.select(); mm.onfocus=()=>mm.select();
         el.querySelectorAll('[data-ap]').forEach(b=>b.onclick=()=>{ read(); H=(H%12)+(b.dataset.ap==='pm'?12:0); put(); el.querySelectorAll('[data-ap]').forEach(x=>x.classList.toggle('on',x===b)); });
         el.querySelector('.okt').onclick=()=>{ read(); st.typing=false; draw(); };
         mm.onkeydown=hh.onkeydown=e=>{ if(e.key==='Enter'){ read(); st.typing=false; draw(); } };
-        setTimeout(()=>hh.focus(),50); return null;
+        setTimeout(()=>(st.typeFocus==='mm'?mm:hh).focus(),50); return null;
       }
       const wh=document.createElement('div'); wh.className='wheels'; el.appendChild(wh);
-      const type=()=>{ st.typing=which; draw(); };
+      const type=f=>{ st.typing=which; st.typeFocus=f||'hh'; draw(); };
       const hours=Array.from({length:12},(_,i)=>String(i+1)), mins=Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
-      const hw=makeWheel(hours,((H%12)||12)-1,i=>{ H=((i+1)%12)+(H>=12?12:0); put(); },'',{loop:true,onTapSel:type});
+      const hw=makeWheel(hours,((H%12)||12)-1,i=>{ H=((i+1)%12)+(H>=12?12:0); put(); },'',{loop:true,onTapSel:()=>type('hh')});
       const c=document.createElement('span'); c.className='colon'; c.textContent=':';
-      const mw=makeWheel(mins,M,i=>{ M=i; put(); },'',{loop:true,onTapSel:type});
-      const aw=makeWheel(['am','pm'],H>=12?1:0,i=>{ H=(H%12)+(i?12:0); put(); },'ampm',{onTapSel:type});
+      const mw=makeWheel(mins,M,i=>{ M=i; put(); },'',{loop:true,onTapSel:()=>type('mm')});
+      const aw=makeWheel(['am','pm'],H>=12?1:0,i=>{ H=(H%12)+(i?12:0); put(); },'ampm',{onTapSel:()=>type('hh')});
       wh.append(hw,c,mw,aw);
       return {set:hm=>{ [H,M]=hm.split(':').map(Number); hw.setTo(((H%12)||12)-1); mw.setTo(M); aw.setTo(H>=12?1:0); }};
     };
@@ -1905,6 +1985,8 @@ function openAdd(existing,onSaved,heading,opt){
       const rec={whos:S.people.map(p=>p.id).filter(id=>st.whos.includes(id)),title:st.title.trim(),addr:st.addr.trim(),date:st.date,time:st.time,dur:st.time?st.dur||60:0};
       if(st.priv) rec.priv=true; else if(existing) delete existing.priv;
       if(canRepeat){ if(st.rpt){ if(st.rpt.until&&st.rpt.until<st.date){ toast('The end date is before the start'); return; } rec.rpt=st.rpt; } else if(existing) delete existing.rpt; }
+      const cl=clashesFor(Object.assign({},rec,{id:existing&&existing.id}));
+      if(cl.length&&!st.clashOk){ clashAsk(cl,()=>{ st.clashOk=true; m.querySelector('#sBtn').click(); }); return; }
       let ev; if(isNew){ ev=Object.assign({id:uid()},rec); if(existing&&existing.todoId) ev.todoId=existing.todoId; S.events.push(ev); } else { ev=Object.assign(existing,rec); const tj=todoOf(ev); if(tj) tj.title=ev.title; }
       save(); close(); renderCal(); renderTodo(); toast(isNew?'Added to the calendar':'Saved'); if(onSaved) onSaved(ev);
     };
