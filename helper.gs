@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 31;
+const HELPER_VERSION = 32;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -730,8 +730,22 @@ function docSave(h, b) {
   return { ok: true, id: f.getId(), url: f.getUrl() };
 }
 /* 3.4 the fridge's night-time photo frame: pictures from a Drive folder the family picked, 10 at a time, about 1280 px wide */
+// the family album: one Drive folder the helper makes itself, "Family Screen photos"
+function albumFolder() {
+  const props = PropertiesService.getScriptProperties(); let f = null;
+  try { const id = props.getProperty('ALBUM_FOLDER'); if (id) f = DriveApp.getFolderById(id); } catch (e) {}
+  if (!f) { f = DriveApp.createFolder('Family Screen photos'); props.setProperty('ALBUM_FOLDER', f.getId()); }
+  return f;
+}
+function photoAdd(b) {
+  const data = String(b.data || ''); if (!data || data.length > 12e6) return { error: 'No photo, or it is too big' };
+  const f = albumFolder(), name = String(b.name || ('Photo ' + Utilities.formatDate(new Date(), 'Pacific/Auckland', 'yyyy-MM-dd HHmmss'))).replace(/[\\/:*?"<>|]/g, ' ').slice(0, 100);
+  const file = f.createFile(Utilities.newBlob(Utilities.base64Decode(data), String(b.mime || 'image/jpeg'), name));
+  if (b.by) try { file.setDescription('Added by ' + String(b.by).slice(0, 60) + ' from Family Screen'); } catch (e) {}
+  return { ok: true, id: file.getId(), folder: f.getId() };
+}
 function photosPage(b) {
-  const id = String(b.folder || '').replace(/[^\w-]/g, ''); if (!id) return { error: 'No folder' };
+  const id = String(b.folder || '').replace(/[^\w-]/g, '') || albumFolder().getId();
   let files; try { files = DriveApp.getFolderById(id).getFiles(); } catch (e) { return { error: 'That folder can\'t be opened by the helper\'s Google account' }; }
   const all = []; while (files.hasNext() && all.length < 200) { const f = files.next(); if (/^image\//.test(f.getMimeType())) all.push(f); }
   all.sort(function (a, c) { return c.getDateCreated() - a.getDateCreated(); });
@@ -1117,6 +1131,7 @@ function voiceDo(h, action, b) {
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
   if (action === 'msg_send') return voiceMsgSend(h, b, now);
   if (action === 'photos') return photosPage(b);
+  if (action === 'photo_add') return photoAdd(b);
   if (action === 'doc_save') return docSave(h, b);
   if (action === 'msg_read') return voiceMsgRead(h, b, now);
   if (action === 'health') { const pr = PropertiesService.getScriptProperties(), st = hRead(pr, h._id); st.readsAt = 0; hSave(pr, h._id, st); return { ok: true, health: healthAfterRun(h, pr, new Date(), '', {}) }; }

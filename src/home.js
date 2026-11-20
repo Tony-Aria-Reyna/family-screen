@@ -1197,6 +1197,10 @@ async function takeShare(){
   let text=[meta.title,meta.text].filter(Boolean).join('\n'); const link=meta.url||((text.match(/https?:\/\/\S+/)||[])[0])||'';
   const tf=files.find(f=>/^text\/|\.(ics|eml|txt)$/i.test(f.type+' '+f.name)); if(tf) try{ text+='\n'+(await tf.text()).slice(0,12000); }catch(e){}
   const pic=files.find(f=>/^image\/|application\/pdf/.test(f.type));
+  if(files.length&&files.every(f=>/^image\//.test(f.type))&&!text.replace(link,'').trim()){
+    const choice=await new Promise(res=>modal((m,close)=>{ m.innerHTML=`<h2>Where should ${files.length>1?'these photos':'this photo'} go?</h2><div class="opts" style="flex-direction:column;align-items:stretch;gap:10px"><button class="opt big" id="a1">📸 Family album</button><button class="opt big" id="a2">📥 Family inbox (a letter, notice or bill)</button></div>`;
+      m.querySelector('#a1').onclick=()=>{ close(); res('album'); }; m.querySelector('#a2').onclick=()=>{ close(); res('inbox'); }; }));
+    if(choice==='album'){ await albumAdd(files); openAlbum(); return; } }
   const me=mePerson(), d={id:uid(),status:'new',at:Date.now(),sender:'Shared by '+(me?nm(me):'the family'),summary:'',items:[],shared:true,
     fromEmail:{from:'Shared',subject:String(meta.title||(pic?pic.name:'')||link||text.split('\n')[0]||'Shared').slice(0,120),link}};
   if(aiOK()){ const done=aiBusy('Reading what you shared…');
@@ -1452,15 +1456,15 @@ async function saverOn(){
     const u=urls.length?urls[saverI++%urls.length]:'';
     el.innerHTML=`${u?`<img src="${u}" alt="">`:''}<div class="sv-info"><div class="sv-time">${esc(t)}</div><div class="sv-date">${esc(jaDate(now))}</div>${nx?`<div class="sv-next">${esc((nx.date===dk(now)?tr('Today'):tr('Tomorrow'))+' · '+(nx.time?jaTime(nx.time)+' ':'')+(nx.title||''))}</div>`:''}</div>`; };
   draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
-  if(navigator.onLine&&S.photoFolder&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
+  if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
 }
 function saverOff(){ clearInterval(saverT); const el=document.getElementById('saver'); if(el){ el.querySelectorAll('img').forEach(i=>{ try{ URL.revokeObjectURL(i.src); }catch(e){} }); el.remove(); } }
 // the photo frame's pictures: up to 40 from the family's Drive folder, fetched through the helper and kept on this screen
 async function saverFetch(force){
-  if(!S.photoFolder||!S.voiceUrl) return 0; lsSet('fs.photosAt',String(Date.now()));
+  if(!S.voiceUrl) return 0; lsSet('fs.photosAt',String(Date.now()));
   const c=await caches.open('fs-photos'), keys=[]; let n=0;
   for(let page=0;page<4;page++){ const j=await helperDo('photos',{folder:S.photoFolder,page}); if(!j||!j.photos) break;
-    for(const p of j.photos){ try{ const bin=Uint8Array.from(atob(p.data),ch=>ch.charCodeAt(0)); await c.put('p/'+p.id,new Response(new Blob([bin],{type:p.mime||'image/jpeg'}))); keys.push(p.id); n++; }catch(e){} }
+    for(const p of j.photos){ try{ if(!(await c.match('p/'+p.id))){ const bin=Uint8Array.from(atob(p.data),ch=>ch.charCodeAt(0)); await c.put('p/'+p.id,new Response(new Blob([bin],{type:p.mime||'image/jpeg'}))); } keys.push(p.id); n++; }catch(e){} }
     if(!j.more) break; }
   if(keys.length){ const old=await saverPhotos(); for(const k of old) if(!keys.includes(k)) try{ await c.delete('p/'+k); }catch(e){}
     await c.put('list',new Response(JSON.stringify(keys),{headers:{'Content-Type':'application/json'}})); }
@@ -1700,3 +1704,45 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
     m.querySelector('#fsave').onclick=()=>{ S.food=m.querySelector('#food').value.trim().slice(0,600); save(); toast('Saved. Every dinner idea follows this.'); };
   }; draw(); });
 }
+
+/* ================= 📸 Family album =================
+   Anyone adds photos: from their phone (camera or photos, several at once), by dragging them onto the fridge or a
+   computer, or with Android's Share → Family Screen. They are made a sensible size and saved by the Reminder helper
+   into "Family Screen photos" in the family's Google Drive; the fridge's night-time photo frame shows them. */
+async function albumAdd(files,status){
+  const list=[...files].filter(f=>/^image\//.test(f.type)).slice(0,30); if(!list.length){ toast('Those aren’t photos'); return 0; }
+  if(!S.voiceUrl){ toast('The album needs the Reminder helper: ⚙️ Settings → Connections → 🧰 Helpers'); return 0; }
+  let ok=0;
+  for(let i=0;i<list.length;i++){ if(status) status(`Saving ${i+1} of ${list.length}…`);
+    try{ const d=await fileForAI(list[i]); const r=await helperDo('photo_add',{data:d.data,mime:d.mime,name:(list[i].name||'Photo').replace(/\.[a-z]+$/i,'')+'.jpg',by:(mePerson()&&nm(mePerson()))||''});
+      if(r&&r.ok){ ok++; if(r.folder&&S.photoFolder!==r.folder){ S.photoFolder=r.folder; save(); }
+        try{ const c=await caches.open('fs-photos'), bin=Uint8Array.from(atob(d.data),ch=>ch.charCodeAt(0)); await c.put('p/'+r.id,new Response(new Blob([bin],{type:d.mime})));
+          const l=await saverPhotos(); l.unshift(r.id); await c.put('list',new Response(JSON.stringify(l.slice(0,40)),{headers:{'Content-Type':'application/json'}})); }catch(e){} } }
+    catch(e){} }
+  toast(ok?`${ok} photo${ok>1?'s':''} added to the family album`:'Couldn’t save the photos. Try again.');
+  return ok;
+}
+function openAlbum(){ modal((m,close)=>{ m.classList.add('wide','tvsheet'); let urls=[];
+  const draw=async()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); urls=[];
+    const ids=await saverPhotos(); try{ const c=await caches.open('fs-photos'); for(const id of ids.slice(0,40)){ const r=await c.match('p/'+id); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
+    if(!m.isConnected) return;
+    m.innerHTML=`<div class="tvhead"><h2>📸 Family album</h2><button class="save" id="x">Done</button></div>
+      <div class="aldrop" id="drop"><b>＋ Add photos</b><small>${isPhone()?'Take one, or choose several from your phone':'Drag photos here, or tap to choose'}</small></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><button class="cancel" id="sync">🔄 Get the latest</button>${!isPhone()?'<button class="cancel" id="try">🌙 Show the photo frame</button>':''}</div>
+      <input type="file" id="alC" accept="image/*" capture="environment" hidden><input type="file" id="alP" accept="image/*" multiple hidden>
+      <p class="note" id="alS">${urls.length?urls.length+' photos on this screen. Everyone’s photos are kept in “Family Screen photos” in Google Drive.':'No photos yet. Add some from your phone and they appear here and on the fridge at night.'}</p>
+      <div class="algrid">${urls.map(u=>`<img src="${u}" alt="" loading="lazy">`).join('')}</div>`;
+    const st=t=>{ const e=m.querySelector('#alS'); if(e) e.textContent=t; }, go=async fs=>{ await albumAdd(fs,st); draw(); };
+    const C=m.querySelector('#alC'), P=m.querySelector('#alP'), dz=m.querySelector('#drop');
+    dz.onclick=()=>isPhone()?photoChoice(C,P):P.click();
+    C.onchange=P.onchange=e=>{ const fs=e.target.files; if(fs&&fs.length) go([...fs]); e.target.value=''; };
+    dz.ondragover=e=>{ e.preventDefault(); dz.classList.add('on'); }; dz.ondragleave=()=>dz.classList.remove('on');
+    dz.ondrop=e=>{ e.preventDefault(); dz.classList.remove('on'); go([...(e.dataTransfer.files||[])]); };
+    m.querySelector('#x').onclick=()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); close(); };
+    m.querySelector('#sync').onclick=async()=>{ st('Getting the latest photos…'); await saverFetch(true); draw(); };
+    const t=m.querySelector('#try'); if(t) t.onclick=()=>{ close(); setTimeout(()=>{ hubIdle=Date.now(); saverOn(); },300); };
+  };
+  m.innerHTML='<p class="note">Opening the album…</p>'; draw(); }); }
+// photos dropped anywhere on the fridge or a computer go to the album
+document.addEventListener('dragover',e=>{ if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+document.addEventListener('drop',e=>{ if(e.defaultPrevented||!S.people.length||LOCAL) return; const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])].filter(f=>/^image\//.test(f.type)); if(!fs.length) return; e.preventDefault(); albumAdd(fs); });

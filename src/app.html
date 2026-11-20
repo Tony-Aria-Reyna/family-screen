@@ -212,6 +212,8 @@ body.limited .tabbar button[data-tab="home"],body.limited .tabbar button[data-ta
 body.limited .bigadd span{font-size:0}body.limited .bigadd span::after{content:'Add to calendar';font-size:15px}
 body.limited #simple #sMsg,body.limited #simple .sshop{display:none}
 .stk{display:flex;flex-wrap:wrap;gap:6px}
+.aldrop{border:3px dashed #b8dcd5;background:#f1faf8;border-radius:20px;padding:22px;text-align:center;display:flex;flex-direction:column;gap:4px;cursor:pointer}.aldrop b{font-size:22px}.aldrop small{color:var(--muted);font-size:15px}.aldrop.on{background:#d9f2ec}
+.algrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}.algrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#eee}
 .srv{display:flex;flex-direction:column;gap:6px}.srow{display:flex;gap:8px;align-items:center}.srow.off{opacity:.45}.srow.off .sn{text-decoration:line-through}
 .srow .sbx{width:44px;height:44px;flex:none;border-radius:12px;border:3px solid #10b981;background:#ecfdf5;color:#047857;font-size:22px;font-weight:900}.srow.off .sbx{border-color:#d1d5db;background:#fff}
 .srow{flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}.srow .sn{flex:1 1 60%;min-width:0;padding:9px 12px;font-size:18px}
@@ -2926,6 +2928,7 @@ function moreTiles(){ return [
   ['👵','Big and simple',()=>openSimplePick(),()=>'日本語 or English'],
   ['🧾','Bills',()=>openBills(),()=>{ const n=(S.bills||[]).filter(b=>b.status==='check').length; return n?n+' to check':''; }],
   ['🧊','Kitchen stock',()=>openStock(),()=>{ const n=stockNow().length; return n?n+' things in the house':'freezer, fridge, sauces'; }],
+  ['📸','Family album',()=>openAlbum(),()=>'add photos for the fridge'],
   ['📁','Documents',()=>openVault(),()=>{ const n=(S.docs||[]).length; return n?n+' kept · who to call':'insurance and policies'; }],
   ['📌','Renewals',()=>openRenewals(),()=>{ const n=(S.renewals||[]).filter(r=>r.due&&daysTo(r.due)<=30).length; return n?n+' coming up':''; }],
   ['📖','Recipes',()=>openRecipeBook(),()=>allRecipes().length+' recipes'],
@@ -2990,7 +2993,7 @@ function openSettings(at){
     <div class="shd" id="s-dev">📱 This device</div>
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goSimple">👵 Big and simple screen</button></div>
     ${isPhone()||LOCAL?'':`<div class="srccard" style="margin:10px 0"><h4>🧲 Fridge screen</h4><label class="small"><input type="checkbox" id="hubOn" ${lsGet('fs.hub','1')==='1'?'checked':''}> Keep the screen on, go back to Today after 3 minutes, and show a photo frame from 9pm to 6am</label>
-      <label class="small">Photos from this Google Drive folder (paste its link) <input class="txt" id="phF" value="${esc(S.photoFolder||'')}" placeholder="https://drive.google.com/drive/folders/…"></label>
+      <label class="small">Photos come from 📸 Family album (More). Or use your own Google Drive folder instead (paste its link) <input class="txt" id="phF" value="${esc(S.photoFolder||'')}" placeholder="https://drive.google.com/drive/folders/…"></label>
       <div class="row"><button class="xbtn" id="phGo">📷 Save and get the photos now</button><button class="xbtn" id="phTry">🌙 Try the photo frame</button></div></div>`}
     <label class="small">Language on this device <select id="devLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語 (Japanese)</option></select></label>
     ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
