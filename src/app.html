@@ -1018,8 +1018,10 @@ function dateIn(d,tz){ return new Intl.DateTimeFormat('en-NZ',{timeZone:tz,weekd
 /* ================= helpers ================= */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const person=id=>S.people.find(p=>p.id===id);
-const traveller=()=>S.people.find(p=>p.traveller);
+// people of a linked family (ids "g~…") come from SYNC; ours from S.people
+const person=id=>S.people.find(p=>p.id===id)||(!LOCAL&&SYNC.guestPerson?SYNC.guestPerson(id):undefined);
+const guestPeople=()=>(!LOCAL&&SYNC.guestPeople?SYNC.guestPeople():[]);
+const traveller=()=>S.people.find(p=>p.traveller)||guestPeople().find(p=>p.traveller);
 const shop=id=>S.shops.find(s=>s.id===id)||S.shops[S.shops.length-1];
 const col=id=>{ const p=person(id); return p?p.color:'#e5e7eb'; };
 const nm=id=>{ const p=person(id); return p?p.name:''; };
@@ -1840,6 +1842,7 @@ function addrSearch(input,list,onSet){
   input.addEventListener('blur',()=>setTimeout(hide,250));
 }
 function openAdd(existing,onSaved,heading,opt){
+  if(existing&&existing.g&&existing.id&&existing.by!==SYNC.me()){ const f=(SYNC.guestFamilies().find(x=>x.id===existing.g)||{}).label||'the other family'; toast('Only '+f+' can change this entry'); return; }
   const isNew=!existing||!existing.id;
   const st={whos:[...(existing?.whos||[])],title:existing?.title||'',addr:existing?.addr||'',date:existing?.date||dk(new Date()),time:existing&&existing.id?(existing.time||''):(existing?.time||defaultTime()),dur:existing?.dur||60,typing:false,rpt:existing&&existing.rpt?JSON.parse(JSON.stringify(existing.rpt)):null,priv:!!(existing&&existing.priv)};
   const canRepeat=!(opt&&opt.noRepeat)&&!(existing&&existing.todoId);
@@ -1869,7 +1872,7 @@ function openAdd(existing,onSaved,heading,opt){
     </div></div>
     <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
     const drawWho=()=>{ const b=m.querySelector('#whoBox');
-      b.innerHTML=S.people.map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
+      b.innerHTML=S.people.concat(guestPeople()).map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
       b.querySelectorAll('[data-who]').forEach(x=>x.onclick=()=>{ const id=x.dataset.who; st.whos=st.whos.includes(id)?st.whos.filter(i=>i!==id):[...st.whos,id]; drawWho(); }); };
     const drawDays=()=>{ const b=m.querySelector('#dayBox');
       b.innerHTML=dayOpts.map(o=>`<button class="opt ${cur().date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
@@ -2861,7 +2864,7 @@ function openSettings(at){
     ${LOCAL?'':`<div class="shd" id="s-health">🩺 Health</div><div id="hcard">${healthHTML()}</div>`}
     <div class="shd" id="s-family">👪 Family</div>
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
-      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
+      ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`${SYNC.getLimited().includes(e)&&CONFIG&&CONFIG.admin?`<button class="xbtn" data-mown="${esc(e)}">🏠 Own household</button>`:''}<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button>${SYNC.me()===SYNC.getOwner()?'<button class="xbtn" id="mAddCal">＋ Add, 📅 calendar only</button>':''}</div>
       <p class="note"><b>📅 Calendar only</b> accounts don’t need to confirm their email address when they sign in with email and password. It lets someone see and add calendar entries (and Reyna’s roster) and get reminders, and gives them their own separate jobs, shopping list and meal plan that nobody else sees. They don’t see the family’s jobs, shopping, meals, bills, messages, documents or Settings. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
       ${CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<div class="step">✉️ Invite another family <span style="font-weight:500">(only you see this)</span></div>
@@ -2943,6 +2946,7 @@ function openSettings(at){
     if(!LOCAL){
       const mac=m.querySelector('#mAddCal'); if(mac) mac.onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addCalMember(v); toast('Added '+v+' (calendar only, no email confirmation needed)'); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
       m.querySelector('#mAdd').onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type a full email address'); return; } try{ await SYNC.addMember(v); toast('Added '+v); setTimeout(draw,300); }catch(e){ toast('Could not add that account'); } };
+      m.querySelectorAll('[data-mown]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.addInvite(b.dataset.mown); toast('Done. On their phone they reopen Family Screen and tap “Set up our family”. Both calendars stay linked.'); }catch(x){ toast('Could not invite that account'); } });
       m.querySelectorAll('[data-mlim]').forEach(b=>b.onclick=async()=>{ const e=b.dataset.mlim, on=!SYNC.getLimited().includes(e); try{ await SYNC.setLimited(e,on); toast(on?e+' now sees the calendar only':e+' now sees everything'); setTimeout(draw,300); }catch(x){ toast('Only the person who set up the family can change that'); } });
       m.querySelectorAll('[data-mrm]').forEach(b=>b.onclick=async()=>{ try{ await SYNC.removeMember(b.dataset.mrm); setTimeout(draw,300); }catch(e){ toast('Could not remove that account'); } });
       m.querySelector('#signOut').onclick=async()=>{ close(); await SYNC.signOut(); };
@@ -3153,7 +3157,10 @@ async function enterHome(again){
   const unconfirmed=!!(SYNC.needsVerify&&SYNC.needsVerify());
   gate('loading');
   // an unconfirmed address is let in only if the family has made it a calendar-only account; otherwise it confirms first
-  try{ const id=await SYNC.findHousehold(); if(id) startHome(id); else if(unconfirmed) gate('verify'); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
+  try{ const id=await SYNC.findHousehold();
+    // someone with only a calendar link who has been invited to start their own household (Masako) gets the set-up card
+    if(id&&SYNC.guestOnly()&&!unconfirmed&&await SYNC.isInvited(CONFIG&&CONFIG.admin)){ gate('nohome','invited'); return; }
+    if(id) startHome(id); else if(unconfirmed) gate('verify'); else gate('nohome',(await SYNC.isInvited(CONFIG&&CONFIG.admin))?'invited':''); }
   catch(e){ const pd=e&&e.code==='permission-denied', tries=+again||0;
     if(unconfirmed&&pd){ gate('verify'); return; }
     // 1.4: the sign-in pass is sometimes a moment behind the first question to the database (a new tab, a phone waking

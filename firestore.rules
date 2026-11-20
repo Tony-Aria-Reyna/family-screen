@@ -39,7 +39,12 @@ service cloud.firestore {
       allow delete: if signedIn() && email() == resource.data.owner;
 
       match /{col}/{id} {
-        allow read, write: if isMember(hid) && col in ['events', 'usage'];
+        allow read: if isMember(hid) && col == 'events';
+        allow write: if isMember(hid) && col == 'usage';
+        // an account that only has a calendar link may add entries, and change or delete only the ones it added
+        allow create: if isMember(hid) && col == 'events' && request.resource.data.by == email();
+        allow update: if isMember(hid) && col == 'events' && resource.data.by == email() && request.resource.data.by == email();
+        allow delete: if isMember(hid) && col == 'events' && resource.data.by == email();
         allow read: if isMember(hid) && col in ['flights', 'sources'];
         allow read, write: if isFull(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs', 'usage', 'docs', 'stock'];
       }
