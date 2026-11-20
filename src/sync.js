@@ -174,6 +174,7 @@ function listenGuest(g) {
   const G = guests[g] = {};
   unsub.push(listen(doc(db, 'households', g), snap => { if (!snap.exists()) return; const d = snap.data();
     G.people = d.people || []; G.owner = d.owner || ''; G.live = d.live || {}; S.live = S.live || {}; guestLive();
+    G.chatOff = d.chatOff || []; G.voiceUrl = d.voiceUrl || ''; G.voiceKey = d.voiceKey || ''; if (gMe(g)) listenGuestChat(g);
     if (!S.vapidKey && d.vapidKey && owner === me()) { S.vapidKey = d.vapidKey; push(); }
     mergeGuest('events'); mergeGuest('flights'); onChange('settings');
   }, () => {}));
@@ -230,7 +231,7 @@ export function start(householdId, state, changed) {
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id)); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
-    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; guestLive(); S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; S.aiKeyTail = d.aiKeyTail || ''; S.aiKeyAt = d.aiKeyAt || 0; S.voiceKey = d.voiceKey || ''; S.voiceUrl = d.voiceUrl || ''; S.voiceName = d.voiceName || ''; S.famNote = d.famNote || ''; S.aiProv = d.aiProv || ''; S.aiClaudeModel = d.aiClaudeModel || ''; S.aiEffort = d.aiEffort || ''; S.claudeKeyTail = d.claudeKeyTail || ''; S.wakeStyle = d.wakeStyle || ''; S.wakeSfx = d.wakeSfx !== false; S.billEmail = d.billEmail || ''; S.inboxEmail = d.inboxEmail || ''; S.inboxHelper = d.inboxHelper || null; S.billsRoot = d.billsRoot || ''; S.billFolders = d.billFolders || []; S.billsRootName = d.billsRootName || ''; S.billsHelper = d.billsHelper || null; S.billSheet = d.billSheet || ''; S.alexaFrom = d.alexaFrom || ''; S.evAt = d.evAt || 0; S.photoFolder = d.photoFolder || ''; S.photoRev = d.photoRev || 0; S.food = d.food || ''; S.foodLog = d.foodLog || []; if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
+    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; guestLive(); S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; S.aiKeyTail = d.aiKeyTail || ''; S.aiKeyAt = d.aiKeyAt || 0; S.voiceKey = d.voiceKey || ''; S.voiceUrl = d.voiceUrl || ''; S.voiceName = d.voiceName || ''; S.famNote = d.famNote || ''; S.aiProv = d.aiProv || ''; S.aiClaudeModel = d.aiClaudeModel || ''; S.aiEffort = d.aiEffort || ''; S.claudeKeyTail = d.claudeKeyTail || ''; S.wakeStyle = d.wakeStyle || ''; S.wakeSfx = d.wakeSfx !== false; S.billEmail = d.billEmail || ''; S.inboxEmail = d.inboxEmail || ''; S.inboxHelper = d.inboxHelper || null; S.billsRoot = d.billsRoot || ''; S.billFolders = d.billFolders || []; S.billsRootName = d.billsRootName || ''; S.billsHelper = d.billsHelper || null; S.billSheet = d.billSheet || ''; S.alexaFrom = d.alexaFrom || ''; S.evAt = d.evAt || 0; S.photoFolder = d.photoFolder || ''; S.photoRev = d.photoRev || 0; S.chatOff = d.chatOff || []; S.food = d.food || ''; S.foodLog = d.foodLog || []; if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
     synced.settings = JSON.stringify(settingsOf(S));
     if (!subbed) { subbed = true; subCols(); }
     onChange('settings');
@@ -277,7 +278,7 @@ export function retrySoft() { if (hid) SOFT.forEach(listenSoft); }
 export const canSee = c => !!softOk[c];
 export const privateOk = () => privOk;
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; callsOn = false; clearTimeout(callRetry); }
-const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '', alexaFrom: s.alexaFrom || '', photoFolder: s.photoFolder || '', photoRev: s.photoRev || 0, food: s.food || '', foodLog: s.foodLog || [] });
+const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '', alexaFrom: s.alexaFrom || '', photoFolder: s.photoFolder || '', photoRev: s.photoRev || 0, chatOff: s.chatOff || [], food: s.food || '', foodLog: s.foodLog || [] });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
 /* ---------- who did what (v1.5) ----------
@@ -405,22 +406,84 @@ export const householdId = () => hid;
    picks up, and any network addresses found late. It is deleted when the call ends.
    A photo sent in Messages is kept in its own record, households/{id}/msgpics/{id}, and fetched when a chat shows it,
    so the message list itself stays small and quick. */
-let callCb = null, callsOn = false, callRetry = 0;
+let callCb = null, callsOn = false, callRetry = 0, ownCalls = [];
 export function onCalls(cb) { callCb = cb; if (hid && subbed && !callsOn) startCalls(); }
 export const callsReady = () => callsOn;
+function emitCalls() { if (!callCb) return; let all = ownCalls.slice(); for (const g of guestIds) if (guests[g] && guests[g].calls) all = all.concat(guests[g].calls); callCb(all); }
 function startCalls() {
   clearTimeout(callRetry);
   if (!hid || !callCb || isLimited()) return;
   const mine = hid;
-  unsub.push(listen(collection(db, 'households', hid, 'calls'), snap => { callsOn = true; callCb(snap.docs.map(x => Object.assign({ id: x.id }, x.data()))); },
+  unsub.push(listen(collection(db, 'households', hid, 'calls'), snap => { callsOn = true; ownCalls = snap.docs.map(x => Object.assign({ id: x.id }, x.data())); emitCalls(); },
     err => { callsOn = false; console.warn('calls: database rules need updating', err && err.code); callCb(null); callRetry = setTimeout(() => { if (hid === mine) startCalls(); }, 120e3); }));
 }
-const callRef = id => doc(db, 'households', hid, 'calls', id);
-export const callPut = (id, data) => setDoc(callRef(id), clean(data));
+const callRef = id => isG(id) ? doc(db, 'households', gOf(id), 'calls', rawOf(id)) : doc(db, 'households', hid, 'calls', id);
+export const callNewId = (th, id) => isG(th) ? gId(gOf(th), id) : id;
+export function callPut(id, data) {
+  const d = clean(data);
+  if (isG(id)) { const g = gOf(id); d.from = whoOut(g, d.from); d.to = d.to === 'fam' ? 'fam' : whoOut(g, d.to); d.th = rawOf(d.th); d.em = [me()]; d.byE = me(); }
+  else { const em = chatEm(d.th, true); if (em.length) d.em = em; }
+  return setDoc(callRef(id), d);
+}
 export const callPatch = (id, data) => updateDoc(callRef(id), data);
 export const callAddIce = (id, field, list) => updateDoc(callRef(id), { [field]: arrayUnion(...list) });
 export const callDrop = id => deleteDoc(callRef(id)).catch(() => {});
-const picRef = id => doc(db, 'households', hid, 'msgpics', id);
-export const picPut = (id, data) => setDoc(picRef(id), clean(data));
-export async function picGet(id) { const s = await getDoc(picRef(id)); tally(1); return s.exists() ? s.data() : null; }
+const picRef = (id, g) => doc(db, 'households', g || hid, 'msgpics', id);
+export const picPut = (id, data, th) => setDoc(picRef(id, isG(th) ? gOf(th) : ''), clean(data));
+export async function picGet(id, g) { const s = await getDoc(picRef(id, g && guests[g] ? g : '')); tally(1); return s.exists() ? s.data() : null; }
 export const picDrop = id => deleteDoc(picRef(id)).catch(() => {});
+
+/* ---------- 4.1 chats and calls with a linked family ----------
+   Masako has her own household, with only the calendars linked to Tony's. She is still one of the people in Tony's
+   family list, so the chats and calls between her and that family live in THAT family's records, each one carrying her
+   address in "em". The database rules let a linked account read and write only the records that carry its address.
+   On her phone they appear as threads "g~<their household>~<thread>"; people are matched by email as for the calendar. */
+// this household's linked accounts that are also listed as people here (Masako, in Tony's family)
+export const linkedPeople = () => (S ? S.people : []).filter(p => p.id !== 'all' && p.email && limitedList.includes(p.email));
+// which linked accounts a record in thread th of THIS household is for. A call to Family rings only this household.
+export function chatEm(th, calling) {
+  const lp = linkedPeople(); if (!lp.length) return [];
+  if (th === 'fam') return calling ? [] : lp.filter(p => !(S.chatOff || []).includes(p.email)).map(p => p.email);
+  const ids = String(th).split('|'); return lp.filter(p => ids.includes(p.id)).map(p => p.email);
+}
+const gMe = g => { const G = guests[g], p = G && (G.people || []).find(q => q.id !== 'all' && q.email && q.email === me()); return p ? p.id : null; };
+function listenGuestChat(g) {
+  const G = guests[g]; if (!G || G.chatOn) return; G.chatOn = true; const subs = [];
+  const fail = err => { if (!G.chatOn) return; G.chatOn = false; G.chatDenied = true; console.warn('linked chat: database rules need updating', err && err.code);
+    subs.forEach(u => { try { u(); } catch (e) {} }); setTimeout(() => { if (guests[g] === G && hid) listenGuestChat(g); }, 120e3); };
+  subs.push(listen(query(collection(db, 'households', g, 'msgs'), where('em', 'array-contains', me())), snap => { G.chatDenied = false; G.msgs = snap.docs.map(x => Object.assign({ id: x.id }, x.data())); mergeGuestMsgs(); }, fail));
+  subs.push(listen(query(collection(db, 'households', g, 'calls'), where('em', 'array-contains', me())), snap => {
+    G.calls = snap.docs.map(x => { const d = x.data(); return Object.assign({}, d, { id: gId(g, x.id), g, from: whoIn(g, d.from), to: d.to === 'fam' ? 'fam' : whoIn(g, d.to), th: gId(g, d.th) }); }); emitCalls(); }, fail));
+  subs.forEach(u => unsub.push(u));
+}
+function mergeGuestMsgs() {
+  if (!S) return; let all = [];
+  for (const g of guestIds) { const G = guests[g]; if (!G || !G.msgs || !G.people || !gMe(g)) continue;
+    all = all.concat(G.msgs.map(x => Object.assign({}, x, { id: gId(g, x.id), g, th: gId(g, x.th), from: whoIn(g, x.from), seen: (x.seen || []).map(w => whoIn(g, w)) }))); }
+  S.msgs = S.msgs || []; mergeArray(S.msgs, S.msgs.filter(x => !x.g).concat(all)); onChange('msgs');
+}
+// my chats in linked families: [{g, label, fam: thread id or '', people: [{id, th}]}]
+export function guestChats() {
+  const out = [];
+  for (const g of guestIds) { const G = guests[g], mine = gMe(g); if (!G || !G.people || !mine) continue;
+    out.push({ g, label: gLabel(G), fam: (G.chatOff || []).includes(me()) ? '' : gId(g, 'fam'),
+      people: G.people.filter(p => p.id !== 'all' && p.id !== mine).map(p => ({ id: whoIn(g, p.id), th: gId(g, [mine, p.id].sort().join('|')) })) }); }
+  return out;
+}
+// what a linked thread is: {g, raw, me, fam, label, other, ready}
+export function guestTh(th) {
+  if (!isG(th)) return null; const g = gOf(th), raw = rawOf(th), G = guests[g], mine = gMe(g); if (!G || !mine || (raw !== 'fam' && raw.indexOf('|') < 0)) return null;   // a thread, not a person
+  return { g, raw, me: mine, fam: raw === 'fam', label: gLabel(G), ready: !G.chatDenied, other: raw === 'fam' ? '' : whoIn(g, raw.split('|').find(x => x !== mine) || mine) };
+}
+// an alert names the thread as the other family knows it: find it here
+export function guestThFromRaw(raw) { for (const g of guestIds) { const mine = gMe(g); if (mine && (raw === 'fam' || String(raw).split('|').includes(mine))) return gId(g, raw); } return ''; }
+export function guestMsgAdd(th, m, seenByAll) {
+  const t = guestTh(th); if (!t) return Promise.reject(new Error('not linked'));
+  const body = clean(m); delete body.id; delete body.g;
+  Object.assign(body, { th: t.raw, from: t.me, seen: seenByAll ? (guests[t.g].people || []).filter(p => p.id !== 'all').map(p => p.id) : [t.me], em: [me()], byE: me() });
+  return setDoc(doc(db, 'households', t.g, 'msgs', m.id), body);
+}
+export const guestMsgSeen = id => { const g = gOf(id), mine = gMe(g); return mine ? updateDoc(doc(db, 'households', g, 'msgs', rawOf(id)), { seen: arrayUnion(mine) }).catch(() => {}) : Promise.resolve(); };
+// the other family's helper sends the alerts for their records (their record already lets a linked account read this)
+export const guestHelper = th => { const G = isG(th) ? guests[gOf(th)] : null; return G && G.voiceUrl && G.voiceKey ? { url: G.voiceUrl, key: G.voiceKey } : null; };
+export const rawId = id => isG(id) ? rawOf(id) : id;

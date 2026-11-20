@@ -6,7 +6,7 @@
    one to answer gets it. The Reminder helper sends the "is calling" alert to phones that don't have the app open.
    The camera can be turned on or off at any time during a call, so a voice call can become a video call. */
 const CALL_DEV=(()=>{ try{ let v=sessionStorage.getItem('fs.callDev'); if(!v){ v='d'+Math.random().toString(36).slice(2,10); sessionStorage.setItem('fs.callDev',v); } return v; }catch(e){ return 'd'+Math.random().toString(36).slice(2,10); } })();
-const CALL_RING_MS=45e3;
+const CALL_RING_MS=60e3;   // long enough to notice the alert on a phone, tap it and have the app open
 let call=null, callList=[], callRingT=0, callCtx=null; const callGone=new Set();
 const callDur=s=>{ s=Math.max(0,Math.round(+s||0)); return s<60?s+' sec':s<3600?Math.round(s/60)+' min':Math.floor(s/3600)+' h '+Math.round(s%3600/60)+' min'; };
 const callClock=s=>{ s=Math.max(0,Math.floor(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=String(s%60).padStart(2,'0'); return h?h+':'+String(m).padStart(2,'0')+':'+x:m+':'+x; };
@@ -46,9 +46,9 @@ function callShow(){ let el=document.getElementById('callUI'); if(el) el.remove(
   if(typeof saverOff==='function') saverOff();
   callDraw(); }
 function callDraw(){ const c=call, el=document.getElementById('callUI'); if(!c||!el) return;
-  const name=c.peer==='fam'?'Family':(nm(c.peer)||'Family'), v=c.kind==='video';
+  const pf=c.peer==='fam'||!!msgG(c.peer), name=msgName(c.peer)||'Family', v=c.kind==='video';
   el.className=(el.classList.contains('c-mini')?'c-mini ':'')+'cs-'+c.st+(c.st==='live'&&c.peerCam?' c-rv':'')+(c.camOn&&c.local&&c.st!=='ringing'?' c-lv':'')+(c.face==='environment'?' c-back':'');
-  const f=el.querySelector('#cFace'); f.textContent=c.peer==='fam'?'👪':(name.charAt(0)||'?'); f.style.background=c.peer==='fam'?'#ffe9b8':col(c.peer);
+  const f=el.querySelector('#cFace'); f.textContent=pf?'👪':(name.charAt(0)||'?'); f.style.background=pf?'#ffe9b8':col(c.peer);
   el.querySelector('#cName').textContent=name;
   el.querySelector('#cSt').textContent=c.st==='calling'?(c.sdpSent?'Ringing…':'Calling…'):c.st==='ringing'?(v?'Video call':'Voice call')+(c.to==='fam'?' to Family':''):c.st==='connecting'?'Connecting…':c.weak?'Reconnecting…':callClock((Date.now()-c.startAt)/1000);
   const b=(id,ico,label,cls)=>`<button id="${id}" class="cbtn ${cls||''}" aria-label="${label}"><span>${ico}</span><small>${label}</small></button>`;
@@ -106,8 +106,9 @@ async function callStart(me,th,kind){
   if(!window.RTCPeerConnection||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('Calls aren’t supported in this browser'); return; }
   if(typeof LOCAL!=='undefined'&&LOCAL){ toast('Calls work once the family is signed in'); return; }
   if(!SYNC.callsReady||!SYNC.callsReady()){ toast('Calls will be ready within about 15 minutes: the database is updating itself'); return; }
-  const to=th==='fam'?'fam':th.split('|').find(x=>x!==me); if(!to) return;
-  const c=call={id:uid(),role:'out',kind,from:me,to,th,peer:to,st:'calling',micOn:true,camOn:false,peerCam:false,at:Date.now(),canFlip:matchMedia('(pointer:coarse)').matches};
+  if(msgG(th)&&!msgG(th).ready){ toast('Calls with '+msgG(th).label+' will be ready within about 15 minutes: the database is updating itself'); return; }
+  const fam=msgIsFam(th), to=fam?'fam':msgOther(th,me); if(!to) return;
+  const c=call={id:SYNC.callNewId(th,uid()),role:'out',kind,from:me,to,th,peer:fam?msgOther(th,me):to,st:'calling',micOn:true,camOn:false,peerCam:false,at:Date.now(),canFlip:matchMedia('(pointer:coarse)').matches};
   callShow();
   try{
     try{ c.local=await callMedia(kind==='video'); }
@@ -121,7 +122,8 @@ async function callStart(me,th,kind){
     const offer={type:'offer',sdp:pc.localDescription.sdp}; c.sdpRead=true;
     await SYNC.callPut(c.id,{from:me,to,th,kind,dev:CALL_DEV,at:c.at,st:'ring',offer});
     c.sdpSent=true; if(call!==c){ SYNC.callDrop(c.id); return; } if(c.late.length) callLateSend(c);
-    helperDo('call_ring',{id:c.id});   // rings the phones that don't have the app open
+    // rings the phones that don't have the app open (for a chat with a linked family, their helper does it)
+    { const h=SYNC.guestHelper(th); if(h) fetch(h.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:h.key,action:'call_ring',id:SYNC.rawId(c.id)}),redirect:'follow'}).catch(()=>{}); else if(!msgG(th)) helperDo('call_ring',{id:c.id}); }
     callRingback(); c.ringT=setTimeout(()=>{ if(call===c&&c.st==='calling') callFinish('noanswer',true); },CALL_RING_MS);
     callDraw();
   }catch(e){ console.warn('call',e); if(call===c) callFinish('failed',true); }
@@ -160,15 +162,15 @@ function callFinish(why,mine){ const c=call; if(!c) return; call=null;
   else if(c.role==='in'&&mine&&!(c.st==='ringing'&&c.to==='fam')) SYNC.callPatch(c.id,{st:'end',why}).catch(()=>{});   // declining a Family call only stops this screen ringing
   try{ c.local&&c.local.getTracks().forEach(t=>t.stop()); }catch(e){} try{ c.pc&&c.pc.close(); }catch(e){} try{ c.wake&&c.wake.release(); }catch(e){}
   const el=document.getElementById('callUI'); if(el) el.remove();
-  const who=c.peer==='fam'?'Family':nm(c.peer);
+  const who=msgName(c.peer)||'Family';
   const note=why==='failed'?'Couldn’t connect the call. Try again, or try a different Wi-Fi.':why==='lost'?'The call dropped':why==='noanswer'?'No answer':why==='declined'&&!mine?who+' can’t talk right now':why==='elsewhere'?'Answered on another screen'
     :c.role==='in'&&!mine&&!dur?'Missed call from '+who:dur?'Call ended · '+callDur(dur):'';
   if(note) toast(note);
   setTimeout(()=>{ if(msgOpen&&msgOpen.draw&&document.querySelector('#msgBox')) msgOpen.draw(); },250);
 }
 // the caller's screen writes the one line in the chat ("Video call · 12 min" or "Missed voice call")
-function callLog(c,dur){ const v=c.kind==='video'||!!c.wasVideo, ok=dur>0, all=msgFolk().map(p=>p.id);
-  msgSend(c.from,c.th,ok?(v?'🎥 Video call':'📞 Voice call')+' · '+callDur(dur):'📞 Missed '+(v?'video':'voice')+' call',Object.assign({call:{kind:v?'video':'audio',dur,ok}},ok?{seen:all,pushed:Date.now()}:{})); }
+function callLog(c,dur){ const v=c.kind==='video'||!!c.wasVideo, ok=dur>0;
+  msgSend(c.from,c.th,ok?(v?'🎥 Video call':'📞 Voice call')+' · '+callDur(dur):'📞 Missed '+(v?'video':'voice')+' call',Object.assign({call:{kind:v?'video':'audio',dur,ok}},ok?{seenAll:true,pushed:Date.now()}:{})); }   // a call that happened is nobody's unread message
 
 /* ---- the database tells every screen about each call ---- */
 function callSync(){
@@ -187,7 +189,7 @@ function callSync(){
     return; }
   // not in a call: is someone ringing this screen?
   const mine=callFor();
-  const d=callList.find(x=>x.st==='ring'&&x.offer&&x.dev!==CALL_DEV&&!x.ans&&!callGone.has(x.id)&&now-(+x.at||0)<90e3&&now-(+x.at||0)>-5*60e3
+  const d=callList.find(x=>x.st==='ring'&&x.offer&&msgOk(x)&&x.dev!==CALL_DEV&&!x.ans&&!callGone.has(x.id)&&now-(+x.at||0)<100e3&&now-(+x.at||0)>-5*60e3
     &&(x.to==='fam'?callFam()&&!(mine.length===1&&mine[0]===x.from):mine.includes(x.to)));
   if(d) callIncoming(d);
 }

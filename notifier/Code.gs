@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 35;
+const HELPER_VERSION = 36;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -677,7 +677,7 @@ function send(h, hash, title, body, tag) {
   const dev = (h.devices || {})[hash]; if (!dev || !dev.token) return;
   if (dev.lang === 'ja') { const j = jaAlert(h, title, body); title = j[0]; body = j[1]; }
   const msg = { message: { token: dev.token, data: { title: String(title), body: String(body), tag: String(tag || ''), url: APP_URL },
-    webpush: { headers: { Urgency: 'high', TTL: /^call-/.test(String(tag || '')) ? '45' : '3600' } } } };   // an "is calling" alert is no use a minute later
+    webpush: { headers: { Urgency: 'high', TTL: /^call-/.test(String(tag || '')) ? '60' : '3600' } } } };   // an "is calling" alert is no use a minute later
   const r = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + PROJECT_ID + '/messages:send', { method: 'post', contentType: 'application/json', payload: JSON.stringify(msg), headers: headers(), muteHttpExceptions: true });
   const code = r.getResponseCode();
   if (code === 404 || (code === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) {
@@ -862,8 +862,11 @@ function msgPush(h, pre) {
   const waiting = recent.filter(function (m) { return !m.pushed && m.at && now - m.at < 12 * 3600e3; }).sort(function (a, b) { return a.at - b.at; });
   waiting.forEach(function (m) {
     const from = people.find(function (p) { return p.id === m.from; }) || { name: 'Family' };
+    // written by a linked account: it must speak as itself, or no alert goes out
+    if (m.byE && String(from.email || '').toLowerCase() !== String(m.byE).toLowerCase()) { patch(path + '/' + m._id, { pushed: now }); return; }
     const to = m.th === 'fam' ? people.filter(function (p) { return p.id !== m.from && p.id !== 'all'; }) : people.filter(function (p) { return String(m.th).split('|').indexOf(p.id) >= 0 && p.id !== m.from; });
-    const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(Boolean);
+    const off = m.th === 'fam' ? (h.chatOff || []).map(function (e) { return String(e).toLowerCase(); }) : [];   // linked accounts left out of the Family chat
+    const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(function (e) { return e && off.indexOf(e) < 0; });
     Object.keys(devices).forEach(function (hash) { const dev = devices[hash]; if (!dev || !dev.token || !dev.email || emails.indexOf(String(dev.email).toLowerCase()) < 0) return;
       try { send(h, hash, '💬 ' + from.name + (m.th === 'fam' ? ' → Family' : ''), String(m.text || '').slice(0, 180), 'msg-' + m.th); n++; } catch (e) {} });
     patch(path + '/' + m._id, { pushed: now });
@@ -880,7 +883,8 @@ function callRing(h, b) {
   const c = getDoc('households/' + h._id + '/calls/' + id); if (!c || c.st !== 'ring') return { ok: true, sent: 0 };
   const people = h.people || [], devices = h.devices || {}, from = people.find(function (p) { return p.id === c.from; }) || { name: 'Someone' }; let n = 0;
   const to = c.to === 'fam' ? people.filter(function (p) { return p.id !== c.from && p.id !== 'all'; }) : people.filter(function (p) { return p.id === c.to; });
-  const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(Boolean);
+  const linked = c.to === 'fam' ? (h.limited || []).map(function (e) { return String(e).toLowerCase(); }) : [];   // a call to Family rings this household only, not a linked one
+  const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(function (e) { return e && linked.indexOf(e) < 0; });
   Object.keys(devices).forEach(function (hash) { const dev = devices[hash]; if (!dev || !dev.token || !dev.email || emails.indexOf(String(dev.email).toLowerCase()) < 0) return;
     try { send(h, hash, '📞 ' + from.name + ' is calling' + (c.to === 'fam' ? ' the family' : ''), (c.kind === 'video' ? 'Video call' : 'Voice call') + ' · tap to answer', 'call-' + String(c.th || '')); n++; } catch (e) {} });
   return { ok: true, sent: n };
@@ -1374,6 +1378,10 @@ function voiceMsgSend(h, b, now) {
   const from = voiceMsgFrom(h, b, to && to.id); if (!from) return { speech: 'Add the family in the app first.' };
   const th = !to || to.id === from.id ? 'fam' : [from.id, to.id].sort().join('|');
   const id = 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), m = { th: th, from: from.id, text: text.charAt(0).toUpperCase() + text.slice(1), at: now.getTime(), seen: [from.id], via: 'alexa' };
+  // a linked account (someone with their own household, like Masako) sees only messages marked with its address
+  const low = function (e) { return String(e || '').toLowerCase(); }, lim = (h.limited || []).map(low), off = (h.chatOff || []).map(low);
+  const em = (h.people || []).filter(function (p) { return p.id !== 'all' && p.email && lim.indexOf(low(p.email)) >= 0 && (th === 'fam' ? off.indexOf(low(p.email)) < 0 : th.split('|').indexOf(p.id) >= 0); }).map(function (p) { return low(p.email); });
+  if (em.length) m.em = em;
   patch('households/' + h._id + '/msgs/' + id, m);
   let sent = 0; try { m._id = id; sent = msgPush(h, [m]); } catch (e) { Logger.log('Voice message push: ' + e); }
   return { speech: 'Sent to ' + (to ? (to.nick || to.name) : 'the family') + (sent ? '.' : '. It will be waiting in Family Screen.'), sent: sent };

@@ -46,6 +46,15 @@ service cloud.firestore {
         allow update: if isMember(hid) && col == 'events' && resource.data.by == email() && request.resource.data.by == email();
         allow delete: if isMember(hid) && col == 'events' && resource.data.by == email();
         allow read: if isMember(hid) && col in ['flights', 'sources'];
+        // 4.1 a linked account (another household's, e.g. Masako's) takes part only in the chats and calls that name it:
+        // records carrying its address in "em". It reads nothing else here, can only tick "seen" on a message, and may
+        // save and fetch a chat photo by its id (it cannot list them).
+        allow read: if isMember(hid) && col in ['msgs', 'calls'] && email() in resource.data.em;
+        allow create: if isMember(hid) && col in ['msgs', 'calls'] && email() in request.resource.data.em && request.resource.data.byE == email();
+        allow update: if isMember(hid) && col == 'msgs' && email() in resource.data.em && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seen']);
+        allow update: if isMember(hid) && col == 'calls' && email() in resource.data.em && request.resource.data.em == resource.data.em;
+        allow delete: if isMember(hid) && col == 'calls' && email() in resource.data.em && resource.data.byE == email();
+        allow get, create: if isMember(hid) && col == 'msgpics';
         allow read, write: if isFull(hid) && col in ['events', 'flights', 'groceries', 'todos', 'sources', 'recipes', 'meals', 'renewals', 'bills', 'memory', 'kids', 'inbox', 'msgs', 'usage', 'docs', 'stock', 'calls', 'msgpics'];
       }
       // Secrets (the Gemini key): only signed-in family members can read or write them, so each family device can

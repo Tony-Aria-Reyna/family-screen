@@ -13,7 +13,8 @@ export const deleteField=()=>({__del:1}); export const arrayUnion=(...v)=>({__u:
 function snapCol(d,path){ const pre=path+'/'; const docs=Object.keys(d).filter(k=>k.startsWith(pre)&&!k.slice(pre.length).includes('/')).map(k=>({id:k.slice(pre.length),data:()=>JSON.parse(JSON.stringify(d[k]))})); return {docs,empty:!docs.length}; }
 export function onSnapshot(ref,cb,err){
   const s={run(){ const d=load(); if(!memberOf(d,ref.path)) return deny(err);
-    if(ref.t==='doc'){ const v=d[ref.path]; cb({exists:()=>!!v,data:()=>JSON.parse(JSON.stringify(v)),id:ref.id}); } else cb(snapCol(d,ref.path)); }};
+    if(ref.t==='doc'){ const v=d[ref.path]; cb({exists:()=>!!v,data:()=>JSON.parse(JSON.stringify(v)),id:ref.id}); }
+    else { const sn=snapCol(d,ref.path); if(ref.w) sn.docs=sn.docs.filter(x=>{ const v=x.data()[ref.w.f]; return Array.isArray(v)&&v.includes(ref.w.v); }); cb(sn); } }};
   subs.push(s); setTimeout(()=>s.run(),0); return ()=>{ subs=subs.filter(x=>x!==s); };
 }
 export async function getDocs(q){ const d=load(); const s=snapCol(d,q.path); if(q.w) s.docs=s.docs.filter(x=>{ const v=x.data()[q.w.f]; return Array.isArray(v)&&v.includes(q.w.v); }); s.empty=!s.docs.length; return s; }
