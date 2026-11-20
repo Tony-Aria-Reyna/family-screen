@@ -1435,6 +1435,10 @@ function openSimplePick(){ modal((m,close)=>{ let lang=appLang(), who=lsGet('fs.
 let hubIdle=Date.now(), hubLock=null, hubHome=true;
 const hubOn=()=>!isPhone()&&!LOCAL&&S.people.length&&lsGet('fs.hub','1')==='1';
 let saverSwallow=0;
+// fridge: hide the tablet's top bar by going full screen (Android only allows it on a touch, so the first touch does it)
+const hubFull=()=>lsGet('fs.hubFull','1')==='1';
+addEventListener('click',()=>{ try{ if(hubOn()&&hubFull()&&!document.fullscreenElement&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); }catch(e){} },true);
+function themeDark(on){ const m=document.querySelector('meta[name=theme-color]'); if(!m) return; if(!m.dataset.day) m.dataset.day=m.content; m.content=on?'#000000':m.dataset.day; }
 addEventListener('click',e=>{ if(Date.now()<saverSwallow){ e.preventDefault(); e.stopPropagation(); } },true);
 function hubTouch(e){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')){ saverOff(); saverSwallow=Date.now()+700; try{ if(document.querySelector('.scrim')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(x){} } }
 ['pointerdown','keydown','wheel','touchstart'].forEach(e=>addEventListener(e,hubTouch,{passive:true,capture:true}));
@@ -1457,7 +1461,7 @@ function photoPull(){ if(!S.voiceUrl||!navigator.onLine||isPhone()) return; cons
 setInterval(photoPull,60e3);
 let saverT=null, saverI=0;
 async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=await c.match('list'); return r?await r.json():[]; }catch(e){ return []; } }
-async function saverOn(){
+async function saverOn(){ themeDark(true);
   const el=document.createElement('div'); el.id='saver'; document.body.appendChild(el);
   const pics=await saverPhotos(); let urls=[];
   try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
@@ -1469,7 +1473,7 @@ async function saverOn(){
   draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
   if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
 }
-function saverOff(){ clearInterval(saverT); const el=document.getElementById('saver'); if(el){ el.querySelectorAll('img').forEach(i=>{ try{ URL.revokeObjectURL(i.src); }catch(e){} }); el.remove(); } }
+function saverOff(){ themeDark(false); clearInterval(saverT); const el=document.getElementById('saver'); if(el){ el.querySelectorAll('img').forEach(i=>{ try{ URL.revokeObjectURL(i.src); }catch(e){} }); el.remove(); } }
 // the photo frame's pictures: up to 150 from the family's Drive folder, fetched through the helper and kept on this screen
 async function saverFetch(force){
   if(!S.voiceUrl) return 0; lsSet('fs.photosAt',String(Date.now()));

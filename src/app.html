@@ -3001,6 +3001,7 @@ function openSettings(at){
     ${isPhone()||LOCAL?'':`<div class="srccard" style="margin:10px 0"><h4>🧲 Fridge screen</h4><label class="small"><input type="checkbox" id="hubOn" ${lsGet('fs.hub','1')==='1'?'checked':''}> Keep the screen on, go back to Today after 3 minutes, and show the photo frame when nobody’s using it</label>
       <div class="row small" style="gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">Photos from <input type="time" id="svFrom" value="${esc(saverFrom())}"> to <input type="time" id="svTo" value="${esc(saverTo())}"> · start after <input type="number" id="svIdle" min="1" max="60" value="${saverIdle()}" style="width:60px"> min without a touch</div>
       <p class="note">Outside those hours it shows just the time, dimmed. A touch anywhere goes straight back to Today.</p>
+      <label class="small"><input type="checkbox" id="hubFull" ${lsGet('fs.hubFull','1')==='1'?'checked':''}> Full screen: hide the tablet’s top bar (happens on the first touch)</label>
       <label class="small">Photos come from 📸 Family album (More). Or use your own Google Drive folder instead (paste its link) <input class="txt" id="phF" value="${esc(S.photoFolder||'')}" placeholder="https://drive.google.com/drive/folders/…"></label>
       <div class="row"><button class="xbtn" id="phGo">📷 Save and get the photos now</button><button class="xbtn" id="phTry">🖼️ Try the photo frame</button></div></div>`}
     <label class="small">Language on this device <select id="devLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語 (Japanese)</option></select></label>
@@ -3038,7 +3039,7 @@ function openSettings(at){
     m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
-    { const hb=m.querySelector('#hubOn'); if(hb) hb.onchange=()=>{ lsSet('fs.hub',hb.checked?'1':'0'); }; [['svFrom','fs.svFrom'],['svTo','fs.svTo'],['svIdle','fs.svIdle']].forEach(([id,k])=>{ const x=m.querySelector('#'+id); if(x) x.onchange=()=>{ if(x.value) lsSet(k,x.value); toast('Saved for this screen'); }; });
+    { const hb=m.querySelector('#hubOn'); if(hb) hb.onchange=()=>{ lsSet('fs.hub',hb.checked?'1':'0'); }; { const hf=m.querySelector('#hubFull'); if(hf) hf.onchange=()=>{ lsSet('fs.hubFull',hf.checked?'1':'0'); if(!hf.checked&&document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }; } [['svFrom','fs.svFrom'],['svTo','fs.svTo'],['svIdle','fs.svIdle']].forEach(([id,k])=>{ const x=m.querySelector('#'+id); if(x) x.onchange=()=>{ if(x.value) lsSet(k,x.value); toast('Saved for this screen'); }; });
       const pg=m.querySelector('#phGo'); if(pg) pg.onclick=async()=>{ const v=m.querySelector('#phF').value.trim(), id=(v.match(/folders\/([\w-]{10,})/)||v.match(/[?&]id=([\w-]{10,})/)||v.match(/^([\w-]{20,})$/)||[])[1]||'';
         if(v&&!id){ toast('That doesn’t look like a Drive folder link'); return; } S.photoFolder=id; save(); if(!id) return; pg.disabled=true; pg.textContent='📷 Getting photos…'; await saverFetch(true); pg.disabled=false; pg.textContent='📷 Save and get the photos now'; };
       const pt=m.querySelector('#phTry'); if(pt) pt.onclick=()=>{ close(); setTimeout(()=>{ hubIdle=Date.now(); saverOn(); },300); }; }
