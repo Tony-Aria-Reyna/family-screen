@@ -2,7 +2,7 @@
 <html lang="en-NZ">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Family Screen</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#9fd8cf">
@@ -574,6 +574,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .tabbar{display:none}
 #phome{display:none;padding:10px 12px 20px}
 .hcard{display:block;width:100%;text-align:left;font:inherit;color:#fff;border-radius:24px;padding:18px 18px 16px;background:linear-gradient(135deg,#5fb3a6,#4a8fc4);box-shadow:0 6px 18px rgba(60,110,140,.25)}
+.hcard+.hcard{margin-top:10px}
 .hcard.tm{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none;margin-top:10px;padding:14px 18px}
 .hcard h2{font-size:26px;margin:0 0 10px}.hcard.tm h2{font-size:17px;margin:0 0 6px;color:var(--muted)}
 .hln{padding:5px 0 5px 10px;border-left:4px solid rgba(255,255,255,.75);margin:6px 0;font-size:18px;font-weight:700}
@@ -658,7 +659,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   body[data-tab="todo"] #shopPanel,body[data-tab="shop"] #todoPanel{display:none}
   body[data-tab="where"] .right,body[data-tab="meals"] .right{display:none}
   .right .panel{min-height:calc(100vh - 170px)}
-  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:var(--lift,0px);z-index:45;background:#fff;border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
   .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:22px;padding:4px 0;min-width:0;border-radius:12px}
   .tabbar button span{font-size:11px;white-space:nowrap;font-weight:700;color:var(--muted)}
   .tabbar button.on{background:var(--soft)}
@@ -3226,7 +3227,7 @@ function itemsForDay(key){
     // the day they fly: still one bar, saying when they leave or when they're home
     const am=whereAt(pid,new Date(key+'T00:30')), pm=whereAt(pid,new Date(key+'T23:30'));
     if(am||pm){ const fl=S.flights.filter(f=>f.who===pid), out1=!am&&fl.find(f=>dk(fS(f))===key&&f.from===HOME_AP), back=am&&!pm&&fl.find(f=>dk(fE(f))===key&&f.to===HOME_AP);
-      out.push({k:'away',sort:'00:00',who:pid,w:pm||am,part:out1?'from '+fmtTime(fS(out1),'Pacific/Auckland'):back?'home '+fmtTime(homeAt(back),'Pacific/Auckland'):''}); } }
+      out.push({k:'away',sort:'00:00',who:pid,w:[pm,am].find(x=>x&&x.code)||pm||am,part:out1?'from '+fmtTime(fS(out1),'Pacific/Auckland'):back?'home '+fmtTime(homeAt(back),'Pacific/Auckland'):''}); } }
   return out.sort((a,b)=>a.sort.localeCompare(b.sort));
 }
 // where a person is at a moment, from their flights: null = home
@@ -5621,7 +5622,7 @@ function personalCard(){
   const tp=traveller(), now=new Date(), out=[];
   if(tp&&tp.id===me){ const r=travellerNow(now), away=r&&(r.air||r.a);
     const soon=S.flights.filter(f=>f.who===me&&fS(f)>now&&fS(f)-now<3*864e5).sort((a,b)=>fS(a)-fS(b))[0];
-    if(away||soon){ const lines=[]; for(let i=0;i<3;i++){ const k=dk(addDays(now,i)), l=dayLines(k).filter(x=>!/✈️/.test(x.t)).slice(0,2); if(l.length) lines.push(`<b>${i?fmtD(addDays(now,i),{weekday:'short'}):'Today'}</b> ${l.map(x=>esc(x.t)).join(' · ')}`); }
+    if(away||soon){ const lines=[]; for(let i=0;i<3;i++){ const k=dk(addDays(now,i)), l=dayLines(k).filter(x=>x.k!=='away'&&x.k!=='fl').map(x=>x.k==='arr'||x.k==='taxi'?Object.assign({},x,{t:x.t.replace(/^(🛬|🚕) \D+/,'$1 ')}):x).slice(0,2); if(l.length) lines.push(`<b>${i?fmtD(addDays(now,i),{weekday:'short'}):'Today'}</b> ${l.map(x=>esc(x.t)).join(' · ')}`); }
       const jobs=S.todos.filter(t=>!t.done&&vis(t)&&t.who&&t.who!==me).length, un=typeof msgUnreadAll==='function'?msgUnreadAll():0;
       out.push(`<button class="hcard hpers" id="hPers"><div class="hhd">✈️ ${away?'While you’re away':'Before you fly'}</div>${lines.length?lines.map(x=>`<div class="hln">${x}</div>`).join(''):'<div class="hln">Nothing on at home for 3 days</div>'}<div class="hln">✅ ${jobs} job${jobs===1?'':'s'} with the others${un?' · 💬 '+un+' new message'+(un>1?'s':''):''}</div></button>`); } }
   const bills=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=14&&daysTo(b.due)>=-3);
@@ -7359,11 +7360,13 @@ function renderPCal(){
 }
 function setPMode(m){ pMode=m; lsSet('fs.pmode2',m); renderPCal(); }
 function dayLines(key){ return itemsForDay(key).map(it=>{
-  if(it.k==='ev') return {c:evBg(it.e.whos),t:(it.e.priv?LOCK:'')+(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
-  if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; return {c:col(it.who),t:a?'💼 '+a[0]:'✈️'}; }
-  if(it.k==='arr') return {c:col(it.f.who),t:'🛬 '+fmtTime(fE(it.f),'Pacific/Auckland')};
-  if(it.k==='taxi') return {c:col(it.f.who),t:'🚕 '+fmtTime(it.t,'Pacific/Auckland')};
-  return {c:col(it.f.who),t:'✈️ '+it.f.from+'→'+it.f.to};
+  if(it.k==='ev') return {k:'ev',c:evBg(it.e.whos),t:(it.e.priv?LOCK:'')+(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
+  const me=mePerson(), who=id=>id===me?'':(tName(person(id))||nm(id));   // on your own phone the lines don't repeat your name
+  if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null, n=who(it.who);
+    return {k:'away',c:col(it.who),t:it.part?(/^home /.test(it.part)?'🏠 '+(n?n+' home ':'Home ')+it.part.slice(5):'✈️ '+(n?n+' away ':'Away ')+it.part):a?'💼 '+(n?n+' in ':'')+a[0]:'✈️ '+(n?n+' flying':'Flying')}; }
+  if(it.k==='arr'){ const n=who(it.f.who); return {k:'arr',c:col(it.f.who),t:'🛬 '+(n?n+' lands ':'Land ')+fmtTime(fE(it.f),'Pacific/Auckland')}; }
+  if(it.k==='taxi') return {k:'taxi',c:col(it.f.who),t:'🚕 Taxi '+fmtTime(it.t,'Pacific/Auckland')};
+  return {k:'fl',c:col(it.f.who),t:'✈️ '+fmtTime(fS(it.f),'Pacific/Auckland')+' '+it.f.from+'→'+it.f.to};
 }); }
 function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.innerHTML=`<span>Add on ${d.getDate()} ${fmtD(d,{month:'short'})}</span><b>＋</b>`; f.onclick=()=>openAdd({date:pSel}); }
 
@@ -7472,7 +7475,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwpdog6u';
+const FS_VERSION='fs-mwpf5u9r';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
@@ -7493,14 +7496,19 @@ if('serviceWorker' in navigator && location.protocol==='https:') navigator.servi
 if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',e=>{ if(e.data&&e.data.open){ launchAct=e.data.open; if(S.people.length) runLaunch(); } });
 </script>
 <script>
-/* the on-screen keyboard: in full screen Android draws it over the page, so lift pop-ups above it and keep the typing box in view */
-(function(){ const vv=window.visualViewport; if(!vv) return; let last=0;
-  const fit=()=>{ const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)); if(Math.abs(kb-last)<40&&kb) return; last=kb;
+/* The shared screen runs full screen, where Android draws the keyboard over the page: lift pop-ups above it and keep the
+   typing box in view. Phones are left to the browser (as before), with one safety net: if the bottom of the page is
+   hidden while nobody is typing, the bottom bar is pulled back up into view so the app can always be got around. */
+(function(){ const vv=window.visualViewport; if(!vv) return; let last=0, lastLift=-1;
+  const phone=()=>matchMedia('(max-width:900px)').matches, typing=()=>{ const a=document.activeElement; return !!a&&(/INPUT|TEXTAREA|SELECT/.test(a.tagName)||a.isContentEditable); };
+  const fit=()=>{ const gap=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop)), ph=phone();
+    const lift=ph&&gap>24&&!typing()&&(vv.scale||1)<1.02?gap:0; if(lift!==lastLift){ lastLift=lift; document.documentElement.style.setProperty('--lift',lift+'px'); }
+    const kb=ph?0:gap; if(kb===last||(Math.abs(kb-last)<40&&kb)) return; last=kb;
     document.documentElement.style.setProperty('--kb',(kb>80?kb:0)+'px'); document.body.classList.toggle('kbup',kb>80);
     const a=document.activeElement; if(kb>80&&a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)) setTimeout(()=>{ try{ a.scrollIntoView({block:'nearest'}); }catch(e){} },60);
     setTimeout(()=>{ const b=document.getElementById('mb'); if(b) b.scrollTop=b.scrollHeight; },120); };
-  vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit);
-  document.addEventListener('focusin',()=>setTimeout(fit,350)); document.addEventListener('focusout',()=>setTimeout(fit,350)); })();
+  vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit); addEventListener('resize',fit);
+  document.addEventListener('focusin',()=>setTimeout(fit,350)); document.addEventListener('focusout',()=>setTimeout(fit,350)); setTimeout(fit,1500); setInterval(fit,5000); })();
 </script>
 </body>
 </html>

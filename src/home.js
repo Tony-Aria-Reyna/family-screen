@@ -1417,7 +1417,7 @@ function personalCard(){
   const tp=traveller(), now=new Date(), out=[];
   if(tp&&tp.id===me){ const r=travellerNow(now), away=r&&(r.air||r.a);
     const soon=S.flights.filter(f=>f.who===me&&fS(f)>now&&fS(f)-now<3*864e5).sort((a,b)=>fS(a)-fS(b))[0];
-    if(away||soon){ const lines=[]; for(let i=0;i<3;i++){ const k=dk(addDays(now,i)), l=dayLines(k).filter(x=>!/✈️/.test(x.t)).slice(0,2); if(l.length) lines.push(`<b>${i?fmtD(addDays(now,i),{weekday:'short'}):'Today'}</b> ${l.map(x=>esc(x.t)).join(' · ')}`); }
+    if(away||soon){ const lines=[]; for(let i=0;i<3;i++){ const k=dk(addDays(now,i)), l=dayLines(k).filter(x=>x.k!=='away'&&x.k!=='fl').map(x=>x.k==='arr'||x.k==='taxi'?Object.assign({},x,{t:x.t.replace(/^(🛬|🚕) \D+/,'$1 ')}):x).slice(0,2); if(l.length) lines.push(`<b>${i?fmtD(addDays(now,i),{weekday:'short'}):'Today'}</b> ${l.map(x=>esc(x.t)).join(' · ')}`); }
       const jobs=S.todos.filter(t=>!t.done&&vis(t)&&t.who&&t.who!==me).length, un=typeof msgUnreadAll==='function'?msgUnreadAll():0;
       out.push(`<button class="hcard hpers" id="hPers"><div class="hhd">✈️ ${away?'While you’re away':'Before you fly'}</div>${lines.length?lines.map(x=>`<div class="hln">${x}</div>`).join(''):'<div class="hln">Nothing on at home for 3 days</div>'}<div class="hln">✅ ${jobs} job${jobs===1?'':'s'} with the others${un?' · 💬 '+un+' new message'+(un>1?'s':''):''}</div></button>`); } }
   const bills=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=14&&daysTo(b.due)>=-3);
