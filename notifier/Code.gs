@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 34;
+const HELPER_VERSION = 35;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -677,7 +677,7 @@ function send(h, hash, title, body, tag) {
   const dev = (h.devices || {})[hash]; if (!dev || !dev.token) return;
   if (dev.lang === 'ja') { const j = jaAlert(h, title, body); title = j[0]; body = j[1]; }
   const msg = { message: { token: dev.token, data: { title: String(title), body: String(body), tag: String(tag || ''), url: APP_URL },
-    webpush: { headers: { Urgency: 'high', TTL: '3600' } } } };
+    webpush: { headers: { Urgency: 'high', TTL: /^call-/.test(String(tag || '')) ? '45' : '3600' } } } };   // an "is calling" alert is no use a minute later
   const r = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + PROJECT_ID + '/messages:send', { method: 'post', contentType: 'application/json', payload: JSON.stringify(msg), headers: headers(), muteHttpExceptions: true });
   const code = r.getResponseCode();
   if (code === 404 || (code === 400 && /UNREGISTERED|INVALID_ARGUMENT/.test(r.getContentText()))) {
@@ -869,6 +869,34 @@ function msgPush(h, pre) {
     patch(path + '/' + m._id, { pushed: now });
   });
   return n;
+}
+
+/* ================= 4.0 Voice and video calls =================
+   The call itself runs between the two screens. The app writes a short record to households/{id}/calls and asks for this
+   the moment someone calls: it sends "… is calling" to the phones of the person being called (everyone else, for a call
+   to Family), so a phone with the app closed still rings. Tapping the alert opens the app on the ringing call. */
+function callRing(h, b) {
+  const id = String(b.id || '').replace(/[^\w-]/g, ''); if (!id) return { error: 'No call' };
+  const c = getDoc('households/' + h._id + '/calls/' + id); if (!c || c.st !== 'ring') return { ok: true, sent: 0 };
+  const people = h.people || [], devices = h.devices || {}, from = people.find(function (p) { return p.id === c.from; }) || { name: 'Someone' }; let n = 0;
+  const to = c.to === 'fam' ? people.filter(function (p) { return p.id !== c.from && p.id !== 'all'; }) : people.filter(function (p) { return p.id === c.to; });
+  const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(Boolean);
+  Object.keys(devices).forEach(function (hash) { const dev = devices[hash]; if (!dev || !dev.token || !dev.email || emails.indexOf(String(dev.email).toLowerCase()) < 0) return;
+    try { send(h, hash, '📞 ' + from.name + ' is calling' + (c.to === 'fam' ? ' the family' : ''), (c.kind === 'video' ? 'Video call' : 'Voice call') + ' · tap to answer', 'call-' + String(c.th || '')); n++; } catch (e) {} });
+  return { ok: true, sent: n };
+}
+/* Optional relay for calls that can't connect directly (some hotel and office Wi-Fi blocks direct calls). Off unless the
+   two Script properties TURN_KEY_ID and TURN_KEY_TOKEN are set (a Cloudflare Realtime TURN key). The key stays here;
+   each screen is handed a pass that lasts a day. */
+function callIce() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('TURN_KEY_ID'), tok = p.getProperty('TURN_KEY_TOKEN');
+  if (!id || !tok) return { ok: true, ice: [], ttl: 43200 };
+  const r = UrlFetchApp.fetch('https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(id) + '/credentials/generate-ice-servers', { method: 'post', contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + tok }, payload: JSON.stringify({ ttl: 86400 }), muteHttpExceptions: true });
+  if (r.getResponseCode() >= 300) return { ok: false, ice: [], ttl: 3600, error: 'Relay: ' + r.getResponseCode() };
+  const ice = (JSON.parse(r.getContentText()).iceServers || []).filter(function (s) { return s && s.username; }).map(function (s) {
+    return { urls: [].concat(s.urls || []).filter(function (u) { return !/:53(\?|$)/.test(u); }), username: s.username, credential: s.credential }; });
+  return { ok: true, ice: ice, ttl: 86400 };
 }
 
 /* ================= Bills by email =================
@@ -1150,6 +1178,8 @@ function voiceDo(h, action, b) {
   const newId = function () { return 'v' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); };
   if (action === 'update') { const u = selfUpdate(PropertiesService.getScriptProperties(), new Date(), true); return { ok: u.ok, version: HELPER_VERSION, update: u, speech: u.ok ? (u.to ? 'Updated to version ' + u.to + '.' : 'Already up to date.') : u.error }; }
   if (action === 'msg_push') { return { ok: true, sent: msgPush(h) }; }
+  if (action === 'call_ring') return callRing(h, b);
+  if (action === 'call_ice') return callIce();
   if (action === 'msg_send') return voiceMsgSend(h, b, now);
   if (action === 'photos') return photosPage(b);
   if (action === 'photo_add') return photoAdd(b);

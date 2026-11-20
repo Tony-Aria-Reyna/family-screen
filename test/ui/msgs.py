@@ -13,7 +13,7 @@ async def main():
           msgAs=ids[0]; renderAll(); }""", ids)
         await pg.wait_for_timeout(300)
         print('home tiles:', await pg.locator('#phome [data-ht] small').all_inner_texts())
-        await pg.click('#phome [data-ht] >> text=Inbox'); await pg.wait_for_timeout(300); await pg.screenshot(path='/tmp/inbox1.png', full_page=True)
+        await pg.evaluate('openInbox()'); await pg.wait_for_timeout(300); await pg.screenshot(path='/tmp/inbox1.png', full_page=True)
         ev0=await pg.evaluate('S.events.length'); td0=await pg.evaluate('S.todos.length')
         await pg.click('[data-add="email-1|e0"]'); await pg.wait_for_timeout(200)
         await pg.click('[data-all="email-1"]'); await pg.wait_for_timeout(200)

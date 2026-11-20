@@ -1127,15 +1127,46 @@ const msgIn=th=>(S.msgs||[]).filter(m=>m.th===th).sort((a,b)=>a.at-b.at);
 const msgUnread=(me,th)=>(S.msgs||[]).filter(m=>(th?m.th===th:(m.th==='fam'||String(m.th).split('|').includes(me)))&&m.from!==me&&!(m.seen||[]).includes(me)).length;
 const msgUnreadAll=()=>msgWho().reduce((n,id)=>n+msgUnread(id),0);
 function msgChime(){ try{ msgCtx=msgCtx||new (window.AudioContext||window.webkitAudioContext)(); const t=msgCtx.currentTime; [660,880].forEach((f,i)=>{ const o=msgCtx.createOscillator(), g=msgCtx.createGain(); o.frequency.value=f; o.connect(g); g.connect(msgCtx.destination); g.gain.setValueAtTime(.0001,t+i*.13); g.gain.exponentialRampToValueAtTime(.12,t+i*.13+.02); g.gain.exponentialRampToValueAtTime(.0001,t+i*.13+.3); o.start(t+i*.13); o.stop(t+i*.13+.32); }); }catch(e){} }
-function msgSend(me,th,text){ text=String(text||'').trim().slice(0,600); if(!text) return;
-  S.msgs=S.msgs||[]; S.msgs.push({id:uid(),th,from:me,text,at:Date.now(),seen:[me]});
-  if(S.msgs.length>600) S.msgs=S.msgs.sort((a,b)=>a.at-b.at).slice(-500);
+function msgSend(me,th,text,extra){ text=String(text||'').trim().slice(0,600); if(!text) return;
+  S.msgs=S.msgs||[]; S.msgs.push(Object.assign({id:uid(),th,from:me,text,at:Date.now(),seen:[me]},extra||{}));
+  if(S.msgs.length>600){ const all=S.msgs.sort((a,b)=>a.at-b.at); all.slice(0,-500).forEach(x=>{ if(x.pic&&x.pic.id){ try{ SYNC.picDrop(x.pic.id); }catch(e){} } }); S.msgs=all.slice(-500); }
   save();
   // ask the helper to send the phone notification straight away (the 5-minute check is the backstop)
   if(S.voiceUrl&&S.voiceKey) setTimeout(()=>{ fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'msg_push'}),redirect:'follow'}).catch(()=>{}); },1500); }
 function msgMarkSeen(me,th){ let ch=false; (S.msgs||[]).forEach(m=>{ if(m.th===th&&m.from!==me&&!(m.seen||[]).includes(me)){ m.seen=(m.seen||[]).concat(me); ch=true; } }); if(ch) save(); }
 const msgTime=t=>{ const d=new Date(t), today=dk(d)===dk(new Date()); return (today?'':fmtD(d,{weekday:'short',day:'numeric',month:'short'})+' ')+t12(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')); };
 const msgFace=id=>id==='fam'?`<span class="mface" style="background:#ffe9b8">👪</span>`:`<span class="mface" style="background:${col(id)}">${esc((nm(id)||'?').charAt(0))}</span>`;
+/* ---- photos in Messages: made a sensible size on the device, kept one per record in the family's database, and saved
+   on each screen the first time a chat shows it. The message itself carries only a tiny blurred preview. ---- */
+const picUrls={};
+async function picPrep(file){
+  const img=await new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=()=>no(new Error('Could not open that picture')); i.src=URL.createObjectURL(file); });
+  const make=(max,q)=>{ const sc=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.width*sc)); c.height=Math.max(1,Math.round(img.height*sc)); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return {w:c.width,h:c.height,url:c.toDataURL('image/jpeg',q)}; };
+  let full=make(1280,.8); if(full.url.length>780e3) full=make(1280,.6); if(full.url.length>780e3) full=make(900,.6);
+  const tiny=make(24,.5); try{ URL.revokeObjectURL(img.src); }catch(e){}
+  return {data:full.url.split(',')[1],w:full.w,h:full.h,t:tiny.url};
+}
+const picBlob=b64=>new Blob([Uint8Array.from(atob(b64),ch=>ch.charCodeAt(0))],{type:'image/jpeg'});
+async function picKeep(id,blob){ picUrls[id]=URL.createObjectURL(blob); try{ const c=await caches.open('fs-keep'); await c.put('mp/'+id,new Response(blob,{headers:{'Content-Type':'image/jpeg'}})); }catch(e){} return picUrls[id]; }
+async function picUrl(id){
+  if(picUrls[id]) return picUrls[id];
+  try{ const c=await caches.open('fs-keep'), r=await c.match('mp/'+id); if(r){ picUrls[id]=URL.createObjectURL(await r.blob()); return picUrls[id]; } }catch(e){}
+  const d=await SYNC.picGet(id); if(!d||!d.d) throw new Error('gone');
+  return picKeep(id,picBlob(d.d));
+}
+async function msgSendPics(me,th,files){
+  const list=[...files].filter(f=>/^image\//.test(f.type)).slice(0,10); if(!list.length){ toast('Those aren’t photos'); return 0; }
+  toast(list.length>1?`Sending ${list.length} photos…`:'Sending photo…'); let ok=0;
+  for(const f of list){ try{ const p=await picPrep(f), id=uid(); await SYNC.picPut(id,{d:p.data,at:Date.now(),by:me,th}); await picKeep(id,picBlob(p.data));
+      msgSend(me,th,'📷 Photo',{pic:{id,w:p.w,h:p.h,t:p.t}}); ok++; if(msgOpen&&msgOpen.draw) msgOpen.draw(); }
+    catch(e){ toast(e&&e.code==='permission-denied'?'Photos in messages will be ready within about 15 minutes: the database is updating itself':'Couldn’t send that photo. Try again.'); break; } }
+  return ok;
+}
+function picView(id){ const u=picUrls[id]; if(!u) return; const v=document.createElement('div'); v.className='alview';
+  v.innerHTML=`<img src="${u}" alt=""><div class="row" style="gap:10px;justify-content:center;flex-wrap:wrap"><button class="save bigback" id="vb">‹ Back</button><a class="cancel" id="vs" href="${u}" download="Family Screen photo.jpg" style="text-decoration:none;display:inline-flex;align-items:center">⬇️ Save</a><button class="cancel" id="va">📸 Add to family album</button></div>`;
+  document.body.appendChild(v); v.querySelector('#vb').onclick=()=>v.remove();
+  v.querySelector('#va').onclick=async e=>{ const b=e.currentTarget; b.disabled=true; b.textContent='Adding…'; try{ const bl=await (await fetch(u)).blob(); await albumAdd([new File([bl],'From messages.jpg',{type:'image/jpeg'})]); }catch(x){ toast('Couldn’t add it to the album'); } v.remove(); }; }
+const picTiny=t=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(t||'')?t:'';
 function openMsgs(th){
   const who=msgWho(); if(!msgAs||!who.includes(msgAs)) msgAs=who.length===1?who[0]:'';
   msgOpen={th:th||null};
@@ -1154,18 +1185,29 @@ function openMsgs(th){
         m.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ msgOpen.th=b.dataset.th; draw(); }); return; }
       const t=msgOpen.th, other=t==='fam'?'fam':t.split('|').find(x=>x!==me)||me, ms=msgIn(t); msgMarkSeen(me,t);
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let lastDay='';
-      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${other==='fam'?'Family':esc(nm(other))}</h2><button class="cancel" id="x">Close</button></div>
+      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${other==='fam'?'Family':esc(nm(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>
         <div class="mbubs" id="mb">${ms.length?ms.map(x=>{ const d=dk(new Date(x.at)), sep=d!==lastDay?`<div class="mday">${d===dk(new Date())?'Today':fmtD(new Date(x.at),{weekday:'long',day:'numeric',month:'short'})}</div>`:''; lastDay=d; const mine=x.from===me;
-          return sep+`<div class="mb ${mine?'me':''}">${!mine&&t==='fam'?`<small class="mfrom" style="color:${col(x.from)};filter:brightness(.6)">${esc(nm(x.from))}</small>`:''}<span class="mtxt" ${mine?'':`style="background:${col(x.from)}"`}>${esc(x.text)}</span><small class="mat">${msgTime(x.at).replace(/^.* /,'')}${mine&&t!=='fam'&&(x.seen||[]).includes(other)?' · Seen':''}</small></div>`; }).join(''):'<p class="note" style="text-align:center;margin-top:30px">No messages yet. Say hello 👋</p>'}</div>
+          if(x.call) return sep+`<div class="mcall ${x.call.ok?'':'miss'}">${x.call.kind==='video'?'🎥':'📞'} ${esc(x.call.ok?(x.call.kind==='video'?'Video call':'Voice call')+' · '+callDur(x.call.dur):mine?'No answer':'Missed '+(x.call.kind==='video'?'video':'voice')+' call')} <small>${msgTime(x.at).replace(/^.* /,'')}</small>${x.call.ok?'':`<button class="cancel" data-cb="${x.call.kind==='video'?'video':'audio'}">${mine?'Call again':'Call back'}</button>`}</div>`;
+          const pic=x.pic&&/^[\w-]+$/.test(x.pic.id||'')?`<span class="mpic" data-pic="${x.pic.id}" style="aspect-ratio:${Math.max(1,+x.pic.w||4)}/${Math.max(1,+x.pic.h||3)};${picTiny(x.pic.t)?`background-image:url(${picTiny(x.pic.t)})`:''}">${picUrls[x.pic.id]?`<img src="${picUrls[x.pic.id]}" alt="Photo">`:''}</span>`:'';
+          return sep+`<div class="mb ${mine?'me':''}">${!mine&&t==='fam'?`<small class="mfrom" style="color:${col(x.from)};filter:brightness(.6)">${esc(nm(x.from))}</small>`:''}${pic}${pic&&x.text==='📷 Photo'?'':`<span class="mtxt" ${mine?'':`style="background:${col(x.from)}"`}>${esc(x.text)}</span>`}<small class="mat">${msgTime(x.at).replace(/^.* /,'')}${mine&&t!=='fam'&&(x.seen||[]).includes(other)?' · Seen':''}</small></div>`; }).join(''):'<p class="note" style="text-align:center;margin-top:30px">No messages yet. Say hello 👋</p>'}</div>
         <div class="mquick">${MSG_QUICK.map((q,i)=>`<button class="cancel" data-q="${i}">${esc(q)}</button>`).join('')}</div>
-        <form class="msend" id="mf"><input id="mi" placeholder="Message" autocomplete="off" maxlength="600">${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
+        <form class="msend" id="mf"><button type="button" class="cancel" id="mpB" aria-label="Send a photo">📷</button><input type="file" id="mpC" accept="image/*" capture="environment" hidden><input type="file" id="mpP" accept="image/*" multiple hidden><input id="mi" placeholder="Message" autocomplete="off" maxlength="600">${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
       const box=m.querySelector('#mb'); box.scrollTop=box.scrollHeight;
       m.querySelector('#x').onclick=shut; m.querySelector('#bk').onclick=()=>{ msgOpen.th=null; draw(); };
       const inp=m.querySelector('#mi'), go=txt=>{ msgSend(me,t,txt); draw(); };
       m.querySelector('#mf').onsubmit=e=>{ e.preventDefault(); if(inp.value.trim()) go(inp.value); };
       m.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>go(MSG_QUICK[+b.dataset.q]));
+      { const C=m.querySelector('#mpC'), P=m.querySelector('#mpP'); m.querySelector('#mpB').onclick=()=>matchMedia('(pointer:coarse)').matches?photoChoice(C,P):P.click();
+        C.onchange=P.onchange=e=>{ const fs=[...(e.target.files||[])]; e.target.value=''; if(fs.length) msgSendPics(me,t,fs); };
+        inp.onpaste=e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)); if(fs.length){ e.preventDefault(); msgSendPics(me,t,fs); } };
+        m.querySelectorAll('[data-pic]').forEach(el=>{ const id=el.dataset.pic; el.onclick=()=>picView(id);
+          if(!el.firstChild) picUrl(id).then(u=>{ if(el.isConnected&&!el.firstChild){ const i=new Image(); i.alt='Photo'; i.src=u; el.appendChild(i); } }).catch(()=>{ el.classList.add('gone'); }); });
+        const cA=m.querySelector('#cA'), cV=m.querySelector('#cV'); if(cA) cA.onclick=()=>callStart(me,t,'audio'); if(cV) cV.onclick=()=>callStart(me,t,'video');
+        m.querySelectorAll('[data-cb]').forEach(b=>b.onclick=()=>callStart(me,t,b.dataset.cb)); }
       const mic=m.querySelector('#mic'); if(mic) mic.onclick=()=>{ try{ const r=new SR(); r.lang='en-NZ'; r.interimResults=false; mic.textContent='👂'; r.onresult=e=>{ inp.value=(inp.value+' '+e.results[0][0].transcript).trim(); }; r.onend=()=>{ mic.textContent='🎤'; inp.focus(); }; r.onerror=()=>{ mic.textContent='🎤'; toast('Couldn’t hear that. Try again, or type it.'); }; r.start(); }catch(e){ toast('Voice typing isn’t available on this device'); } };
     };
+    m.addEventListener('dragover',e=>{ if(msgOpen&&msgOpen.th&&msgAs&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+    m.addEventListener('drop',e=>{ if(!(msgOpen&&msgOpen.th&&msgAs)) return; const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])].filter(f=>/^image\//.test(f.type)); if(!fs.length) return; e.preventDefault(); msgSendPics(msgAs,msgOpen.th,fs); });
     msgOpen.draw=draw; draw();
   });
 }

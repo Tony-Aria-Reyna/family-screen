@@ -48,7 +48,12 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { data: { title: 'Family Screen', body: e.data ? e.data.text() : '' } }; }
   const m = Object.assign({}, d.notification || {}, d.data || {});
-  e.waitUntil(self.registration.showNotification(m.title || 'Family Screen', { body: m.body || '', tag: m.tag || undefined, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || './', open: /^msg-/.test(m.tag || '') ? 'msg:' + m.tag.slice(4) : m.tag === 'inbox' ? 'inbox' : '' }, renotify: !!m.tag }));
+  const tag = m.tag || '', isCall = /^call-/.test(tag);
+  // a message for a chat replaces that chat's "is calling" alert (the call was missed or is over)
+  const tidy = /^msg-/.test(tag) ? self.registration.getNotifications({ tag: 'call-' + tag.slice(4) }).then(ns => ns.forEach(n => n.close())).catch(() => null) : Promise.resolve();
+  e.waitUntil(tidy.then(() => self.registration.showNotification(m.title || 'Family Screen', Object.assign({ body: m.body || '', tag: tag || undefined, icon: 'icon-192.png', badge: 'icon-192.png',
+    data: { url: m.url || './', open: /^msg-/.test(tag) ? 'msg:' + tag.slice(4) : isCall ? 'call:' + tag.slice(5) : tag === 'inbox' ? 'inbox' : '' }, renotify: !!tag },
+    isCall ? { requireInteraction: true, vibrate: [400, 200, 400, 200, 400, 200, 600] } : {}))));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();

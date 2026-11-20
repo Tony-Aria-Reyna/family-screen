@@ -252,6 +252,7 @@ function subCols() {
       onChange(c);
     }, err => { if (NEWER.includes(c) && err && err.code === 'permission-denied') { denied.add(c); console.warn(c + ': database rules need updating'); onChange('rulesold', c); } else onChange('error', err); }));
   }
+  if (!lim) startCalls();
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
   if (me()) for (const c of PRIV.filter(c => !(lim && LIM_OWN.includes(c)))) unsub.push(listen(collection(db, 'households', hid, 'private', me(), c), snap => {
     const mine = snap.docs.map(x => Object.assign({ id: x.id }, x.data(), { priv: true }));
@@ -275,7 +276,7 @@ function listenSoft(c) {
 export function retrySoft() { if (hid) SOFT.forEach(listenSoft); }
 export const canSee = c => !!softOk[c];
 export const privateOk = () => privOk;
-export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; }
+export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; callsOn = false; clearTimeout(callRetry); }
 const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '', alexaFrom: s.alexaFrom || '', photoFolder: s.photoFolder || '', photoRev: s.photoRev || 0, food: s.food || '', foodLog: s.foodLog || [] });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
@@ -398,3 +399,28 @@ export async function reauth(password) {
   const p = new GoogleAuthProvider(); p.setCustomParameters({ login_hint: me() || '' }); await reauthenticateWithPopup(auth.currentUser, p); return true;
 }
 export const householdId = () => hid;
+
+/* ---------- 4.0 calls and photos in Messages ----------
+   A call is one short-lived record, households/{id}/calls/{callId}: the caller's offer, the answer from each screen that
+   picks up, and any network addresses found late. It is deleted when the call ends.
+   A photo sent in Messages is kept in its own record, households/{id}/msgpics/{id}, and fetched when a chat shows it,
+   so the message list itself stays small and quick. */
+let callCb = null, callsOn = false, callRetry = 0;
+export function onCalls(cb) { callCb = cb; if (hid && subbed && !callsOn) startCalls(); }
+export const callsReady = () => callsOn;
+function startCalls() {
+  clearTimeout(callRetry);
+  if (!hid || !callCb || isLimited()) return;
+  const mine = hid;
+  unsub.push(listen(collection(db, 'households', hid, 'calls'), snap => { callsOn = true; callCb(snap.docs.map(x => Object.assign({ id: x.id }, x.data()))); },
+    err => { callsOn = false; console.warn('calls: database rules need updating', err && err.code); callCb(null); callRetry = setTimeout(() => { if (hid === mine) startCalls(); }, 120e3); }));
+}
+const callRef = id => doc(db, 'households', hid, 'calls', id);
+export const callPut = (id, data) => setDoc(callRef(id), clean(data));
+export const callPatch = (id, data) => updateDoc(callRef(id), data);
+export const callAddIce = (id, field, list) => updateDoc(callRef(id), { [field]: arrayUnion(...list) });
+export const callDrop = id => deleteDoc(callRef(id)).catch(() => {});
+const picRef = id => doc(db, 'households', hid, 'msgpics', id);
+export const picPut = (id, data) => setDoc(picRef(id), clean(data));
+export async function picGet(id) { const s = await getDoc(picRef(id)); tally(1); return s.exists() ? s.data() : null; }
+export const picDrop = id => deleteDoc(picRef(id)).catch(() => {});
