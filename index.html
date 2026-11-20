@@ -235,6 +235,7 @@ body.simple{overflow:hidden}
 #saver img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;animation:svfade 1.5s}
 @keyframes svfade{from{opacity:0}to{opacity:1}}
 #saver .sv-info{position:absolute;left:32px;bottom:28px;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+#saver.night{background:#000}#saver .sv-clock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:min(22vw,200px);font-weight:300;color:#555;letter-spacing:2px}
 #saver .sv-time{font-size:84px;font-weight:800;line-height:1}#saver .sv-date{font-size:28px;opacity:.9}#saver .sv-next{font-size:26px;margin-top:8px;opacity:.95}
 #simple{position:fixed;inset:0;z-index:48;background:#fbf8f2;overflow:auto;padding:16px 18px 40px;font-size:24px;color:var(--ink)}
 #simple .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -5604,16 +5605,21 @@ function openSimplePick(){ modal((m,close)=>{ let lang=appLang(), who=lsGet('fs.
    Photos come from a Google Drive folder through the Reminder helper (⚙️ Settings → This device), kept on the screen. */
 let hubIdle=Date.now(), hubLock=null, hubHome=true;
 const hubOn=()=>!isPhone()&&!LOCAL&&S.people.length&&lsGet('fs.hub','1')==='1';
-function hubTouch(){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')) saverOff(); }
+let saverSwallow=0;
+addEventListener('click',e=>{ if(Date.now()<saverSwallow){ e.preventDefault(); e.stopPropagation(); } },true);
+function hubTouch(e){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')){ saverOff(); saverSwallow=Date.now()+700; try{ if(document.querySelector('.scrim')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(x){} } }
 ['pointerdown','keydown','wheel','touchstart'].forEach(e=>addEventListener(e,hubTouch,{passive:true,capture:true}));
 async function hubWake(){ if(!hubOn()||!('wakeLock' in navigator)||document.visibilityState!=='visible') return; try{ if(!hubLock||hubLock.released) hubLock=await navigator.wakeLock.request('screen'); }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') hubWake(); });
 function hubTick(){
   if(!hubOn()) return; hubWake(); const idle=Date.now()-hubIdle, h=new Date().getHours();
   if(idle>3*60e3&&!hubHome){ hubHome=true; try{ if(document.querySelector('.scrim')&&!document.querySelector('.aibusy')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(e){} }
-  if((h>=21||h<6)&&idle>5*60e3&&!document.getElementById('saver')) saverOn();
-  if(h>=6&&h<21&&document.getElementById('saver')) saverOff();
+  if(idle>saverIdle()*60e3&&!document.getElementById('saver')) saverOn();
 }
+// this screen's photo-frame times (kept on the device): photos between From and To, a dim clock the rest of the time
+const saverIdle=()=>Math.max(1,+lsGet('fs.svIdle','5')||5), saverFrom=()=>lsGet('fs.svFrom','06:00')||'06:00', saverTo=()=>lsGet('fs.svTo','21:00')||'21:00';
+function saverPhotosNow(d){ const t=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'), f=saverFrom(), u=saverTo();
+  return f<=u?(t>=f&&t<u):(t>=f||t<u); }
 setInterval(hubTick,30e3);
 // someone added photos on another device: fetch them within a couple of minutes (fridge and computers; phones when the album opens)
 let photoPullAt=0;
@@ -5628,7 +5634,8 @@ async function saverOn(){
   try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
   const draw=()=>{ if(!document.getElementById('saver')) return; const now=new Date(), t=now.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'});
     const nx=itemsForDay(dk(now)).concat(itemsForDay(dk(addDays(now,1)))).filter(it=>it.k==='ev').map(it=>it.e).filter(e=>!e.time||e.date!==dk(now)||e.time>String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'))[0];
-    const u=urls.length?urls[saverI++%urls.length]:'';
+    if(!saverPhotosNow(now)){ el.className='night'; el.innerHTML=`<div class="sv-clock" style="transform:translate(${Math.round(Math.random()*60-30)}px,${Math.round(Math.random()*60-30)}px)">${esc(t)}</div>`; return; }
+    el.className=''; const u=urls.length?urls[saverI++%urls.length]:'';
     el.innerHTML=`${u?`<img src="${u}" alt="">`:''}<div class="sv-info"><div class="sv-time">${esc(t)}</div><div class="sv-date">${esc(jaDate(now))}</div>${nx?`<div class="sv-next">${esc((nx.date===dk(now)?tr('Today'):tr('Tomorrow'))+' · '+(nx.time?jaTime(nx.time)+' ':'')+(nx.title||''))}</div>`:''}</div>`; };
   draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
   if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
@@ -6572,9 +6579,11 @@ function openSettings(at){
     <p class="note" style="margin:0 0 6px">Bills, renewals, gift ideas, loyalty cards, recipes and more are under 🧩 <b>More</b>.</p>
     <div class="shd" id="s-dev">📱 This device</div>
     <div class="row" style="margin:8px 0 4px"><button class="opt" id="goInstall">📲 Install on this device</button><button class="opt" id="goPrivacy">🔒 Privacy &amp; our data</button><button class="opt" id="goSimple">👵 Big and simple screen</button></div>
-    ${isPhone()||LOCAL?'':`<div class="srccard" style="margin:10px 0"><h4>🧲 Fridge screen</h4><label class="small"><input type="checkbox" id="hubOn" ${lsGet('fs.hub','1')==='1'?'checked':''}> Keep the screen on, go back to Today after 3 minutes, and show a photo frame from 9pm to 6am</label>
+    ${isPhone()||LOCAL?'':`<div class="srccard" style="margin:10px 0"><h4>🧲 Fridge screen</h4><label class="small"><input type="checkbox" id="hubOn" ${lsGet('fs.hub','1')==='1'?'checked':''}> Keep the screen on, go back to Today after 3 minutes, and show the photo frame when nobody’s using it</label>
+      <div class="row small" style="gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">Photos from <input type="time" id="svFrom" value="${esc(saverFrom())}"> to <input type="time" id="svTo" value="${esc(saverTo())}"> · start after <input type="number" id="svIdle" min="1" max="60" value="${saverIdle()}" style="width:60px"> min without a touch</div>
+      <p class="note">Outside those hours it shows just the time, dimmed. A touch anywhere goes straight back to Today.</p>
       <label class="small">Photos come from 📸 Family album (More). Or use your own Google Drive folder instead (paste its link) <input class="txt" id="phF" value="${esc(S.photoFolder||'')}" placeholder="https://drive.google.com/drive/folders/…"></label>
-      <div class="row"><button class="xbtn" id="phGo">📷 Save and get the photos now</button><button class="xbtn" id="phTry">🌙 Try the photo frame</button></div></div>`}
+      <div class="row"><button class="xbtn" id="phGo">📷 Save and get the photos now</button><button class="xbtn" id="phTry">🖼️ Try the photo frame</button></div></div>`}
     <label class="small">Language on this device <select id="devLang"><option value="">English</option><option value="ja" ${appLang()==='ja'?'selected':''}>日本語 (Japanese)</option></select></label>
     ${LOCAL?`<div class="step">Sample entries <span style="font-weight:500">(demo mode: everything is saved on this device only)</span></div>
     <div class="opts"><button class="opt" id="clr">Remove all sample entries</button><button class="opt" id="reset">Start again from scratch</button></div>`:`<div class="opts"><button class="opt" id="signOut">Sign out of ${esc(SYNC.me()||'')}</button></div>`}
@@ -6610,7 +6619,7 @@ function openSettings(at){
     m.querySelector('#goHelpers').onclick=()=>{ close(); openHelpers(); };
     m.querySelector('#goNotify').onclick=()=>{ close(); openNotify(); };
     m.querySelector('#goPrivacy').onclick=()=>{ close(); openPrivacy(); };
-    { const hb=m.querySelector('#hubOn'); if(hb) hb.onchange=()=>{ lsSet('fs.hub',hb.checked?'1':'0'); };
+    { const hb=m.querySelector('#hubOn'); if(hb) hb.onchange=()=>{ lsSet('fs.hub',hb.checked?'1':'0'); }; [['svFrom','fs.svFrom'],['svTo','fs.svTo'],['svIdle','fs.svIdle']].forEach(([id,k])=>{ const x=m.querySelector('#'+id); if(x) x.onchange=()=>{ if(x.value) lsSet(k,x.value); toast('Saved for this screen'); }; });
       const pg=m.querySelector('#phGo'); if(pg) pg.onclick=async()=>{ const v=m.querySelector('#phF').value.trim(), id=(v.match(/folders\/([\w-]{10,})/)||v.match(/[?&]id=([\w-]{10,})/)||v.match(/^([\w-]{20,})$/)||[])[1]||'';
         if(v&&!id){ toast('That doesn’t look like a Drive folder link'); return; } S.photoFolder=id; save(); if(!id) return; pg.disabled=true; pg.textContent='📷 Getting photos…'; await saverFetch(true); pg.disabled=false; pg.textContent='📷 Save and get the photos now'; };
       const pt=m.querySelector('#phTry'); if(pt) pt.onclick=()=>{ close(); setTimeout(()=>{ hubIdle=Date.now(); saverOn(); },300); }; }
@@ -7172,7 +7181,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwot6okk';
+const FS_VERSION='fs-mwotfvr2';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

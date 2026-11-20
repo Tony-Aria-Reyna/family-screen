@@ -1434,16 +1434,21 @@ function openSimplePick(){ modal((m,close)=>{ let lang=appLang(), who=lsGet('fs.
    Photos come from a Google Drive folder through the Reminder helper (⚙️ Settings → This device), kept on the screen. */
 let hubIdle=Date.now(), hubLock=null, hubHome=true;
 const hubOn=()=>!isPhone()&&!LOCAL&&S.people.length&&lsGet('fs.hub','1')==='1';
-function hubTouch(){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')) saverOff(); }
+let saverSwallow=0;
+addEventListener('click',e=>{ if(Date.now()<saverSwallow){ e.preventDefault(); e.stopPropagation(); } },true);
+function hubTouch(e){ hubIdle=Date.now(); hubHome=false; if(document.getElementById('saver')){ saverOff(); saverSwallow=Date.now()+700; try{ if(document.querySelector('.scrim')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(x){} } }
 ['pointerdown','keydown','wheel','touchstart'].forEach(e=>addEventListener(e,hubTouch,{passive:true,capture:true}));
 async function hubWake(){ if(!hubOn()||!('wakeLock' in navigator)||document.visibilityState!=='visible') return; try{ if(!hubLock||hubLock.released) hubLock=await navigator.wakeLock.request('screen'); }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') hubWake(); });
 function hubTick(){
   if(!hubOn()) return; hubWake(); const idle=Date.now()-hubIdle, h=new Date().getHours();
   if(idle>3*60e3&&!hubHome){ hubHome=true; try{ if(document.querySelector('.scrim')&&!document.querySelector('.aibusy')) closeModal(); const t=document.getElementById('todayBtn'); if(t) t.click(); }catch(e){} }
-  if((h>=21||h<6)&&idle>5*60e3&&!document.getElementById('saver')) saverOn();
-  if(h>=6&&h<21&&document.getElementById('saver')) saverOff();
+  if(idle>saverIdle()*60e3&&!document.getElementById('saver')) saverOn();
 }
+// this screen's photo-frame times (kept on the device): photos between From and To, a dim clock the rest of the time
+const saverIdle=()=>Math.max(1,+lsGet('fs.svIdle','5')||5), saverFrom=()=>lsGet('fs.svFrom','06:00')||'06:00', saverTo=()=>lsGet('fs.svTo','21:00')||'21:00';
+function saverPhotosNow(d){ const t=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'), f=saverFrom(), u=saverTo();
+  return f<=u?(t>=f&&t<u):(t>=f||t<u); }
 setInterval(hubTick,30e3);
 // someone added photos on another device: fetch them within a couple of minutes (fridge and computers; phones when the album opens)
 let photoPullAt=0;
@@ -1458,7 +1463,8 @@ async function saverOn(){
   try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
   const draw=()=>{ if(!document.getElementById('saver')) return; const now=new Date(), t=now.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'});
     const nx=itemsForDay(dk(now)).concat(itemsForDay(dk(addDays(now,1)))).filter(it=>it.k==='ev').map(it=>it.e).filter(e=>!e.time||e.date!==dk(now)||e.time>String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'))[0];
-    const u=urls.length?urls[saverI++%urls.length]:'';
+    if(!saverPhotosNow(now)){ el.className='night'; el.innerHTML=`<div class="sv-clock" style="transform:translate(${Math.round(Math.random()*60-30)}px,${Math.round(Math.random()*60-30)}px)">${esc(t)}</div>`; return; }
+    el.className=''; const u=urls.length?urls[saverI++%urls.length]:'';
     el.innerHTML=`${u?`<img src="${u}" alt="">`:''}<div class="sv-info"><div class="sv-time">${esc(t)}</div><div class="sv-date">${esc(jaDate(now))}</div>${nx?`<div class="sv-next">${esc((nx.date===dk(now)?tr('Today'):tr('Tomorrow'))+' · '+(nx.time?jaTime(nx.time)+' ':'')+(nx.title||''))}</div>`:''}</div>`; };
   draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
   if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
