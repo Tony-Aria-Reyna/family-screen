@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 29;
+const HELPER_VERSION = 30;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -54,7 +54,7 @@ function tick() {
       try { agendaPrep(h, props, now); } catch (e) { Logger.log('Agenda: ' + e); }
       try { weekAhead(h, props, now, pre); } catch (e) { Logger.log('Week ahead: ' + e); }
       billArrivals(h, data.bills, msgs, k => !!sent[k]);
-      try { trackFlights(h, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
+      try { trackFlights(hl, data.flights, now, props, msgs); } catch (e) { flightNote.error = String(e && e.message || e).slice(0, 200); }
       for (const m of msgs) { send(hl, m.device, m.title, m.body, m.tag); props.setProperty(m.key, String(now.getTime())); sent[m.key] = '1'; }
       if (h.testPing && h.testPing.hash && (h.devices || {})[h.testPing.hash]) send(h, h.testPing.hash, '🔔 Family Screen', 'Test notification — this phone is all set.', 'test');
     } catch (e) { err = String(e && e.message || e).slice(0, 300); }
@@ -551,7 +551,7 @@ function trackFlights(h, flights, now, props, msgs) {
     else if (prev.prev) cur.prev = prev.prev;
     for (const a of flightAlerts(h, f, prev, cur)) for (const hash of Object.keys(h.devices || {})) {
       const dev = h.devices[hash]; if (!dev || !dev.token || dev.flights === false) continue;
-      if (dev.people && dev.people.length && dev.people.indexOf(a.who) < 0) continue;
+      if (dev.people && dev.people.length && dev.people.indexOf(a.who) < 0 && (dev.flyers || []).indexOf(a.who) < 0) continue;
       msgs.push({ device: hash, key: 'f|' + hash + '|' + f.id + '|' + cur.told + '|' + cur.toldStatus + '|' + now.getTime(), tag: a.tag,
         title: dev.private ? '✈️ Family Screen' : a.title, body: dev.private ? 'A flight time has changed.' : a.body });
     }
@@ -659,7 +659,9 @@ function lentDevices(homes) {
       for (const o of homes) { if (o._id === h._id) continue;
         const devs = o.devices || {};
         for (const hash of Object.keys(devs)) { const d = devs[hash]; if (!d || !d.token || String(d.email || '').toLowerCase() !== em) continue;
-          (out[h._id] = out[h._id] || {})['L-' + o._id + '-' + hash] = { token: d.token, email: em, lang: d.lang || '', label: d.label || '', people: [p.id], lead: d.lead || 30, remind: true, morning: false, jobs: false, flights: false, lent: true };
+          // flight alerts for the family's traveller too (Masako picks Reyna up and drops her off)
+          const fly = (h.people || []).filter(q => q.traveller).map(q => q.id);
+          (out[h._id] = out[h._id] || {})['L-' + o._id + '-' + hash] = { token: d.token, email: em, lang: d.lang || '', label: d.label || '', people: [p.id], flyers: fly, lead: d.lead || 30, remind: true, morning: false, jobs: false, flights: d.flights !== false, lent: true };
         } } }
   }
   return out;

@@ -21,6 +21,8 @@ async def main():
         await M.click('#gNew'); await M.wait_for_timeout(2500)
         print('2 her household:', await M.evaluate("JSON.stringify({people:S.people.map(p=>p.name),limited:SYNC.isLimited(),members:SYNC.getMembers(),guests:SYNC.getLimited(),vapid:S.vapidKey,tabs:[...document.querySelectorAll('.tabbar button')].filter(b=>getComputedStyle(b).display!=='none').length})"))
         print('3 she sees their calendar, not their jobs:', await M.evaluate("JSON.stringify({events:S.events.map(e=>[e.title,e.whos.map(w=>(person(w)||{}).name)]),flights:S.flights.length,todos:S.todos.length})"))
+        await T.evaluate("(()=>{ const d=JSON.parse(localStorage.getItem('mockdb')); const k=Object.keys(d).find(x=>/^households\\/[^/]+$/.test(x)&&d[x].owner==='tonyandreynanz@gmail.com'); d[k].live={f1:{status:'Delayed',gate:'7'}}; localStorage.setItem('mockdb',JSON.stringify(d)); window.dispatchEvent(new StorageEvent('storage',{key:'mockdb'})); })()"); await M.wait_for_timeout(800)
+        print('4a live flight status reaches her:', await M.evaluate("JSON.stringify(liveOf(S.flights[0]))"))
         print('4 Where is:', await M.evaluate("(traveller()||{}).name"), '| guest people to pick:', await M.evaluate("guestPeople().map(p=>p.name)"))
         # she adds her own entry, and one for Aria
         await M.evaluate("S.events.push({id:'m1',title:'Doctor',date:dk(new Date()),time:'09:00',whos:['p1'],dur:30}); S.todos.push({id:'mt',title:'Her job',done:false}); S.groceries.push({id:'mg',name:'Tofu',shop:S.shops[0].id,done:false}); const a=guestPeople().find(p=>p.name==='Aria'); S.events.push({id:'m2',title:'Aria sleepover',date:dk(new Date()),time:'18:00',whos:[a.id,'p1'],dur:60}); save()"); await M.wait_for_timeout(1200); await T.wait_for_timeout(1500)
