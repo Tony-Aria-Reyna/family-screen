@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 32;
+const HELPER_VERSION = 33;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -147,7 +147,10 @@ function selfUpdate(props, now, force) {
       if (m.getResponseCode() === 200 && mf) {
         const want = JSON.parse(m.getContentText()).oauthScopes || [], have = JSON.parse(mf.source).oauthScopes || [];
         const extra = want.filter(function (x) { return have.indexOf(x) < 0; });
-        if (extra.length) { report.needsYou = 'Version ' + v + ' needs new permissions, so paste it in by hand once (⚙️ → 🧰 Helpers).'; throw new Error(report.needsYou); }
+        // a few low-risk permissions may be added here; someone then says yes once by running updateNow in the editor
+        const OK_NEW = ['https://www.googleapis.com/auth/photoslibrary.appendonly'];
+        if (extra.some(function (x) { return OK_NEW.indexOf(x) < 0; })) { report.needsYou = 'Version ' + v + ' needs new permissions, so paste it in by hand once (⚙️ → 🧰 Helpers).'; throw new Error(report.needsYou); }
+        if (extra.length) { mf.source = JSON.stringify(Object.assign(JSON.parse(mf.source), { oauthScopes: have.concat(extra) }), null, 2); report.needsYou = 'Approve the new Google Photos permission: open the helper in Apps Script, choose updateNow, Run, then Review permissions and Allow.'; }
       }
       let done = false;
       cur.files.forEach(function (f) { if (f.type === 'SERVER_JS' && /function tick\(/.test(f.source || '')) { f.source = src; done = true; } });
@@ -742,7 +745,50 @@ function photoAdd(b) {
   const f = albumFolder(), name = String(b.name || ('Photo ' + Utilities.formatDate(new Date(), 'Pacific/Auckland', 'yyyy-MM-dd HHmmss'))).replace(/[\\/:*?"<>|]/g, ' ').slice(0, 100);
   const file = f.createFile(Utilities.newBlob(Utilities.base64Decode(data), String(b.mime || 'image/jpeg'), name));
   if (b.by) try { file.setDescription('Added by ' + String(b.by).slice(0, 60) + ' from Family Screen'); } catch (e) {}
-  return { ok: true, id: file.getId(), folder: f.getId() };
+  let gp = ''; try { gp = gphotosAdd(file.getBlob(), name, b.by); } catch (e) { gp = String(e.message || e).slice(0, 120); Logger.log('Google Photos: ' + gp); }
+  if (/^ok:/.test(gp)) try { file.setDescription((file.getDescription() || '') + ' [gp:' + gp.slice(3) + ']'); } catch (e) {}
+  return { ok: true, id: file.getId(), folder: f.getId(), gphotos: /^ok/.test(gp) };
+}
+/* delete a photo from the family album: the Drive copy goes to the bin (30 days to undo), the Google Photos copy leaves the album */
+function photoDel(b) {
+  const id = String(b.id || '').replace(/[^\w-]/g, ''); if (!id) return { error: 'No photo' };
+  let file; try { file = DriveApp.getFileById(id); } catch (e) { return { ok: true, gone: true }; }
+  const folders = [albumFolder().getId()], props = PropertiesService.getScriptProperties(), alt = String(b.folder || '').replace(/[^\w-]/g, '');
+  if (alt) folders.push(alt);
+  let inAlbum = false; const ps = file.getParents(); while (ps.hasNext()) if (folders.indexOf(ps.next().getId()) >= 0) inAlbum = true;
+  if (!inAlbum) return { error: 'That photo isn’t in the family album' };
+  const m = /\[gp:([^\]]+)\]/.exec(file.getDescription() || ''), album = props.getProperty('GPHOTOS_ALBUM');
+  if (m && album) try { UrlFetchApp.fetch('https://photoslibrary.googleapis.com/v1/albums/' + album + ':batchRemoveMediaItems', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PROJECT_ID }, payload: JSON.stringify({ mediaItemIds: [m[1]] }) }); } catch (e) {}
+  file.setTrashed(true);
+  return { ok: true };
+}
+/* a copy of each album photo goes into a "Family Screen" album in this account's Google Photos (Google only lets apps add, not read) */
+function gphotosAdd(blob, name, by) {
+  const H = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'x-goog-user-project': PROJECT_ID }, props = PropertiesService.getScriptProperties(), api = 'https://photoslibrary.googleapis.com/v1/';
+  const json = function (r) { const t = r.getContentText(); if (r.getResponseCode() !== 200) throw new Error('Photos ' + r.getResponseCode() + ': ' + t.slice(0, 160)); return JSON.parse(t || '{}'); };
+  let album = props.getProperty('GPHOTOS_ALBUM');
+  if (!album) {
+    album = json(UrlFetchApp.fetch(api + 'albums', { method: 'post', contentType: 'application/json', headers: H, muteHttpExceptions: true, payload: JSON.stringify({ album: { title: 'Family Screen' } }) })).id;
+    props.setProperty('GPHOTOS_ALBUM', album);
+  }
+  const up = UrlFetchApp.fetch(api + 'uploads', { method: 'post', contentType: 'application/octet-stream', muteHttpExceptions: true, payload: blob.getBytes(),
+    headers: Object.assign({ 'X-Goog-Upload-Content-Type': blob.getContentType() || 'image/jpeg', 'X-Goog-Upload-Protocol': 'raw' }, H) });
+  if (up.getResponseCode() !== 200) throw new Error('Photos upload ' + up.getResponseCode() + ': ' + up.getContentText().slice(0, 160));
+  const add = function (alb) { return UrlFetchApp.fetch(api + 'mediaItems:batchCreate', { method: 'post', contentType: 'application/json', headers: H, muteHttpExceptions: true,
+    payload: JSON.stringify(Object.assign(alb ? { albumId: alb } : {}, { newMediaItems: [{ description: by ? 'Added by ' + String(by).slice(0, 60) : '', simpleMediaItem: { uploadToken: up.getContentText(), fileName: name } }] })) }); };
+  let r = add(album);
+  if (r.getResponseCode() === 400 || r.getResponseCode() === 403 || r.getResponseCode() === 404) { props.deleteProperty('GPHOTOS_ALBUM'); json(r); }   // the album was deleted in Google Photos: make a new one next time
+  const res = json(r), it = res.newMediaItemResults && res.newMediaItemResults[0] && res.newMediaItemResults[0].mediaItem;
+  return it ? 'ok:' + it.id : 'ok';
+}
+/* a photo picked in Google Photos' own picker that the phone couldn't download itself */
+function photoFetch(b) {
+  const url = String(b.url || ''); if (!/^https:\/\/[a-z0-9.-]+\.(googleusercontent|google)\.com\//.test(url)) return { error: 'Not a Google Photos link' };
+  const r = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + String(b.token || '') }, muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) return { error: 'Google Photos said ' + r.getResponseCode() };
+  const blob = r.getBlob();
+  return photoAdd({ data: Utilities.base64Encode(blob.getBytes()), mime: blob.getContentType() || 'image/jpeg', name: b.name, by: b.by });
 }
 function photosPage(b) {
   const id = String(b.folder || '').replace(/[^\w-]/g, '') || albumFolder().getId();
@@ -1132,6 +1178,8 @@ function voiceDo(h, action, b) {
   if (action === 'msg_send') return voiceMsgSend(h, b, now);
   if (action === 'photos') return photosPage(b);
   if (action === 'photo_add') return photoAdd(b);
+  if (action === 'photo_fetch') return photoFetch(b);
+  if (action === 'photo_del') return photoDel(b);
   if (action === 'doc_save') return docSave(h, b);
   if (action === 'msg_read') return voiceMsgRead(h, b, now);
   if (action === 'health') { const pr = PropertiesService.getScriptProperties(), st = hRead(pr, h._id); st.readsAt = 0; hSave(pr, h._id, st); return { ok: true, health: healthAfterRun(h, pr, new Date(), '', {}) }; }

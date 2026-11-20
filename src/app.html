@@ -609,6 +609,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .ibit select{font:inherit;font-size:15px;padding:6px;border-radius:10px;border:1px solid var(--line);max-width:120px}.ibit button{padding:7px 14px}
 .ibst{color:var(--muted);font-weight:700}.ibact{margin-top:8px;gap:8px;flex-wrap:wrap}.ibact a{text-decoration:none;display:inline-flex;align-items:center;border-radius:14px;padding:8px 14px;color:var(--ink);font-weight:700}
 .hmore{margin:18px 2px 8px;font-size:15px;font-weight:800;color:var(--muted)}
+.alview{position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column;gap:12px;padding:14px}.alview img{flex:1;min-height:0;width:100%;object-fit:contain;border-radius:12px;background:#111}
+.hallmore{display:block;width:100%;margin:12px 0 4px;padding:14px;border-radius:16px;background:var(--soft);font-size:17px;font-weight:800;text-align:left}.hallmore small{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-top:2px}
 .hwarn{background:#fff4e5;border:2px solid #f3c58a;border-radius:20px;padding:14px 16px;margin:0 0 12px}.hwarn b{display:block;font-size:16px;line-height:1.35;margin-bottom:8px}.hwarn .row{gap:8px;flex-wrap:wrap}
 .hneed{display:block;width:100%;text-align:left;font:inherit;background:#fff;border:2px solid var(--line);border-radius:24px;padding:14px 18px;margin:12px 0 0;color:var(--ink)}.hneed h3{margin:0 0 6px;font-size:17px}.hneed .hln{border-left:4px solid #c3e8cc;padding:4px 10px;margin:4px 0;font-size:16px}.hneed small{color:var(--muted)}
 @media (max-width:900px){
@@ -626,6 +628,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;font-size:22px;padding:4px 0;min-width:0;border-radius:12px}
   .tabbar button span{font-size:11px;white-space:nowrap;font-weight:700;color:var(--muted)}
   .tabbar button.on{background:var(--soft)}
+  body:not(.limited) .tabbar button[data-tab="meals"],body:not(.limited) .tabbar button[data-tab="where"],body.limited #tabMore{display:none}
+  body:not(.limited)[data-tab="meals"] #tabMore,body:not(.limited)[data-tab="where"] #tabMore{background:var(--soft)}
   body #phoneTop{display:flex}
   .ph .tip{display:none}
   body[data-tab="cal"] #pcal{display:flex}
@@ -833,7 +837,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
   <div class="dock" id="dock"></div>
 </div>
 <button class="pc-fab" id="pcFab"></button>
-<nav class="tabbar"><button data-tab="home">🏠<span>Home</span></button><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="meals">🍽️<span>Meals</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button></nav>
+<nav class="tabbar"><button data-tab="home">🏠<span>Home</span></button><button data-tab="cal">📅<span>Calendar</span></button><button data-tab="todo">✅<span>To do</span></button><button data-tab="shop">🛒<span>Shopping</span></button><button data-tab="meals">🍽️<span>Meals</span></button><button data-tab="where">🌏<span id="tabWhere">Where?</span></button><button id="tabMore" aria-label="More">🧩<span>More</span></button></nav>
 <div id="gate" hidden></div>
 <div id="layer"></div>
 <div id="spaceLayer"></div>
@@ -2944,8 +2948,9 @@ function moreTiles(){ return [
   ['🔊','Alexa',()=>requirePin(()=>openAlexa()),()=>S.voiceUrl?'set up':'set up voice'],
   ['⚙️','Settings',()=>openSettings(),()=>''],
 ]; }
+function phoneMoreTiles(){ const tp=traveller(); return (isPhone()?[['🍽️','Meals',()=>setTab('meals'),()=>'dinner plan & ideas'],['🌏',tp?'Where’s '+tName(tp)+'?':'Where?',()=>setTab('where'),()=>'flights & time there']]:[]).concat(moreTiles()); }
 function openMore(){
-  modal((m,close)=>{ m.classList.add('wide');
+  modal((m,close)=>{ m.classList.add('wide'); const moreTiles=phoneMoreTiles;
     m.innerHTML=`<div class="tvhead"><h2>🧩 More</h2><button class="cancel" id="x">Close</button></div><div class="tiles">${moreTiles().map((t,i)=>`<button class="tile" data-tile="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[3]()||'')}</small></button>`).join('')}</div>`;
     m.querySelector('#x').onclick=close;
     m.querySelectorAll('[data-tile]').forEach(b=>b.onclick=()=>{ close(); moreTiles()[+b.dataset.tile][2](); });
@@ -3317,16 +3322,11 @@ function renderHome(){
   const chk=(S.bills||[]).filter(b=>b.status==='check').length, due=(S.bills||[]).filter(b=>b.status==='due'&&b.due&&daysTo(b.due)<=7).length;
   const mun=typeof msgUnreadAll==='function'?msgUnreadAll():0, inb=typeof inboxNew==='function'?inboxNew():0;
   const tiles=[
-    ['📅','Calendar',week?week+(week===1?' thing':' things')+' this week':'Nothing this week',()=>setTab('cal')],
-    ['✅','To do',me&&mine.length?mine.length+' for you · '+open.length+' in all':open.length?open.length+' to do':'All done',()=>setTab('todo')],
-    ['🛒','Shopping',shop?shop+(shop===1?' item':' items'):'List is empty',()=>setTab('shop')],
     ['🍽️','Meals',dinner?'Dinner: '+dinner:'No dinner planned',()=>setTab('meals')],
     ['🌏',tp?'Where’s '+tName(tp)+'?':'Our travels',where,()=>setTab('where')],
-    ['🧾','Bills',chk?chk+' to check':due?due+' due this week':'Nothing due',()=>openBills()],
-    ['✉️','Messages',mun?mun+' new':'Chat with the family',()=>openMsgs(),mun],
-    ['📥','Inbox',inb?inb+' to check':S.inboxEmail?'Nothing new':'Forward emails here',()=>openInbox(),inb],
+    ['🧾','Bills',chk?chk+' to check':due?due+' due this week':'Nothing due',()=>openBills(),chk],
+    mun||!inb?['✉️','Messages',mun?mun+' new':'Chat with the family',()=>openMsgs(),mun]:['📥','Inbox',inb+' to check',()=>openInbox(),inb],
   ];
-  const skip=['Bills','Our travels','Messages','Inbox','Big and simple'], rest=moreTiles().map((t,i)=>({t,i})).filter(x=>!skip.includes(x.t[1])&&!/’s corner$/.test(x.t[1]));
   // needs doing: my jobs first (overdue and due soon at the top), else everyone's
   const jobs=(me&&mine.length?mine:open).slice().sort((a,b)=>String(a.due||'9999').localeCompare(String(b.due||'9999')));
   const need=jobs.length||shop?`<button class="hneed" id="hNeed"><h3>✅ Needs doing</h3>${jobs.slice(0,3).map(t=>`<div class="hln">${esc(t.title)}${t.due?` <small>· ${esc(fmtD(new Date(t.due+'T12:00'),{weekday:'short',day:'numeric',month:'short'}))}</small>`:''}</div>`).join('')}${jobs.length>3?`<div class="hnone">+ ${jobs.length-3} more</div>`:''}${shop?`<div class="hln">🛒 ${shop} on the shopping list</div>`:''}</button>`:'';
@@ -3336,8 +3336,7 @@ function renderHome(){
     <button class="hcard tm" id="hTmrw"><h2>Tomorrow</h2>${M.show.length?M.show.map(line).join('')+(M.more?`<div class="hnone">+ ${M.more} more</div>`:''):'<div class="hnone">Nothing yet</div>'}</button>
     ${need}
     <div class="hgrid">${tiles.map((t,i)=>`<button class="tile ${t[4]?'hot':''}" data-ht="${i}"><span class="ti">${t[0]}</span><b>${esc(t[1])}</b><small>${esc(t[2]||'')}</small></button>`).join('')}</div>
-    <div class="hmore">Everything else</div>
-    <div class="hgrid">${rest.map(x=>`<button class="tile" data-hm="${x.i}"><span class="ti">${x.t[0]}</span><b>${esc(x.t[1])}</b><small>${esc(x.t[3]()||'')}</small></button>`).join('')}</div>`;
+    <button class="hallmore" id="hAll">🧩 Everything else <small>album, stock, documents, recipes…</small></button>`;
   const goDay=k=>{ pSel=k; pMonth=null; setTab('cal'); };
   { const slot=$('#hAddSlot'); if(slot){ if(keepAdd) slot.replaceWith(keepAdd); else { slot.outerHTML=addAnyHTML('hAdd'); wireAddAny($('#hAdd')); } } }
   wirePersonal(); $('#hToday').onclick=()=>goDay(tk); $('#hTmrw').onclick=()=>goDay(mk);
@@ -3345,7 +3344,7 @@ function renderHome(){
   { const on=$('#hAlertsOn'); if(on) on.onclick=async()=>{ on.disabled=true; on.textContent='Turning on…'; const ok=await turnOnPush(); if(ok) toast('Alerts are on for this phone'); renderHome(); };
     const later=$('#hAlertsLater'); if(later) later.onclick=()=>{ lsSet('fs.alertsLater',Date.now()+3*864e5); renderHome(); }; }
   el.querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>tiles[+b.dataset.ht][3]());
-  el.querySelectorAll('[data-hm]').forEach(b=>b.onclick=()=>moreTiles()[+b.dataset.hm][2]());
+  $('#hAll').onclick=openMore;
 }
 /* ================= phone calendar: month grid with a sliding day sheet ================= */
 let pSel=dk(new Date()), pMode=lsGet('fs.pmode2','split'), pMonth=null, pY=null, pSnaps=null, pScroll=null;
@@ -3587,7 +3586,7 @@ $('#mealBtn').onclick=openMeals;
 $('#moreBtn').onclick=openMore;
 $('#askBtn').onclick=()=>openAsk(); $('#msgBtn').onclick=()=>openMsgs();
 $('#homeClock').onclick=openGlobe;
-document.querySelectorAll('.tabbar [data-tab]').forEach(b=>{ b.onclick=()=>setTab(b.dataset.tab); });
+document.querySelectorAll('.tabbar [data-tab]').forEach(b=>{ b.onclick=()=>setTab(b.dataset.tab); }); $('#tabMore').onclick=openMore;
 setTab((()=>{ try{ return sessionStorage.getItem('fs.tab')||'home'; }catch(e){ return 'home'; } })());
 initSplits();
 if(LOCAL){ gate(null); renderAll(); save(); setTimeout(()=>refreshLinks(false),2000); }

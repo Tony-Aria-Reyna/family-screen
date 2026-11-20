@@ -1445,6 +1445,11 @@ function hubTick(){
   if(h>=6&&h<21&&document.getElementById('saver')) saverOff();
 }
 setInterval(hubTick,30e3);
+// someone added photos on another device: fetch them within a couple of minutes (fridge and computers; phones when the album opens)
+let photoPullAt=0;
+function photoPull(){ if(!S.voiceUrl||!navigator.onLine||isPhone()) return; const rev=+S.photoRev||0, have=+lsGet('fs.photosAt',0)||0;
+  if(rev>have&&Date.now()-photoPullAt>120e3){ photoPullAt=Date.now(); saverFetch(); } }
+setInterval(photoPull,60e3);
 let saverT=null, saverI=0;
 async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=await c.match('list'); return r?await r.json():[]; }catch(e){ return []; } }
 async function saverOn(){
@@ -1709,29 +1714,64 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
    Anyone adds photos: from their phone (camera or photos, several at once), by dragging them onto the fridge or a
    computer, or with Android's Share → Family Screen. They are made a sensible size and saved by the Reminder helper
    into "Family Screen photos" in the family's Google Drive; the fridge's night-time photo frame shows them. */
-async function albumAdd(files,status){
+async function albumAdd(files,status,quiet){
   const list=[...files].filter(f=>/^image\//.test(f.type)).slice(0,30); if(!list.length){ toast('Those aren’t photos'); return 0; }
   if(!S.voiceUrl){ toast('The album needs the Reminder helper: ⚙️ Settings → Connections → 🧰 Helpers'); return 0; }
-  let ok=0;
+  let ok=0, err='';
   for(let i=0;i<list.length;i++){ if(status) status(`Saving ${i+1} of ${list.length}…`);
     try{ const d=await fileForAI(list[i]); const r=await helperDo('photo_add',{data:d.data,mime:d.mime,name:(list[i].name||'Photo').replace(/\.[a-z]+$/i,'')+'.jpg',by:(mePerson()&&nm(mePerson()))||''});
-      if(r&&r.ok){ ok++; if(r.folder&&S.photoFolder!==r.folder){ S.photoFolder=r.folder; save(); }
+      if(r&&r.error) err=r.error;
+      if(r&&r.ok){ ok++; if(r.folder&&S.photoFolder!==r.folder) S.photoFolder=r.folder;
         try{ const c=await caches.open('fs-photos'), bin=Uint8Array.from(atob(d.data),ch=>ch.charCodeAt(0)); await c.put('p/'+r.id,new Response(new Blob([bin],{type:d.mime})));
           const l=await saverPhotos(); l.unshift(r.id); await c.put('list',new Response(JSON.stringify(l.slice(0,40)),{headers:{'Content-Type':'application/json'}})); }catch(e){} } }
     catch(e){} }
-  toast(ok?`${ok} photo${ok>1?'s':''} added to the family album`:'Couldn’t save the photos. Try again.');
+  if(ok){ S.photoRev=Date.now(); lsSet('fs.photosAt',String(Date.now())); save(); }   // tells the fridge and the other phones there are new photos
+  if(!quiet) toast(ok?`${ok} photo${ok>1?'s':''} added to the family album`:/unknown|action/i.test(err)?'The Reminder helper needs updating first: ⚙️ Settings → 🧰 Helpers':'Couldn’t save the photos'+(err?': '+err:'. Try again.'));
   return ok;
 }
-function openAlbum(){ modal((m,close)=>{ m.classList.add('wide','tvsheet'); let urls=[];
-  const draw=async()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); urls=[];
-    const ids=await saverPhotos(); try{ const c=await caches.open('fs-photos'); for(const id of ids.slice(0,40)){ const r=await c.match('p/'+id); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
+/* ---- Pick from Google Photos (Google's own picker: search a face, tick photos, they come into the album) ---- */
+const PHOTOS_CLIENT='573480703676-5osef2ulg9opju4a8ik0vgg5jmq0v950.apps.googleusercontent.com', PICK_API='https://photospicker.googleapis.com/v1/';
+let gisP=null;
+function gisLoad(){ if(window.google&&google.accounts&&google.accounts.oauth2) return Promise.resolve(); if(gisP) return gisP;
+  gisP=new Promise((ok,no)=>{ const s=document.createElement('script'); s.src='https://accounts.google.com/gsi/client'; s.async=true; s.onload=ok; s.onerror=()=>{ gisP=null; no(new Error('Couldn’t reach Google')); }; document.head.appendChild(s); }); return gisP; }
+function photosToken(){ return new Promise((ok,no)=>{ try{
+  const c=google.accounts.oauth2.initTokenClient({client_id:PHOTOS_CLIENT,scope:'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+    callback:r=>r&&r.access_token?ok(r.access_token):no(new Error(r&&r.error||'Google said no')), error_callback:e=>no(new Error(e&&e.type==='popup_closed'?'closed':'Google sign-in didn’t open'))});
+  c.requestAccessToken({prompt:'',hint:SYNC.me&&SYNC.me()||undefined}); }catch(e){ no(e); } }); }
+async function pickApi(tok,path,opt){ const r=await fetch(PICK_API+path,Object.assign({headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'}},opt||{})); if(!r.ok) throw new Error('Google Photos '+r.status); return r.status===204?{}:r.json(); }
+// step 1 (needs a tap): sign in to Google and start a picking session; step 2 (another tap) opens Google Photos
+async function pickStart(){ await gisLoad(); const tok=await photosToken(); const ses=await pickApi(tok,'sessions',{method:'POST',body:'{}'}); return {tok,ses}; }
+async function pickFinish(p,status){
+  const {tok,ses}=p, until=Date.now()+15*60e3; let s=ses;
+  while(!s.mediaItemsSet){ if(Date.now()>until) throw new Error('Took too long. Try again.'); await new Promise(r=>setTimeout(r,4000)); s=await pickApi(tok,'sessions/'+ses.id); }
+  let items=[], pt=''; do{ const j=await pickApi(tok,'mediaItems?sessionId='+ses.id+'&pageSize=100'+(pt?'&pageToken='+pt:'')); items=items.concat(j.mediaItems||[]); pt=j.nextPageToken||''; }while(pt&&items.length<300);
+  items=items.filter(x=>x.type!=='VIDEO'&&x.mediaFile&&x.mediaFile.baseUrl).slice(0,30);
+  let ok=0;
+  for(let i=0;i<items.length;i++){ status&&status(`Bringing in ${i+1} of ${items.length}…`); const mf=items[i].mediaFile, url=mf.baseUrl+'=w1600-h1600';
+    let done=false;
+    try{ const r=await fetch(url,{headers:{Authorization:'Bearer '+tok}}); if(r.ok){ const b=await r.blob(); done=(await albumAdd([new File([b],mf.filename||'Photo.jpg',{type:b.type||'image/jpeg'})],null,true))>0; } }catch(e){}
+    if(!done){ const r=await helperDo('photo_fetch',{url,token:tok,name:(mf.filename||'Photo').replace(/\.[a-z]+$/i,'')+'.jpg',by:(mePerson()&&nm(mePerson()))||''}); done=!!(r&&r.ok); }
+    if(done) ok++; }
+  try{ await pickApi(tok,'sessions/'+ses.id,{method:'DELETE'}); }catch(e){}
+  if(ok){ S.photoRev=Date.now(); save(); await saverFetch(); }
+  return {ok,of:items.length};
+}
+async function photoDel(id){
+  const r=await helperDo('photo_del',{id,folder:S.photoFolder}); if(!(r&&r.ok)){ toast(r&&r.error?r.error:/unknown|action/i.test(String(r&&r.error))?'The Reminder helper needs updating first':'Couldn’t delete it. Try again.'); return false; }
+  try{ const c=await caches.open('fs-photos'); await c.delete('p/'+id); const l=(await saverPhotos()).filter(k=>k!==id); await c.put('list',new Response(JSON.stringify(l),{headers:{'Content-Type':'application/json'}})); }catch(e){}
+  S.photoRev=Date.now(); lsSet('fs.photosAt',String(Date.now())); save(); return true; }
+function openAlbum(){ gisLoad().catch(()=>{}); modal((m,close)=>{ m.classList.add('wide','tvsheet'); let urls=[];
+  let pids=[];
+  const draw=async()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); urls=[]; pids=[];
+    const ids=await saverPhotos(); try{ const c=await caches.open('fs-photos'); for(const id of ids.slice(0,40)){ const r=await c.match('p/'+id); if(r){ urls.push(URL.createObjectURL(await r.blob())); pids.push(id); } } }catch(e){}
     if(!m.isConnected) return;
     m.innerHTML=`<div class="tvhead"><h2>📸 Family album</h2><button class="save" id="x">Done</button></div>
       <div class="aldrop" id="drop"><b>＋ Add photos</b><small>${isPhone()?'Take one, or choose several from your phone':'Drag photos here, or tap to choose'}</small></div>
-      <div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><button class="cancel" id="sync">🔄 Get the latest</button>${!isPhone()?'<button class="cancel" id="try">🌙 Show the photo frame</button>':''}</div>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><button class="cancel" id="gp">🖼️ Pick from Google Photos</button><button class="cancel" id="sync">🔄 Get the latest</button>${!isPhone()?'<button class="cancel" id="try">🌙 Show the photo frame</button>':''}</div>
       <input type="file" id="alC" accept="image/*" capture="environment" hidden><input type="file" id="alP" accept="image/*" multiple hidden>
       <p class="note" id="alS">${urls.length?urls.length+' photos on this screen. Everyone’s photos are kept in “Family Screen photos” in Google Drive.':'No photos yet. Add some from your phone and they appear here and on the fridge at night.'}</p>
-      <div class="algrid">${urls.map(u=>`<img src="${u}" alt="" loading="lazy">`).join('')}</div>`;
+      <div class="algrid">${urls.map((u,i)=>`<img src="${u}" alt="" loading="lazy" data-pi="${i}">`).join('')}</div>${urls.length?'<p class="note">Tap a photo to see it big or delete it.</p>':''}`;
+    m.querySelectorAll('[data-pi]').forEach(im=>im.onclick=()=>photoView(+im.dataset.pi));
     const st=t=>{ const e=m.querySelector('#alS'); if(e) e.textContent=t; }, go=async fs=>{ await albumAdd(fs,st); draw(); };
     const C=m.querySelector('#alC'), P=m.querySelector('#alP'), dz=m.querySelector('#drop');
     dz.onclick=()=>isPhone()?photoChoice(C,P):P.click();
@@ -1740,6 +1780,19 @@ function openAlbum(){ modal((m,close)=>{ m.classList.add('wide','tvsheet'); let 
     dz.ondrop=e=>{ e.preventDefault(); dz.classList.remove('on'); go([...(e.dataTransfer.files||[])]); };
     m.querySelector('#x').onclick=()=>{ urls.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} }); close(); };
     m.querySelector('#sync').onclick=async()=>{ st('Getting the latest photos…'); await saverFetch(true); draw(); };
+    if((+S.photoRev||0)>(+lsGet('fs.photosAt',0)||0)&&!m.dataset.pulled){ m.dataset.pulled='1'; st('Getting the latest photos…'); saverFetch().then(()=>{ if(m.isConnected) draw(); }); }
+    m.querySelector('#gp').onclick=async e=>{ const b=e.currentTarget; b.disabled=true; st('Signing in to Google Photos…');
+      let p; try{ p=await pickStart(); }catch(err){ b.disabled=false; st(err.message==='closed'?'Cancelled.':'Couldn’t open Google Photos: '+err.message); return; }
+      b.disabled=false; b.textContent='📲 Open Google Photos and tick your photos'; st('Tap the button, tick the photos you want (search a name to find faces), then tap Done. Come back here and they’ll arrive.');
+      b.onclick=async()=>{ window.open(p.ses.pickerUri+(isPhone()?'':'/autoclose'),'_blank'); b.disabled=true; b.textContent='Waiting for your picks…';
+        try{ const r=await pickFinish(p,st); toast(r.ok?`${r.ok} photo${r.ok>1?'s':''} added from Google Photos`:'No photos came through'); }catch(err){ toast(err.message); }
+        draw(); }; };
+    const photoView=i=>{ const v=document.createElement('div'); v.className='alview';
+      v.innerHTML=`<img src="${urls[i]}" alt=""><div class="row" style="gap:10px;justify-content:center"><button class="save bigback" id="vb">‹ Back</button><button class="cancel" id="vd">🗑️ Delete</button></div>`;
+      m.appendChild(v); v.querySelector('#vb').onclick=()=>v.remove();
+      v.querySelector('#vd').onclick=e=>{ const b=e.currentTarget;
+        if(!b.dataset.sure){ b.dataset.sure='1'; b.textContent='🗑️ Yes, delete it for everyone'; b.style.background='#ffd6d6'; return; }
+        b.disabled=true; b.textContent='Deleting…'; photoDel(pids[i]).then(ok=>{ v.remove(); if(ok){ toast('Photo deleted'); draw(); } }); }; };
     const t=m.querySelector('#try'); if(t) t.onclick=()=>{ close(); setTimeout(()=>{ hubIdle=Date.now(); saverOn(); },300); };
   };
   m.innerHTML='<p class="note">Opening the album…</p>'; draw(); }); }
