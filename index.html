@@ -5485,9 +5485,9 @@ async function sortAdds(text,photo){
   const shops=S.shops.map(s=>`${s.id} = ${s.name}`).join('; ');
   const prompt=`Sort what a family member ${photo?'wrote on the attached photo of a paper note or list'+(text?' (and typed: """'+text+'""")':''):'typed: """'+text+'"""'} into calendar entries, jobs and shopping.
 People (id = names): ${ppl}. Shops (id = name): ${shops}. Today is ${dk(new Date())} (${fmtD(new Date(),{weekday:'long'})}), New Zealand.
-Return JSON only: {"bill":true or false,"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":"person id or empty","shop":"shop id or empty"}]}
+Return JSON only: {"bill":true or false,"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":["person ids, or empty"],"shop":"shop id or empty"}]}
 "bill" is true when the photo or text is an invoice, statement or bill to pay (power, water, rates, phone, insurance and so on); then items can be empty.
-Rules: each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. Never translate. Leave out anything crossed out.`;
+Rules: each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. One thing for several people is ONE item with all of them in who ("Tony and Aria to Nora's at 2pm" is one event, who = both): never repeat it per person. Never translate. Leave out anything crossed out.`;
   const out=await aiAsk({prompt:withMemory(prompt,text),json:true,file:photo||undefined});
   if(out&&out.bill&&photo){ const r=await billFromFile(photo); if(r){ const e=new Error(r.msg); e.bill=r.bill; throw e; } }
   const items=Array.isArray(out)?out:(out&&out.items)||[]; return items.filter(x=>x&&x.title);
@@ -5514,15 +5514,19 @@ function applyAdds(items){
   const added=[], ok=d=>/^\d{4}-\d\d-\d\d$/.test(d||'');
   for(const it of items||[]){
     const title=String(it.title||'').trim().slice(0,110); if(!title) continue;
-    const who=S.people.some(p=>p.id===it.who&&p.id!=='all')?it.who:'';
+    const whos=[...new Set([].concat(it.who||[]).filter(w=>S.people.some(p=>p.id===w&&p.id!=='all')))], who=whos[0]||'';
     if(it.type==='shop'){ const sid=S.shops.some(s=>s.id===it.shop)?it.shop:suggestShop(title);
       const ex=S.groceries.find(x=>x.shop===sid&&x.name.toLowerCase()===title.toLowerCase());
       if(ex){ if(ex.done){ ex.done=false; added.push({k:'groceries',id:ex.id,undone:true,label:'🛒 '+ex.name+' ('+shop(sid).name+')'}); } continue; }
       const g={id:uid(),name:title.charAt(0).toUpperCase()+title.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(title):'',done:false}; S.groceries.push(g); S.itemShop[title.toLowerCase()]=sid;
       added.push({k:'groceries',id:g.id,label:'🛒 '+g.name+' ('+shop(sid).name+')'}); }
     else if(it.type==='event'&&ok(it.date)){ const time=/^\d\d:\d\d$/.test(it.time||'')?it.time:'';
-      const ev={id:uid(),whos:[who||(person('all')?'all':S.people[0].id)],title,addr:'',date:it.date,time,dur:time?Math.max(15,Math.min(720,+it.mins||60)):0}; S.events.push(ev);
-      added.push({k:'events',id:ev.id,label:'📅 '+title+' · '+fmtD(kd(it.date),{weekday:'short',day:'numeric',month:'short'})+(time?' '+t12(time):'')+(who?' · '+nm(who):'')}); }
+      // the same thing split per person: add them to the entry already made in this batch
+      const twin=added.map(a=>a.k==='events'&&S.events.find(e=>e.id===a.id)).find(e=>e&&e.date===it.date&&(e.time||'')===time&&e.title.toLowerCase()===title.toLowerCase());
+      if(twin){ for(const w of whos) if(!twin.whos.includes(w)) twin.whos=twin.whos.filter(x=>x!=='all').concat(w);
+        const a=added.find(x=>x.id===twin.id); a.label=a.base+' · '+twin.whos.map(nm).join(' + '); continue; }
+      const ev={id:uid(),whos:whos.length?whos:[person('all')?'all':S.people[0].id],title,addr:'',date:it.date,time,dur:time?Math.max(15,Math.min(720,+it.mins||60)):0}; S.events.push(ev);
+      const base='📅 '+title+' · '+fmtD(kd(it.date),{weekday:'short',day:'numeric',month:'short'})+(time?' '+t12(time):''); added.push({k:'events',id:ev.id,base,label:base+(whos.length?' · '+whos.map(nm).join(' + '):'')}); }
     else { const t={id:uid(),title,done:false,who}; if(ok(it.date)) t.due=it.date; S.todos.push(t);
       added.push({k:'todos',id:t.id,label:'✅ '+title+(who?' · '+nm(who):'')+(t.due?' · '+tr('by')+' '+fmtD(kd(t.due),{weekday:'short',day:'numeric',month:'short'}):'')}); }
   }
@@ -7191,7 +7195,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwotn2th';
+const FS_VERSION='fs-mwp6ugz9';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
