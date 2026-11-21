@@ -575,8 +575,8 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 #phome{display:none;padding:10px 12px 20px}
 .hcard{display:block;width:100%;text-align:left;font:inherit;color:#fff;border-radius:24px;padding:18px 18px 16px;background:linear-gradient(135deg,#5fb3a6,#4a8fc4);box-shadow:0 6px 18px rgba(60,110,140,.25)}
 .hcard+.hcard{margin-top:10px}
-.daychips{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;-webkit-overflow-scrolling:touch}
-.dchip{flex:0 0 auto;min-width:62px;border-radius:12px;padding:6px 8px;background:var(--soft);font-weight:800;font-size:15px;display:flex;flex-direction:column;align-items:center;line-height:1.15;position:relative}
+.daychips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:4px 0 8px}
+.dchip{min-width:0;border-radius:12px;padding:6px 8px;background:var(--soft);font-weight:800;font-size:15px;display:flex;flex-direction:column;align-items:center;line-height:1.15;position:relative}
 .dchip small{font-weight:600;font-size:12px;color:var(--muted)}.dchip.on{background:var(--ink);color:#fff}.dchip.on small{color:#ddd}
 .dchip i{font-style:normal;font-size:10px;font-weight:800;color:#30a46c;text-transform:uppercase}
 .idea.fresh{box-shadow:inset 4px 0 0 #30a46c}.idea.done{opacity:.75}.idea.done .mrow{background:#eefaf3}
@@ -6003,7 +6003,7 @@ function openPlanWeek(){ stockSettle();
       <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">Spare ideas <button id="sm">−</button> <b>${st.spare}</b> <button id="sp">＋</button></span>${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Start from Kitchen stock (${stockNow().length})</label>`:'<span class="note">Kitchen stock is empty: list the freezer first for better plans.</span>'}</div>
       <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go" ${st.days.length?'':'disabled'}>✨ Plan ${st.days.length} day${st.days.length===1?'':'s'}</button></div>`;
     m.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ st.slot=b.dataset.meal; draw(); });
-    m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const k=b.dataset.d; st.days=st.days.includes(k)?st.days.filter(x=>x!==k):st.days.concat(k).sort(); draw(); });
+    m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const k=b.dataset.d; st.days=st.days.includes(k)?st.days.filter(x=>x!==k):st.days.concat(k).sort(); b.classList.toggle('on',st.days.includes(k)); const g=m.querySelector('#go'); if(g){ g.disabled=!st.days.length; g.textContent='✨ Plan '+st.days.length+' day'+(st.days.length===1?'':'s'); } });
     m.querySelectorAll('[data-mood]').forEach(b=>b.onclick=()=>{ const x=b.dataset.mood; st.moods=st.moods.includes(x)?st.moods.filter(y=>y!==x):[...st.moods,x]; draw(); });
     const ex=m.querySelector('#ex'); ex.oninput=()=>st.extra=ex.value;
     m.querySelector('#sm').onclick=()=>{ st.spare=Math.max(0,st.spare-1); draw(); }; m.querySelector('#sp').onclick=()=>{ st.spare=Math.min(4,st.spare+1); draw(); };
@@ -7657,7 +7657,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwq0w2ft';
+const FS_VERSION='fs-mwq39oq6';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

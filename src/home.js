@@ -1789,7 +1789,7 @@ function openPlanWeek(){ stockSettle();
       <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">Spare ideas <button id="sm">−</button> <b>${st.spare}</b> <button id="sp">＋</button></span>${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Start from Kitchen stock (${stockNow().length})</label>`:'<span class="note">Kitchen stock is empty: list the freezer first for better plans.</span>'}</div>
       <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go" ${st.days.length?'':'disabled'}>✨ Plan ${st.days.length} day${st.days.length===1?'':'s'}</button></div>`;
     m.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ st.slot=b.dataset.meal; draw(); });
-    m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const k=b.dataset.d; st.days=st.days.includes(k)?st.days.filter(x=>x!==k):st.days.concat(k).sort(); draw(); });
+    m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const k=b.dataset.d; st.days=st.days.includes(k)?st.days.filter(x=>x!==k):st.days.concat(k).sort(); b.classList.toggle('on',st.days.includes(k)); const g=m.querySelector('#go'); if(g){ g.disabled=!st.days.length; g.textContent='✨ Plan '+st.days.length+' day'+(st.days.length===1?'':'s'); } });
     m.querySelectorAll('[data-mood]').forEach(b=>b.onclick=()=>{ const x=b.dataset.mood; st.moods=st.moods.includes(x)?st.moods.filter(y=>y!==x):[...st.moods,x]; draw(); });
     const ex=m.querySelector('#ex'); ex.oninput=()=>st.extra=ex.value;
     m.querySelector('#sm').onclick=()=>{ st.spare=Math.max(0,st.spare-1); draw(); }; m.querySelector('#sp').onclick=()=>{ st.spare=Math.min(4,st.spare+1); draw(); };
