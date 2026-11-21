@@ -1768,7 +1768,7 @@ function toBuyNext8(){ const days=next8(), ms=(S.meals||[]).filter(m=>days.inclu
 function openBoard(o){ o=o||{}; let slot0=null, seen=o.seen||[], seenSaved=false; const fresh=new Set(o.fresh||[]), picking={};
   // ideas saved by the 21 Nov build had their ingredient and step lists squashed into text: rebuild them
   (S.ideaBoard||[]).forEach(x=>{ const r=x&&x.r; if(!r) return; if((r.ing||[]).some(i=>typeof i==='string')) r.ing=r.ing.map(i=>typeof i==='string'?parseIng(i.replace(/ p$/,' (pantry)')):i).filter(Boolean); if((r.steps||[]).some(t=>typeof t==='string')) r.steps=r.steps.map(t=>{ if(typeof t!=='string') return t; const n=t.match(/^(.*\S) (\d+)$/); return n?[n[1],+n[2]]:[t]; }); });
-  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const all=(S.ideaBoard||[]).filter(x=>x&&x.r), tb=toBuyNext8();
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const _l=m.querySelector('.tvlist'), _st=_l?_l.scrollTop:0, _mt=m.scrollTop; const keep=()=>{ const n=m.querySelector('.tvlist'); if(n) n.scrollTop=_st; m.scrollTop=_mt; }; requestAnimationFrame(keep); setTimeout(keep,60); const all=(S.ideaBoard||[]).filter(x=>x&&x.r), tb=toBuyNext8();
     const sug=all.filter(x=>fresh.has(x.id)&&x.day&&!x.planned&&next8().includes(x.day));
     m.innerHTML=`<div class="tvhead"><h2>💡 Our ideas</h2><button class="save" id="x">Done</button></div>
       ${seen.length?`<p class="note">I could see: ${esc(seen.slice(0,14).map(x=>x.name).join(', '))}${seen.length>14?' and '+(seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
