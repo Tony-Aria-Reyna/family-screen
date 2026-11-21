@@ -237,7 +237,8 @@ const ingLine=i=>(i[0]?fmtQty(i[0],i[1])+' ':'')+i[2]+(i[3]==='p'?' (pantry)':''
 function editRecipe(r0){
   const r=r0?JSON.parse(JSON.stringify(r0)):{name:'',meal:'dinner',tags:[],mins:30,serves:4,emoji:'🍽️',ing:[],steps:[]};
   modal((m,close)=>{ m.classList.add('wide');
-    m.innerHTML=`<h2>${r0&&recipeById(r0.id)?'✏️ Edit recipe':'📝 New recipe'}</h2>
+    m.innerHTML=`<h2>${r0&&recipeById(r0.id)?'✏️ Edit recipe':'📝 New recipe'}</h2>${r.imported?(()=>{ const ings=(r.ing||[]).filter(i=>i[3]!=='p'), have=ings.filter(i=>inStock(i[2])), need=ings.filter(i=>!inStock(i[2]));
+      return `<div class="note" style="background:var(--soft);border-radius:12px;padding:10px;margin:0 0 8px">${r.pro?`<b>Per serve:</b> 💪 ${r.pro} g protein · 🍚 ${r.carb||0} g carbs${r.kcal?' · '+r.kcal+' kcal':''}<br>`:''}${have.length?`✅ <b>In the house:</b> ${esc(have.map(i=>i[2]).join(', '))}<br>`:''}${need.length?`🛒 <b>Not in Kitchen stock:</b> ${esc(need.map(i=>i[2]).join(', '))}`:'✅ Everything is in Kitchen stock'}<br><small>Check it over, then tap Save recipe.</small></div>`; })():''}
       <div class="rform"><label>Name<input class="txt" id="fn" value="${esc(r.name)}" placeholder="e.g. Nana's lasagne"></label>
       <div class="row"><label>Emoji<input class="txt" id="fe" value="${esc(r.emoji||'🍽️')}" style="width:80px"></label><label>Meal<select id="fm" class="txt">${MEAL_SLOTS.map(s=>`<option value="${s[0]}" ${r.meal===s[0]?'selected':''}>${s[1]}</option>`).join('')}</select></label>
       <label>Minutes<input class="txt" id="ft" type="number" value="${r.mins||''}" style="width:100px"></label><label>Serves<input class="txt" id="fs" type="number" value="${r.serves||4}" style="width:90px"></label></div>
@@ -249,7 +250,7 @@ function editRecipe(r0){
     m.querySelector('#c').onclick=close;
     const d=m.querySelector('#d'); if(d) d.onclick=()=>{ if(!confirm('Delete this recipe?')) return; if(STARTERS.some(x=>x.id===r0.id)) { S.recHide=[...(S.recHide||[]),r0.id]; } S.recipes=(S.recipes||[]).filter(x=>x.id!==r0.id); setFav(r0.id,false); close(); toast('Recipe deleted'); };
     m.querySelector('#s').onclick=()=>{ const v=id=>m.querySelector(id).value;
-      const out={name:v('#fn').trim(),emoji:v('#fe').trim()||'🍽️',meal:v('#fm'),mins:+v('#ft')||0,serves:+v('#fs')||4,tags:v('#fg').split(',').map(x=>x.trim()).filter(Boolean),blurb:v('#fb').trim(),
+      const out={name:v('#fn').trim(),emoji:v('#fe').trim()||'🍽️',meal:v('#fm'),mins:+v('#ft')||0,serves:+v('#fs')||4,tags:v('#fg').split(',').map(x=>x.trim()).filter(Boolean),blurb:v('#fb').trim(),pro:r.pro,carb:r.carb,kcal:r.kcal,src:r.src,
         ing:v('#fi').split('\n').map(parseIng).filter(Boolean),steps:v('#fst').split('\n').map(x=>x.trim()).filter(Boolean).map(x=>{ const t=x.match(/\[(\d+)\s*min\]/i); return t?[x.replace(t[0],'').trim(),+t[1]]:[x]; })};
       if(!out.name){ toast('Give it a name'); return; } if(!out.ing.length){ toast('Add the ingredients'); return; }
       S.recipes=S.recipes||[];
@@ -264,13 +265,21 @@ function editRecipe(r0){
   });
 }
 function addRecipeMenu(){
-  modal((m,close)=>{ m.innerHTML=`<h2>＋ Add a recipe</h2><div class="opts" style="flex-direction:column;align-items:stretch">
-    <button class="opt" id="a1">✏️ Type it in</button><button class="opt" id="a2">📷 From a photo, PDF or screenshot</button><button class="opt" id="a3">📋 Paste a recipe or a web link</button></div>
-    <p class="note">Photos and links are read by your Gemini helper, then you check it before saving.</p><div class="mact"><button class="cancel" id="c">Close</button></div>`;
+  modal((m,close)=>{ m.innerHTML=`<h2>＋ Add a recipe</h2>
+    <div class="rdrop" id="dz" tabindex="0"><b>Drop a recipe here</b><span>a web link, a photo, a screenshot or a PDF.<br>Or paste (long-press → Paste), or tap to choose a file.</span></div>
+    <textarea class="txt" id="t" rows="3" placeholder="…or paste a link or the recipe text here"></textarea>
+    <p class="note">Gemini reads it and writes it up our way: NZ measures, clear steps with timers, protein and carbs, and what we already have in Kitchen stock. You check it before saving.</p>
+    <div class="mact"><button class="cancel" id="c">Close</button><button class="cancel" id="a1">✏️ Type it in</button><button class="save" id="s">✨ Read it</button></div>`;
+    const go=async x=>{ if(!x) return; close(); try{ if(x.file) readRecipe({file:await fileForAI(x.file)}); else { const v=x.text.trim(); const u=v.match(/https?:\/\/\S+/); readRecipe(u&&v.length<400?{url:u[0]}:{text:v}); } }catch(e){ toast(e.message||'Could not read that'); } };
+    const pick=dt=>{ if(!dt) return null; const f=[...(dt.files||[])].find(f=>/^image\/|pdf$/.test(f.type)); if(f) return {file:f}; const t=dt.getData&&(dt.getData('text/uri-list')||dt.getData('text/plain')); return t&&t.trim()?{text:t}:null; };
+    const dz=m.querySelector('#dz');
+    ['dragenter','dragover'].forEach(ev=>m.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add('over'); }));
+    m.addEventListener('dragleave',e=>{ if(e.target===dz) dz.classList.remove('over'); });
+    m.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('over'); const x=pick(e.dataTransfer); if(x) go(x); else toast('Drop a link, picture or PDF'); });
+    m.addEventListener('paste',e=>{ const x=pick(e.clipboardData); if(x&&x.file){ e.preventDefault(); go(x); } });
+    dz.onclick=()=>{ const f=document.createElement('input'); f.type='file'; f.accept='image/*,application/pdf'; f.onchange=()=>f.files[0]&&go({file:f.files[0]}); f.click(); };
     m.querySelector('#c').onclick=close; m.querySelector('#a1').onclick=()=>{ close(); editRecipe(); };
-    m.querySelector('#a2').onclick=()=>{ const f=document.createElement('input'); f.type='file'; f.accept='image/*,application/pdf'; f.onchange=async()=>{ const file=f.files[0]; if(!file) return; close(); try{ const data=await fileForAI(file); readRecipe({file:data}); }catch(e){ toast(e.message||'Could not read that file'); } }; f.click(); };
-    m.querySelector('#a3').onclick=()=>{ close(); modal((m2,close2)=>{ m2.innerHTML=`<h2>📋 Paste a recipe or link</h2><textarea class="txt" id="t" rows="8" placeholder="Paste the recipe text, or a link to a recipe page"></textarea><div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="s">✨ Read it</button></div>`;
-      m2.querySelector('#c').onclick=close2; m2.querySelector('#s').onclick=()=>{ const v=m2.querySelector('#t').value.trim(); if(!v) return; close2(); readRecipe(/^https?:\/\/\S+$/.test(v)?{url:v}:{text:v}); }; }); };
+    m.querySelector('#s').onclick=()=>{ const v=m.querySelector('#t').value; if(v.trim()) go({text:v}); else toast('Paste a link or recipe first'); };
   });
 }
 async function fileForAI(file){
@@ -508,8 +517,8 @@ function aiBusy(msg){ const el=document.createElement('div'); el.className='aibu
 function aiProgress(text){ const p=document.getElementById('aiProg'); if(p) p.textContent=text.length<40?'Thinking…':'Writing… '+text.split(/\s+/).length+' words'; }
 async function readRecipe(src){
   const done=aiBusy('Reading the recipe…');
-  try{ const out=await aiAsk(Object.assign({json:true,prompt:withMemory(`Read the recipe in the attached ${src.file?'file':src.url?'web page':'text'} and return it as JSON exactly in this shape (one recipe object, no extra text):\n${RECIPE_SHAPE}\n${RECIPE_RULES}\nKeep the original quantities and serves; rewrite the method into clear steps.`+(src.text?'\n\nRECIPE:\n'+src.text.slice(0,20000):''),'recipe')},src.file?{file:src.file}:src.url?{url:src.url}:{}));
-    done(); const r=cleanRecipe(out.recipe||out); delete r.id; editRecipe(r); }
+  try{ const out=await aiAsk(Object.assign({json:true,prompt:withMemory(`Read the recipe in the attached ${src.file?'file':src.url?'web page':'text'} and return it as JSON exactly in this shape (one recipe object, no extra text):\n${RECIPE_SHAPE}\n${RECIPE_RULES}\nKeep the original quantities and serves, but write them the New Zealand way: °C (and the fan-bake temperature), grams and millilitres where the original uses ounces or pounds (cups and spoons are fine). Rewrite the method in your own words as short, clear numbered steps, each with a timer in minutes where something cooks or rests. Put the oven temperature, tin size and any key tip (storage, swaps, what to watch for) in the blurb, in one or two sentences. Fill in pro, carb and kcal per serve (rough is fine). Mark salt, oil, pepper and basic spices as pantry ("p").`+(src.text?'\n\nRECIPE:\n'+src.text.slice(0,20000):''),'recipe')},src.file?{file:src.file}:src.url?{url:src.url}:{}));
+    done(); const r=cleanRecipe(out.recipe||out); delete r.id; r.imported=1; if(src.url) r.src=src.url; editRecipe(r); }
   catch(e){ done(); if(e.message!=='quiet') toast(e.message); }
 }
 const MOODS=['Kiwi classics','Mexican','Asian','Italian','Indian','Middle Eastern','Quick (under 30 min)','Healthy','Kids love it','Vegetarian','Comfort food','One pan','Budget','BBQ'];
@@ -1295,8 +1304,15 @@ async function takeShare(){
   const pic=files.find(f=>/^image\/|application\/pdf/.test(f.type));
   if(files.length&&files.every(f=>/^image\//.test(f.type))&&!text.replace(link,'').trim()){
     const choice=await new Promise(res=>modal((m,close)=>{ m.innerHTML=`<h2>Where should ${files.length>1?'these photos':'this photo'} go?</h2><div class="opts" style="flex-direction:column;align-items:stretch;gap:10px"><button class="opt big" id="a1">📸 Family album</button><button class="opt big" id="a2">📥 Family inbox (a letter, notice or bill)</button></div>`;
-      m.querySelector('#a1').onclick=()=>{ close(); res('album'); }; m.querySelector('#a2').onclick=()=>{ close(); res('inbox'); }; }));
-    if(choice==='album'){ await albumAdd(files); openAlbum(); return; } }
+      m.querySelector('.opts').insertAdjacentHTML('beforeend','<button class="opt big" id="a3">📖 A recipe (photo of a cookbook page)</button>'); m.querySelector('#a3').onclick=()=>{ close(); res('recipe'); }; m.querySelector('#a1').onclick=()=>{ close(); res('album'); }; m.querySelector('#a2').onclick=()=>{ close(); res('inbox'); }; }));
+    if(choice==='album'){ await albumAdd(files); openAlbum(); return; }
+    if(choice==='recipe'){ try{ readRecipe({file:await fileForAI(files[0])}); }catch(e){ toast(e.message||'Could not read that'); } return; }
+    meta.__inbox=1; }
+  if(!meta.__inbox){ const looks=/recipe|ingredients|bake|cook|kitchen|food|meal|dinner|dessert/i.test(link+' '+text);
+    const ch=await new Promise(res=>modal((m,close)=>{ m.innerHTML=`<h2>What is this?</h2><div class="opts" style="flex-direction:column;align-items:stretch;gap:10px"><button class="opt big" id="r1">📖 A recipe for our recipes</button><button class="opt big" id="r2">📥 Something for the family inbox</button></div>`;
+      if(!looks) m.querySelector('.opts').appendChild(m.querySelector('#r1'));
+      m.querySelector('#r1').onclick=()=>{ close(); res('recipe'); }; m.querySelector('#r2').onclick=()=>{ close(); res('inbox'); }; }));
+    if(ch==='recipe'){ try{ if(pic) readRecipe({file:await fileForAI(pic)}); else if(link&&!text.replace(link,'').replace(meta.title||'','').trim()) readRecipe({url:link}); else readRecipe({text:(text+'\n'+link).trim()}); }catch(e){ toast(e.message||'Could not read that'); } return; } }
   const me=mePerson(), d={id:uid(),status:'new',at:Date.now(),sender:'Shared by '+(me?nm(me):'the family'),summary:'',items:[],shared:true,
     fromEmail:{from:'Shared',subject:String(meta.title||(pic?pic.name:'')||link||text.split('\n')[0]||'Shared').slice(0,120),link}};
   if(aiOK()){ const done=aiBusy('Reading what you shared…');

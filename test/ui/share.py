@@ -27,7 +27,9 @@ async def main():
           const bl=await new Promise(r=>cv.toBlob(r,'image/jpeg',.8)); f.append('file',new File([bl],'letter.jpg',{type:'image/jpeg'}));
           const r=await fetch('share',{method:'POST',body:f}); return r.url; })()""")
         print('1 service worker answered the share:', ctl, '| went to:', st.split('/')[-1])
-        await P.goto(U.replace('index.html','')+'?open=share'); await P.wait_for_timeout(2500)
+        await P.goto(U.replace('index.html','')+'?open=share'); await P.wait_for_timeout(1500)
+        if await P.locator('#r2').count(): await P.click('#r2')
+        await P.wait_for_timeout(1200)
         inbox=await P.evaluate("JSON.stringify((S.inbox||[])[0]||null)")
         d=json.loads(inbox) if inbox!='null' else {}
         print('2 in the inbox:', d.get('sender'), '|', d.get('summary'), '|', [(i['type'],i['title'],i.get('date') or i.get('due')) for i in d.get('items',[])])
