@@ -1,3 +1,5 @@
+// Firestore rejects an array directly inside an array: turn inner arrays into text
+function fixNest(v, inArr) { if (Array.isArray(v)) return inArr ? v.map(x => (x && typeof x === 'object') ? JSON.stringify(x) : String(x)).join(' ') : v.map(x => fixNest(x, true)); if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { const o = {}; for (const k in v) o[k] = fixNest(v[k], false); return o; } return v; }
 // Family Screen — live sync between the fridge and the family's phones (Firebase Auth + Firestore).
 // The UI keeps one in-memory state object S. This module fills S from the household's
 // documents, keeps them up to date in real time, and writes back whatever the UI changes.
@@ -344,7 +346,7 @@ export function push() {
   if (ops.some(o => o[1] && o[1].path && o[1].path.indexOf('/events/') > 0 && o[1].path.indexOf('/private/') < 0)) ops.push(['update', doc(db, 'households', hid), { evAt: Date.now() }]);
   for (let i = 0; i < ops.length; i += 400) {
     const b = writeBatch(db);
-    ops.slice(i, i + 400).forEach(([k, ref, data]) => k === 'set' ? b.set(ref, data) : k === 'update' ? b.update(ref, data) : b.delete(ref));
+    ops.slice(i, i + 400).forEach(([k, ref, data]) => (data = fixNest(data), k === 'set') ? b.set(ref, data) : k === 'update' ? b.update(ref, data) : b.delete(ref));
     b.commit().catch(e => onChange('error', e));
   }
 }
