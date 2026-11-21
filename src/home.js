@@ -135,7 +135,7 @@ function openRecipe(r,opt){
     m.querySelector('#cook').onclick=()=>{ close(); cookMode(r,serves); };
   }; draw(); });
 }
-function saveRecipe(r){ S.recipes=S.recipes||[]; if(!(S.recipes||[]).some(x=>x.id===r.id)){ const c=noNest(JSON.parse(JSON.stringify(r))); c.id=c.id&&!c.id.startsWith('ai-')?c.id:'r-'+uid(); c.at=Date.now(); S.recipes.push(c); r.id=c.id; } save(); return r; }
+function saveRecipe(r){ S.recipes=S.recipes||[]; if(!(S.recipes||[]).some(x=>x.id===r.id)){ const c=JSON.parse(JSON.stringify(r)); c.id=c.id&&!c.id.startsWith('ai-')?c.id:'r-'+uid(); c.at=Date.now(); S.recipes.push(c); r.id=c.id; } save(); return r; }
 // what's in the kitchen, for the AI: oldest first so things get used up
 function stockLine(){ const st=stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)).slice(0,60), sa=sauceShelf(); if(!st.length&&!sa.length) return '';
   return (st.length?'In their fridge, freezer and pantry now (oldest first): '+st.map(x=>x.name+(x.qty?' ('+x.qty+(x.unit?' '+x.unit:'')+')':'')).join(', ')+'. Build most of the recipes around these, the oldest first, so little extra needs buying. ':'')+(sa.length?'Sauces and staples on hand: '+sa.map(x=>x.name).join(', ')+'. ':'')+'\n'; }
@@ -1716,7 +1716,7 @@ Write their KITCHEN PROFILE for a meal-planning assistant: 8 to 12 short lines, 
 // Firestore can't store an array inside an array; the AI sometimes sends ingredients as [name, amount] pairs
 function noNest(v,inArr){ if(Array.isArray(v)) return inArr?v.map(x=>typeof x==='object'&&x?JSON.stringify(x):String(x)).join(' '):v.map(x=>noNest(x,true)); if(v&&typeof v==='object'){ const o={}; for(const k in v) o[k]=noNest(v[k],false); return o; } return v; }
 function boardAdd(rs,slot,src){ S.ideaBoard=(S.ideaBoard||[]).filter(x=>Date.now()-(x.at||0)<21*864e5); const ids=[];
-  for(const r of (rs||[]).slice().reverse()){ const c=noNest(JSON.parse(JSON.stringify(r))); const id='i-'+uid(); S.ideaBoard.unshift({id,r:c,slot:c.meal&&MEAL_SLOTS.some(x=>x[0]===c.meal)?c.meal:slot,src,at:Date.now(),day:c.day||''}); ids.unshift(id); }
+  for(const r of (rs||[]).slice().reverse()){ const c=JSON.parse(JSON.stringify(r)); const id='i-'+uid(); S.ideaBoard.unshift({id,r:c,slot:c.meal&&MEAL_SLOTS.some(x=>x[0]===c.meal)?c.meal:slot,src,at:Date.now(),day:c.day||''}); ids.unshift(id); }
   S.ideaBoard=S.ideaBoard.slice(0,40); save(); return ids; }
 const next8=()=>[...Array(8)].map((_,i)=>dk(addDays(new Date(),i)));
 function dayChips(sel,slot,mark){ return next8().map((k,i)=>{ const has=mealsOn(k,slot).length; return `<button class="dchip ${k===sel?'on':''} ${has?'has':''}" data-dk="${k}" title="${has?'Already has a '+slot:''}">${i===0?'Today':i===1?'Tmrw':fmtD(kd(k),{weekday:'short'})}<small>${fmtD(kd(k),{day:'numeric'})}${has?' •':''}</small>${mark&&k===mark?'<i>this day</i>':''}</button>`; }).join(''); }
@@ -1731,6 +1731,8 @@ function toBuyNext8(){ const days=next8(), ms=(S.meals||[]).filter(m=>days.inclu
   for(const m of ms) for(const i of recipeById(m.rid).ing||[]){ const n=String(i[2]||'').toLowerCase(); if(!n||i[3]==='p'||seen.has(n)) continue; seen.add(n); if(!inStock(n)&&!onList(n)) out.push(i[2]); }
   return {days,meals:ms.length,items:out}; }
 function openBoard(o){ o=o||{}; let slot0=null, seen=o.seen||[], seenSaved=false; const fresh=new Set(o.fresh||[]), picking={};
+  // ideas saved by the 21 Nov build had their ingredient and step lists squashed into text: rebuild them
+  (S.ideaBoard||[]).forEach(x=>{ const r=x&&x.r; if(!r) return; if((r.ing||[]).some(i=>typeof i==='string')) r.ing=r.ing.map(i=>typeof i==='string'?parseIng(i.replace(/ p$/,' (pantry)')):i).filter(Boolean); if((r.steps||[]).some(t=>typeof t==='string')) r.steps=r.steps.map(t=>{ if(typeof t!=='string') return t; const n=t.match(/^(.*\S) (\d+)$/); return n?[n[1],+n[2]]:[t]; }); });
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const all=(S.ideaBoard||[]).filter(x=>x&&x.r), tb=toBuyNext8();
     const sug=all.filter(x=>fresh.has(x.id)&&x.day&&!x.planned&&next8().includes(x.day));
     m.innerHTML=`<div class="tvhead"><h2>💡 Our ideas</h2><button class="save" id="x">Done</button></div>
