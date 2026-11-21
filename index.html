@@ -6091,7 +6091,7 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); let busy=false;
     const draw=()=>{ const now=stockNow(), used=(S.stock||[]).filter(x=>x.used), sh=sauceShelf();
     m.innerHTML=`<div class="tvhead"><h2>🧊 Kitchen stock</h2><button class="save" id="x">Done</button></div>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="din" style="border-radius:14px;padding:12px 16px;font-weight:800">🍽️ What's for dinner?</button><button class="xbtn" id="cook">📸 From photos of the fridge</button></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="save" id="din" style="border-radius:14px;padding:12px 16px;font-weight:800">🍽️ What's for dinner?</button><button class="xbtn" id="cook">📸 From photos of the fridge</button><button class="xbtn" id="exp0">⬇️ Export our kitchen</button></div>
       <div class="step">Add what's in the house</div>
       <div class="opts">${STOCK_PLACES.map(p=>`<button class="opt sm ${where===p[0]?'on':''}" data-w="${p[0]}">${p[1]} ${p[2]}</button>`).join('')}</div>
       <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off">${AA_SR?'<button class="aaic aamic" id="smic" aria-label="Hold to talk">🎤</button>':''}<button class="aaic" id="scam" aria-label="Photo">📷</button><button class="save aago" id="sgo">✨ List it</button></div><input type="file" id="sf" accept="image/*" multiple hidden><input type="file" id="sfc" accept="image/*" capture="environment" hidden></div>
@@ -6129,6 +6129,7 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
     const sa=m.querySelector('#sadd'); if(sa) sa.onclick=()=>{ const v=m.querySelector('#snew').value.trim(); if(!v) return; S.stock.push({id:uid(),name:v.slice(0,50),where:'sauce',grp:'Ours',out:false,at:Date.now()}); save(); draw(); };
     m.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const [n,k]=b.dataset.fl.split('|'); S.foodLog=(S.foodLog||[]).filter(x=>!(x.n===n&&x.k===k)); save(); draw(); });
     m.querySelector('#exp').onclick=()=>openKitchenExport();
+    m.querySelector('#exp0').onclick=()=>openKitchenExport();
     m.querySelector('#kbs').onclick=()=>{ S.foodKb=m.querySelector('#kb').value.trim().slice(0,1500); save(); toast('Saved'); };
     m.querySelector('#kbb').onclick=async()=>{ if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; } if(!stockNow().length&&!(S.recipes||[]).length){ toast('List some stock first'); return; }
       const done=aiBusy('Reading your kitchen…'); try{ await buildKitchenProfile(); done(); draw(); toast('Kitchen profile built. Have a read and fix anything.'); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
@@ -7640,7 +7641,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwprr7d7';
+const FS_VERSION='fs-mwpvv72b';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
