@@ -72,7 +72,7 @@ function pickMeal(key,slot,tab){
   let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true; const key0=key;
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
     const pool=allRecipes().filter(r=>(!only||r.meal===slot||(slot!=='dinner'&&r.meal!=='dinner'))&&(t!=='fav'||isFav(r.id))), k=q.trim().toLowerCase();
-    const list=pool.filter(r=>!k||(r.name+' '+(r.tags||[]).join(' ')).toLowerCase().includes(k)).sort((a,b)=>(isFav(b.id)-isFav(a.id))||a.name.localeCompare(b.name));
+    const list=recSearch(pool,k);
     const home=homeOn(key).length;
     m.innerHTML=`<div class="tvhead"><h2>${MEAL_SLOTS.find(s=>s[0]===slot)[2]} ${fmtD(kd(key),{weekday:'short',day:'numeric',month:'short'})} · ${home} home</h2><button class="cancel" id="x">Close</button></div>
       <div class="daychips">${dayChips(key,slot,key0)}</div>
@@ -98,13 +98,20 @@ function editNoteMeal(meal){
     if(meal.id) m.querySelector('#d').onclick=()=>{ S.meals=S.meals.filter(x=>x.id!==meal.id); save(); close(); openMeals(); };
     m.querySelector('#s').onclick=()=>{ const v=n.value.trim(); if(!v){ toast('Type a note'); return; } if(meal.id) meal.note=v; else { S.meals=S.meals||[]; S.meals.push({id:uid(),date:meal.date,slot:meal.slot,note:v}); } save(); close(); openMeals(); }; });
 }
+// recipe search: every word must appear in the name, tags, description, meal or ingredients; "pork" finds "pork scotch", "chops" finds "chop"
+function recSearch(list,k){ const stem=w=>w.replace(/(ies)$/,'y').replace(/(es|s)$/,''); const words=(k||'').toLowerCase().split(/[\s,]+/).filter(Boolean).map(stem);
+  const by=(a,b)=>(isFav(b.id)-isFav(a.id))||a.name.localeCompare(b.name); if(!words.length) return list.slice().sort(by);
+  const out=[]; for(const r of list){ const name=(r.name||'').toLowerCase(), rest=[(r.tags||[]).join(' '),r.blurb||'',r.meal||'',(r.ing||[]).map(i=>Array.isArray(i)?i[2]:i).join(' ')].join(' ').toLowerCase();
+    let sc=0, ok=true; for(const w of words){ if(name.includes(w)) sc+=3; else if(rest.includes(w)) sc+=1; else { ok=false; break; } } if(ok) out.push([sc,r]); }
+  return out.sort((a,b)=>(b[0]-a[0])||by(a[1],b[1])).map(x=>x[1]); }
 function openRecipeBook(){
   let q='', t='all';
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const k=q.trim().toLowerCase();
-    const list=allRecipes().filter(r=>(t==='all'||(t==='fav'?isFav(r.id):r.meal===t))&&(!k||(r.name+' '+(r.tags||[]).join(' ')).toLowerCase().includes(k))).sort((a,b)=>(isFav(b.id)-isFav(a.id))||a.name.localeCompare(b.name));
+    const list=allRecipes().filter(r=>(t==='all'||(t==='fav'?isFav(r.id):r.meal===t)));
+    const list2=recSearch(list,k);
     m.innerHTML=`<div class="tvhead"><h2>📖 Our recipes</h2><button class="save" id="x">Done</button></div>
       <div class="opts mtabs">${[['all','All'],['fav','⭐ Favourites'],['dinner','Dinners'],['lunch','Lunches'],['breakfast','Breakfasts']].map(([v,l])=>`<button class="opt sm ${t===v?'on':''}" data-t="${v}">${l}</button>`).join('')}<button class="opt sm" id="add">＋ Add a recipe</button></div>
-      <input class="txt" id="q" placeholder="Search recipes" value="${esc(q)}" autocomplete="off"><div class="tvlist">${list.map(r=>recRow(r)).join('')||'<p class="note">Nothing here yet.</p>'}</div>`;
+      <input class="txt" id="q" placeholder="Search recipes" value="${esc(q)}" autocomplete="off"><div class="tvlist">${list2.map(r=>recRow(r)).join('')||'<p class="note">Nothing here yet.</p>'}</div>`;
     m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ t=b.dataset.t; draw(); });
     const qi=m.querySelector('#q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=m.querySelector('#q'); n.focus(); n.setSelectionRange(p,p); };
     m.querySelector('#x').onclick=()=>{ close(); openMeals(); };
@@ -226,7 +233,11 @@ function editRecipe(r0){
       const ex=r0&&(S.recipes.find(x=>x.id===r0.id));
       if(ex) Object.assign(ex,out); else if(r0&&STARTERS.some(x=>x.id===r0.id)){ const c=Object.assign({id:'r-'+uid(),from:r0.id,at:Date.now()},out); S.recipes.push(c); if(isFav(r0.id)){ setFav(r0.id,false); setFav(c.id,true); } (S.meals||[]).forEach(x=>{ if(x.rid===r0.id) x.rid=c.id; }); }
       else S.recipes.push(Object.assign({id:'r-'+uid(),at:Date.now()},out));
-      save(); close(); toast('Recipe saved'); };
+      // keep the ideas board copy (and the screen that opened it) in step with the edit
+      const sid=ex?ex.id:S.recipes[S.recipes.length-1].id;
+      (S.ideaBoard||[]).forEach(x=>{ if(x&&x.r&&r0&&(x.r===r0||x.r.id===r0.id)){ Object.assign(x.r,out); x.r.id=sid; } });
+      if(r0) { Object.assign(r0,out); r0.id=sid; }
+      save(); renderAll(); close(); toast('✅ Recipe saved: '+out.name); };
   });
 }
 function addRecipeMenu(){
