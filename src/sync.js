@@ -183,7 +183,7 @@ function listenGuest(g) {
     mergeGuest('events'); mergeGuest('flights'); onChange('settings');
   }, () => {}));
   for (const c of ['events', 'flights']) unsub.push(listen(collection(db, 'households', g, c), snap => {
-    G[c] = snap.docs.map(x => Object.assign({ id: x.id }, x.data())); mergeGuest(c);
+    G[c] = snap.docs.map(x => Object.assign({ id: x.id }, unNest(x.data()))); mergeGuest(c);
   }, () => {}));
 }
 function pushGuest() {
@@ -249,7 +249,7 @@ function subCols() {
     if (lim && !LIM_COLS.includes(c) && !LIM_OWN.includes(c)) { S[c] = S[c] || []; continue; }
     S[c] = S[c] || [];
     unsub.push(listen(colRef(c, lim), snap => {
-      let list = snap.docs.map(x => Object.assign({ id: x.id }, x.data()));
+      let list = snap.docs.map(x => Object.assign({ id: x.id }, unNest(x.data())));
       if (PRIV.includes(c) && !(lim && LIM_OWN.includes(c))) list = list.filter(e => !e.priv).concat(S[c].filter(e => e.priv));   // keep my private ones
       list = list.concat(S[c].filter(e => e.g));   // and the linked family's
       mergeArray(S[c], list);
@@ -260,7 +260,7 @@ function subCols() {
   if (!lim) startCalls();
   // my private entries: households/{id}/private/{my email}/{events|todos} — the rules let only me read or write them
   if (me()) for (const c of PRIV.filter(c => !(lim && LIM_OWN.includes(c)))) unsub.push(listen(collection(db, 'households', hid, 'private', me(), c), snap => {
-    const mine = snap.docs.map(x => Object.assign({ id: x.id }, x.data(), { priv: true }));
+    const mine = snap.docs.map(x => Object.assign({ id: x.id }, unNest(x.data()), { priv: true }));
     mergeArray(S[c], S[c].filter(e => !e.priv).concat(mine));
     synced.priv[c].clear(); mine.forEach(x => synced.priv[c].set(x.id, JSON.stringify(clean(x))));
     privOk = true; onChange(c);
@@ -272,7 +272,7 @@ function listenSoft(c) {
   if (softUnsub[c]) { try { softUnsub[c](); } catch (e) {} }
   S[c] = S[c] || []; softOk[c] = false;
   softUnsub[c] = listen(collection(db, 'households', hid, c), snap => {
-    softOk[c] = true; mergeArray(S[c], snap.docs.map(x => Object.assign({ id: x.id }, x.data())));
+    softOk[c] = true; mergeArray(S[c], snap.docs.map(x => Object.assign({ id: x.id }, unNest(x.data()))));
     const m = synced.cols[c]; m.clear(); S[c].forEach(x => m.set(x.id, JSON.stringify(clean(x)))); onChange(c);
   }, () => { softOk[c] = false; mergeArray(S[c], []); synced.cols[c].clear(); onChange(c); });
   unsub.push(softUnsub[c]);

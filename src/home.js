@@ -1,8 +1,12 @@
 /* ================= meals: plan the week, cook step by step, ideas from AI ================= */
 const STARTERS=/*@RECIPES@*/[];
-const MEAL_SLOTS=[['breakfast','Breakfast','🥣'],['lunch','Lunch','🥪'],['dinner','Dinner','🍽️']];
+const MEAL_SLOTS=[['breakfast','Breakfast','🥣'],['lunch','Lunch','🥪'],['dinner','Dinner','🍽️'],['dessert','Dessert','🍮']];
 const eaters=()=>S.people.filter(p=>p.id!=='all');
-const recipeById=id=>(S.recipes||[]).find(r=>r.id===id)||STARTERS.find(r=>r.id===id);
+// a planned recipe that never reached the database (the 21 Nov save bug) is rescued from the ideas board copy and saved again
+let rescueT=0;
+const recipeById=id=>{ const r=(S.recipes||[]).find(r=>r.id===id)||STARTERS.find(r=>r.id===id); if(r||!id) return r;
+  const b=(S.ideaBoard||[]).find(x=>x&&x.r&&x.r.id===id); if(!b) return undefined;
+  const c=JSON.parse(JSON.stringify(b.r)); c.at=c.at||Date.now(); S.recipes=S.recipes||[]; S.recipes.push(c); clearTimeout(rescueT); rescueT=setTimeout(()=>save(),500); return c; };
 const allRecipes=()=>(S.recipes||[]).concat(STARTERS.filter(r=>!(S.recHide||[]).includes(r.id)&&!(S.recipes||[]).some(x=>x.from===r.id)));
 const isFav=id=>(S.favs||[]).includes(id);
 function setFav(id,on){ S.favs=(S.favs||[]).filter(x=>x!==id); if(on) S.favs.push(id); save(); }
@@ -28,6 +32,24 @@ function homeOn(key){
 let mealWeek=0;
 const mealsOn=(key,slot)=>(S.meals||[]).filter(m=>m.date===key&&m.slot===slot);
 function closeMeals(){ $('#mealLayer').innerHTML=''; }
+// rough daily protein and carbs per adult from the planned meals that have numbers
+function dayMacros(key){ let pro=0,carb=0,n=0; for(const m of (S.meals||[]).filter(x=>x.date===key)){ const r=m.rid&&recipeById(m.rid); if(r&&r.pro){ pro+=r.pro; carb+=(r.carb||0); n++; } } return {pro,carb,n}; }
+// drag a planned meal onto another day or meal (hold, then drag). Dropping on a planned meal swaps them.
+function mealDrag(L,redraw){ let hold=null, drag=null;
+  const end=()=>{ clearTimeout(hold); hold=null; if(drag){ drag.ghost.remove(); drag.src.classList.remove('dragsrc'); document.querySelectorAll('.droptgt').forEach(x=>x.classList.remove('droptgt')); } };
+  const target=(x,y)=>{ const el=document.elementFromPoint(x,y); return el&&el.closest('#mealLayer [data-pick],#mealLayer [data-meal]'); };
+  L.querySelectorAll('.mtile[data-meal]').forEach(b=>{ b.style.touchAction='pan-y';
+    b.addEventListener('pointerdown',e=>{ if(e.button>0) return; const sx=e.clientX, sy=e.clientY; end(); try{ b.setPointerCapture(e.pointerId); }catch(_){}
+      hold=setTimeout(()=>{ const r=b.getBoundingClientRect(); const g=b.cloneNode(true); g.className+=' dragghost'; g.style.cssText=`position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;z-index:9999;pointer-events:none;opacity:.9;transform:scale(1.05)`; document.body.appendChild(g); b.classList.add('dragsrc'); drag={src:b,ghost:g,dx:sx-r.left,dy:sy-r.top,id:b.dataset.meal}; try{ navigator.vibrate&&navigator.vibrate(20); }catch(_){} b.style.touchAction='none'; },380); });
+    b.addEventListener('pointermove',e=>{ if(!drag){ if(hold&&e.pointerType!=='mouse'&&Math.hypot(e.movementX,e.movementY)>6) { clearTimeout(hold); hold=null; } return; } e.preventDefault(); drag.ghost.style.left=(e.clientX-drag.dx)+'px'; drag.ghost.style.top=(e.clientY-drag.dy)+'px';
+      document.querySelectorAll('.droptgt').forEach(x=>x.classList.remove('droptgt')); const t=target(e.clientX,e.clientY); if(t&&t!==drag.src) t.classList.add('droptgt'); });
+    b.addEventListener('touchmove',e=>{ if(drag) e.preventDefault(); },{passive:false});
+    b.addEventListener('pointerup',e=>{ if(!drag){ end(); return; } const d=drag, t=target(e.clientX,e.clientY); end(); drag=null; b.dataset.dragged='1'; setTimeout(()=>delete b.dataset.dragged,300); b.style.touchAction='pan-y';
+      if(!t||t===d.src) return; const m=(S.meals||[]).find(x=>x.id===d.id); if(!m) return; let k,sl;
+      if(t.dataset.pick){ [k,sl]=t.dataset.pick.split('|'); } else { const o=(S.meals||[]).find(x=>x.id===t.dataset.meal); if(!o) return; k=o.date; sl=o.slot; o.date=m.date; o.slot=m.slot; boardMoved(o); }
+      m.date=k; m.slot=sl; boardMoved(m); save(); toast('Moved to '+(MEAL_SLOTS.find(x=>x[0]===sl)||[,''])[1].toLowerCase()+' '+fmtD(kd(k),{weekday:'short',day:'numeric'})); redraw(); });
+    b.addEventListener('pointercancel',()=>{ end(); drag=null; }); b.addEventListener('contextmenu',e=>e.preventDefault()); }); }
+function boardMoved(m){ (S.ideaBoard||[]).forEach(x=>{ if(x.planned&&x.planned.mid===m.id){ x.planned.key=m.date; x.planned.slot=m.slot; } }); }
 function openMeals(){
   if(isPhone()&&document.body.dataset.tab!=='meals'){ setTab('meals'); return; }
   const L=$('#mealLayer'), mon=addDays(new Date(),mealWeek*8), today=dk(new Date());   // today and the next 7, then the 8 after that
@@ -36,11 +58,11 @@ function openMeals(){
   const tile=(key,slot,big)=>{ const ms=mealsOn(key,slot), sl=MEAL_SLOTS.find(s=>s[0]===slot);
     if(!ms.length) return `<button class="mtile add ${big?'big':''}" data-pick="${key}|${slot}">＋ ${sl[1]}</button>`;
     return ms.map(m=>{ const r=m.rid&&recipeById(m.rid);
-      return `<button class="mtile ${big?'big':''} ${m.shopped?'shopped':''} ${mealJust&&mealJust.id===m.id?'just':''}" data-meal="${m.id}"><span class="me">${r?r.emoji||'🍽️':'📝'}</span><span class="mn">${esc(r?r.name:m.note||'')}</span>${r?`<small>${big?esc(sl[1])+' · ':''}serves ${m.serves||r.serves}${m.shopped?' · 🛒✓':''}</small>`:''}</button>`; }).join(''); };
+      return `<button class="mtile ${big?'big':''} ${m.shopped?'shopped':''} ${mealJust&&mealJust.id===m.id?'just':''}" data-meal="${m.id}"><span class="me">${r?r.emoji||'🍽️':'📝'}</span><span class="mn">${esc(r?r.name:m.note||'')}</span>${r?`<small>${big?esc(sl[1])+' · ':''}serves ${m.serves||r.serves}${r.pro?' · 💪'+r.pro+'g':''}${r.carb!=null&&r.pro?' · 🍚'+r.carb+'g':''}${m.shopped?' · 🛒✓':''}</small>`:''}</button>`; }).join(''); };
   const dayHTML=key=>{ const d=kd(key), home=homeOn(key);
     return `<div class="mday ${key===today?'today':''} ${key<today?'past':''}"><div class="mdl"><b>${fmtD(d,{weekday:'short'})}</b> <span>${fmtD(d,{day:'numeric',month:'short'})}</span>
-      <button class="mhome" data-home="${key}" title="Who's home">${home.map(p=>`<i style="background:${p.color}"></i>`).join('')}<small>${home.length} home</small></button></div>
-      <div class="mslots">${tile(key,'dinner',true)}<div class="msmall">${tile(key,'breakfast')}${tile(key,'lunch')}</div></div></div>`; };
+      <button class="mhome" data-home="${key}" title="Who's home">${home.map(p=>`<i style="background:${p.color}"></i>`).join('')}<small>${home.length} home</small></button>${(()=>{ const t=dayMacros(key); return t.n?`<div class="mmac ${t.pro>=90?'ok':'low'}" title="Rough, per adult">💪${t.pro}g<br>🍚${t.carb}g</div>`:''; })()}</div>
+      <div class="mslots">${tile(key,'dinner',true)}<div class="msmall">${tile(key,'breakfast')}${tile(key,'lunch')}${tile(key,'dessert')}</div></div></div>`; };
   const toShop=(S.meals||[]).filter(m=>days.includes(m.date)&&m.rid&&!m.shopped).length;
   L.innerHTML=`<div class="meals"><div class="mhead"><h2>🍽️ Meals</h2>
     <div class="mnav"><button data-wk="-1" aria-label="Previous week">‹</button><b>${label}</b><button data-wk="1" aria-label="Next week">›</button></div>
@@ -54,8 +76,9 @@ function openMeals(){
   L.querySelector('#mPlan').onclick=()=>openPlanWeek(); { const bb=L.querySelector('#mBoard'); if(bb) bb.onclick=()=>openBoard(); }
   L.querySelector('#mShop').onclick=()=>shopForMeals(days);
   L.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const [k,s]=b.dataset.pick.split('|'); pickMeal(k,s); });
-  L.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ const m=(S.meals||[]).find(x=>x.id===b.dataset.meal); if(!m) return; const r=m.rid&&recipeById(m.rid); if(r) openRecipe(r,{meal:m}); else editNoteMeal(m); });
+  L.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ if(b.dataset.dragged) return; const m=(S.meals||[]).find(x=>x.id===b.dataset.meal); if(!m) return; const r=m.rid&&recipeById(m.rid); if(r) openRecipe(r,{meal:m}); else editNoteMeal(m); });
   L.querySelectorAll('[data-home]').forEach(b=>b.onclick=()=>whoHome(b.dataset.home));
+  mealDrag(L,()=>{ renderAll(); openMeals(); });
   if(mealJust&&Date.now()-mealJust.at<8000){ const t=L.querySelector('.mtile.just'); if(t) setTimeout(()=>{ try{ t.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} },120); }
 }
 function whoHome(key){
@@ -71,7 +94,7 @@ function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; mealJust={key,at:Date
 function pickMeal(key,slot,tab){
   let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true; const key0=key;
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
-    const pool=allRecipes().filter(r=>(!only||r.meal===slot||(slot!=='dinner'&&r.meal!=='dinner'))&&(t!=='fav'||isFav(r.id))), k=q.trim().toLowerCase();
+    const pool=allRecipes().filter(r=>(!only||r.meal===slot||(slot!=='dinner'&&slot!=='dessert'&&r.meal!=='dinner'&&r.meal!=='dessert'))&&(t!=='fav'||isFav(r.id))), k=q.trim().toLowerCase();
     const list=recSearch(pool,k);
     const home=homeOn(key).length;
     m.innerHTML=`<div class="tvhead"><h2>${MEAL_SLOTS.find(s=>s[0]===slot)[2]} ${fmtD(kd(key),{weekday:'short',day:'numeric',month:'short'})} · ${home} home</h2><button class="cancel" id="x">Close</button></div>
@@ -257,7 +280,7 @@ async function fileForAI(file){
   return {mime:'image/jpeg',data:c.toDataURL('image/jpeg',0.85).split(',')[1]};
 }
 // ---- AI (Gemini, through the family's own Google helper so the key never sits in the app)
-const RECIPE_SHAPE=`{"name":"...","meal":"dinner|lunch|breakfast","emoji":"one food emoji","mins":30,"serves":4,"tags":["Mexican","Quick"],"blurb":"one friendly sentence","ing":[[500,"g","beef mince"],[1,"","brown onion"],[1,"tbsp","oil","p"]],"steps":[["Step text, clear and specific.",8],["Step without a timer."]]}`;
+const RECIPE_SHAPE=`{"name":"...","meal":"dinner|lunch|breakfast|dessert","emoji":"one food emoji","mins":30,"serves":4,"tags":["Mexican","Quick"],"blurb":"one friendly sentence","pro":35,"carb":25,"kcal":550,"ing":[[500,"g","beef mince"],[1,"","brown onion"],[1,"tbsp","oil","p"]],"steps":[["Step text, clear and specific.",8],["Step without a timer."]]}`;
 const RECIPE_RULES=`Rules for every recipe: metric units only (g, ml, tsp, tbsp, cup, or "" for counted items); ingredient names as they'd appear on a New Zealand supermarket shelf (Woolworths, New World, PAK'nSAVE), e.g. "kūmara", "capsicum", "courgette"; mark pantry staples (oil, salt, pepper, flour, sugar, soy sauce, butter, spices) with "p" as a 4th item; steps written HelloFresh-style: 4-7 numbered steps, each one or two short sentences, saying the heat and what "done" looks like; add the minutes as the 2nd item of a step only when there's waiting or cooking time.`;
 /* ---- talking to Gemini. With the family's key in hand the app calls Gemini itself, word by word (fast); otherwise it
    goes through the Google helper. Thinking is kept low: these are quick jobs. ---- */
@@ -479,7 +502,7 @@ function openAsk(seed){
 // a little markdown: bold, bullets, line breaks
 function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n').map(l=>/^\s*[-•*]\s+/.test(l)?'<div class="li">• '+l.replace(/^\s*[-•*]\s+/,'')+'</div>':l?'<div>'+l+'</div>':'').join(''); }
 
-const cleanRecipe=x=>({id:'ai-'+uid(),name:String(x.name||'Recipe').slice(0,80),meal:['dinner','lunch','breakfast'].includes(x.meal)?x.meal:'dinner',emoji:x.emoji||'🍽️',mins:+x.mins||0,serves:+x.serves||4,tags:(x.tags||[]).map(String).slice(0,5),blurb:String(x.blurb||''),
+const cleanRecipe=x=>({id:'ai-'+uid(),name:String(x.name||'Recipe').slice(0,80),meal:['dinner','lunch','breakfast','dessert'].includes(x.meal)?x.meal:'dinner',pro:Math.round(+x.pro||0)||undefined,carb:Math.round(+x.carb||0)||undefined,kcal:Math.round(+x.kcal||0)||undefined,emoji:x.emoji||'🍽️',mins:+x.mins||0,serves:+x.serves||4,tags:(x.tags||[]).map(String).slice(0,5),blurb:String(x.blurb||''),
   ing:(x.ing||[]).filter(i=>Array.isArray(i)&&i[2]).map(i=>[+i[0]||0,String(i[1]||''),String(i[2])].concat(i[3]==='p'?['p']:[])),steps:(x.steps||[]).map(s=>Array.isArray(s)?[String(s[0]),+s[1]||undefined].filter(v=>v!==undefined):[String(s)])});
 function aiBusy(msg){ const el=document.createElement('div'); el.className='aibusy'; el.innerHTML=`<div><div class="spin"></div><p>${esc(msg)}</p><small id="aiProg"></small></div>`; document.body.appendChild(el); return ()=>el.remove(); }
 function aiProgress(text){ const p=document.getElementById('aiProg'); if(p) p.textContent=text.length<40?'Thinking…':'Writing… '+text.split(/\s+/).length+' words'; }
@@ -1690,6 +1713,7 @@ const NZ_SEASON=['stone fruit, berries, sweetcorn, tomatoes, courgettes, beans, 
 function kitchenKnowledge(){ const mo=new Date().getMonth();
   return `In season in New Zealand this month (cheapest and best): ${NZ_SEASON[mo]}.
 Reading the stock list: it was built from photos and voice, so expect duplicates (chicken thigh and chicken thighs, mince and beef mince), odd amounts (a kilo-plus of minced garlic or almond flour is probably a misread) and typos. Treat near-duplicates as one item and never plan a meal around an amount that looks wrong. Ignore snacks, lollies, protein balls, supplements, powders, drinks and desserts when planning meals. Curry roux blocks, seasoning mixes, slow cooker mixes and pasta sauces are ready-made cooking bases: great for an easy weeknight, but don't use more than one or two a week. Aim to use the freezer proteins first (mutton and lamb chops, ribs, brisket, salmon, whole chickens, mince), and use fridge vegetables before they turn. They keep soy sauce but eat minimal gluten, so write tamari where a recipe says soy sauce, and say when something needs buying.
+Nutrition (rough is fine, per adult serve): "pro" grams of protein, "carb" grams of carbohydrate, "kcal". Protein first: every lunch and dinner built around a good protein (aim 30–45 g per adult serve), with plenty of vegetables. Keep carbs low: rice, noodles, potato or bread as a small side or swapped for vegetables, not the base of the meal. Who eats: two active adults, a growing girl who needs enough protein, calcium, iron and some healthy carbs for energy (give her a little extra rice or kūmara rather than cutting it), and an older Japanese grandmother who needs protein that's soft and easy to eat (fish, eggs, tofu, slow-cooked meat). Desserts: a nice dessert a few nights a week, lighter and lower in sugar where it's easy (fruit, yoghurt, dark chocolate, baked fruit, a proper treat now and then).
 Freezer rules: meat and fish are thawed overnight in the fridge (mince and thin fillets can go from frozen, or a quick thaw in cold water); a big roast needs a day and a half. Say what to take out and when.
 ${S.foodKb?'What this family actually cooks with (their kitchen profile): '+S.foodKb:''}`; }
 // everything about the kitchen as text: for sharing, and for the AI to write the kitchen profile from
