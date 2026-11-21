@@ -127,6 +127,17 @@ function recSearch(list,k){ const stem=w=>w.replace(/(ies)$/,'y').replace(/(es|s
   const out=[]; for(const r of list){ const name=(r.name||'').toLowerCase(), rest=[(r.tags||[]).join(' '),r.blurb||'',r.meal||'',(r.ing||[]).map(i=>Array.isArray(i)?i[2]:i).join(' ')].join(' ').toLowerCase();
     let sc=0, ok=true; for(const w of words){ if(name.includes(w)) sc+=3; else if(rest.includes(w)) sc+=1; else { ok=false; break; } } if(ok) out.push([sc,r]); }
   return out.sort((a,b)=>(b[0]-a[0])||by(a[1],b[1])).map(x=>x[1]); }
+// method steps with the amounts written in: "Add the carrots" → "Add the carrots [2]" (scaled to the serves chosen)
+function stepAmts(text,ing,k){ let h=esc(text); const done=new Set();
+  const stem=w=>w.toLowerCase().replace(/(ies)$/,'y').replace(/(oes|es|s)$/,'');
+  const skip=/^(fresh|dried|ground|large|small|medium|chopped|sliced|diced|minced|grated|ripe|very|of|and|or|the|a|to|taste|fine|sea|pure|extra|virgin|boneless|skinless|frozen|cooked|raw|room|temperature|melted|cooled|organic|blanched|cup|cups)$/i;
+  (ing||[]).forEach((i,j)=>{ if(!Array.isArray(i)||!i[2]) return; const amt=fmtQty(scaleQ(i[0],k,i[1]),i[1]); if(!String(amt).trim()) return;
+    const name=String(i[2]).replace(/\(.*?\)|,.*$/g,'').trim(); const words=name.split(/\s+/).filter(w=>w.length>2&&!skip.test(w));
+    const tries=[name].concat(words.length>1?[words.slice(-2).join(' ')]:[]).concat(words.slice().reverse());
+    for(const t of tries){ if(!t||t.length<3) continue; const st=stem(t.split(' ').pop()); const base=t.split(' ').slice(0,-1).join(' ');
+      const re=new RegExp('\\b('+(base?base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+':'')+st.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[a-z]*)\\b(?![^<]*>)(?![^<]*</b>)','i');
+      const mm=h.match(re); if(mm&&!done.has(mm[1].toLowerCase())){ done.add(mm[1].toLowerCase()); h=h.replace(re,`$1 <b class="samt">${esc(amt)}</b>`); return; } } });
+  return h; }
 function openRecipeBook(){
   let q='', t='all';
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const k=q.trim().toLowerCase();
@@ -152,7 +163,7 @@ function openRecipe(r,opt){
       ${meal?`<div class="note">📅 ${esc(MEAL_SLOTS.find(s=>s[0]===meal.slot)[1])}, ${fmtD(kd(meal.date),{weekday:'long',day:'numeric',month:'short'})}</div>`:''}
       <div class="rcols"><div><div class="step">Ingredients <span class="serves"><button id="sm">−</button> serves <b>${serves}</b> <button id="sp">＋</button></span></div>
         <ul class="ring">${(r.ing||[]).map(i=>`<li class="${i[3]==='p'?'pantry':''}"><b>${esc(fmtQty(scaleQ(i[0],k,i[1]),i[1]))}</b> ${esc(i[2])}${i[3]==='p'?' <small>(pantry)</small>':''}</li>`).join('')}</ul></div>
-      <div><div class="step">Method</div><ol class="rsteps">${(r.steps||[]).map(s=>`<li>${esc(s[0])}${s[1]?` <small>⏱ ${s[1]} min</small>`:''}</li>`).join('')}</ol></div></div>
+      <div><div class="step">Method</div><ol class="rsteps">${(r.steps||[]).map(s=>`<li>${stepAmts(s[0],r.ing,k)}${s[1]?` <small>⏱ ${s[1]} min</small>`:''}</li>`).join('')}</ol></div></div>
       <div class="mact" style="flex-wrap:wrap">${meal?'<button class="del" id="rm">Take off the plan</button>':''}${!saved?'<button class="cancel" id="keep">💾 Save to our recipes</button>':`<button class="cancel" id="ed">✏️ Edit</button>`}<button class="cancel" id="shop">🛒 Add to shopping</button>${opt.back||meal?'<button class="cancel" id="bk">Back</button>':'<button class="cancel" id="bk">Close</button>'}<button class="save" id="cook">👩‍🍳 Start cooking</button></div>`;
     const f=m.querySelector('#fav'); if(f) f.onclick=()=>{ setFav(r.id,!isFav(r.id)); draw(); };
     m.querySelector('#sm').onclick=()=>{ if(serves>1){ serves--; if(meal){ meal.serves=serves; meal.serveSet=true; save(); } draw(); } };
@@ -209,7 +220,7 @@ function cookMode(r,serves){
     let body;
     if(i===0) body=`<div class="cstep"><div class="cnum">Get ready</div><p class="ctext" style="font-size:22px">Get these out (serves ${serves}). Tick them off as you go.</p>
       <div class="cing">${(r.ing||[]).map((x,j)=>`<button class="${ticks.has(j)?'on':''}" data-j="${j}"><span class="box">${ticks.has(j)?'✓':''}</span><b>${esc(fmtQty(scaleQ(x[0],k,x[1]),x[1]))}</b> ${esc(x[2])}</button>`).join('')}</div></div>`;
-    else { const s=steps[i-1]; body=`<div class="cstep"><div class="cnum">Step ${i} of ${steps.length}</div><p class="ctext">${esc(s[0])}</p>${s[1]?`<button class="ctimer" id="tm">⏱ Start a ${s[1]} minute timer</button>`:''}</div>`; }
+    else { const s=steps[i-1]; body=`<div class="cstep"><div class="cnum">Step ${i} of ${steps.length}</div><p class="ctext">${stepAmts(s[0],r.ing,k)}</p>${s[1]?`<button class="ctimer" id="tm">⏱ Start a ${s[1]} minute timer</button>`:''}</div>`; }
     el.innerHTML=head+body+`<div class="cdots">${[0,...steps.map((_,j)=>j+1)].map(j=>`<i class="${j===i?'on':''}"></i>`).join('')}</div>
       <div class="cnav"><button id="cp" ${i===0?'disabled':''}>‹ Back</button><button id="cn" class="go">${i===steps.length?'✓ Finished':'Next ›'}</button></div>`;
     el.querySelector('#cx').onclick=end;
