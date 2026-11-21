@@ -5857,65 +5857,65 @@ async function stockRead(files,text,where){
   if(!aiOK()){ if(files&&files.length) throw new Error('Reading a photo needs AI: ⚙️ Settings → Connections → ✨ AI.'); return String(text||'').split(/\n|,|;|、/).map(x=>({name:x.trim(),where})).filter(x=>x.name); }
   const j=await aiAsk({json:true,files,file:files&&files[0],prompt:`List the food a New Zealand family has, from ${files&&files.length?'the attached photo(s) of their freezer, fridge, pantry or a handwritten list':'this typed list'}${text?': """'+String(text).slice(0,4000)+'"""':''}.
 Return JSON only: {"items":[{"name":"short everyday name, e.g. chicken thighs","qty":"number then unit, e.g. 2 pack, 500 g, 1.5 kg, 6 each; empty if not said","where":"freezer|fridge|pantry"}]}
-Only what you can actually see or read; no guesses about what is hidden. ${where?'Unless it is obvious otherwise, these are in the '+where+'.':''} Skip condiments and drinks unless they matter for cooking dinner.`});
+Only what you can actually see or read; no guesses about what is hidden. ${where?'Unless it is obvious otherwise, these are in the '+where+'.':''} Skip condiments and drinks unless they matter for cooking.`});
   return (j.items||[]).filter(x=>x&&x.name);
 }
-async function dinnerIdeas(o){
+async function dinnerIdeas(o){ const M=o.meal||'dinner';
   const stock=o.useStock?stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)):[], sh=sauceShelf(), people=o.people||Math.max(1,homeOn(dk(new Date())).length);
-  const prompt=`You are helping a New Zealand family (Auckland) decide dinner from what they ALREADY have, so nothing in the freezer or fridge is wasted.
+  const prompt=`You are helping a New Zealand family (Auckland) decide ${M} from what they ALREADY have, so nothing in the freezer or fridge is wasted.
 Their tastes: ${foodPrefs()}
 ${foodHistory()}
 ${o.files&&o.files.length?'Attached: '+o.files.length+' photo(s) of their fridge, freezer or pantry, taken just now. Work from what you can actually see.':''}
 ${stock.length?'Their kitchen stock list (oldest first; use the oldest and the frozen things first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
 ${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.'+(sh.some(x=>x.out)?' Run out of: '+sh.filter(x=>x.out).map(x=>x.name).join(', ')+'.':''):''}
 ${o.text?'They also said: """'+String(o.text).slice(0,600)+'""".':''}
-${(()=>{ const mine=(S.recipes||[]).filter(r=>(r.meal||'dinner')==='dinner').sort((a,b)=>isFav(b.id)-isFav(a.id)).slice(0,40);
+${(()=>{ const mine=(S.recipes||[]).filter(r=>(r.meal||'dinner')===(o.meal||'dinner')).sort((a,b)=>isFav(b.id)-isFav(a.id)).slice(0,40);
   return mine.length?'Their own saved recipes (⭐ = favourite), with main ingredients: '+mine.map(r=>(isFav(r.id)?'⭐ ':'')+r.name+' ['+(r.ing||[]).filter(i=>i[3]!=='p').slice(0,6).map(i=>i[2]).join(', ')+']').join('; ')+'. If any of their own recipes can be made mostly from what they have, make it one of the three (favourites first), using its exact name and "saved":true; the others are new ideas.':''; })()}
-Suggest 3 different dinners for ${people} people. Each must be built mainly from what they have, need at most 2 things from the supermarket (none is best), and fit their tastes. Salt, pepper and cooking oil can be assumed; nothing else can.
+Suggest 3 different ${M==='lunch'?'lunches':M+'s'} for ${people} people.${o.meal==='lunch'?' Lunch: quick (under 20 minutes), light, good for home or a lunchbox.':o.meal==='breakfast'?' Breakfast: quick and simple.':''} Each must be built mainly from what they have, need at most 2 things from the supermarket (none is best), and fit their tastes. Salt, pepper and cooking oil can be assumed; nothing else can.
 Return JSON only: {"seen":[{"name":"...","qty":"","where":"freezer|fridge|pantry"}],"recipes":[ 3 objects shaped like ${RECIPE_SHAPE} plus "uses":["the things they have that it uses, named exactly as in the stock list or as seen"],"buy":["each thing they would need to buy, or empty list"],"thaw":"what to take out of the freezer and when, or empty" ]} with "serves": ${people}.
 "seen" lists what you could see in the photos (empty list when there are no photos). ${RECIPE_RULES}`;
-  const out=await aiAsk({prompt:withMemory(prompt,o.text||'dinner'),json:true,files:o.files,file:o.files&&o.files[0]});
+  const out=await aiAsk({prompt:withMemory(prompt,o.text||M),json:true,files:o.files,file:o.files&&o.files[0]});
   const own=n=>(S.recipes||[]).find(r=>r.name.trim().toLowerCase()===String(n||'').trim().toLowerCase());
   const rs=(out.recipes||[]).map(raw=>{ const sv=raw.saved&&own(raw.name), r=sv?Object.assign(JSON.parse(JSON.stringify(sv)),{serves:sv.serves||people,yours:true}):cleanRecipe(raw); r.uses=(raw.uses||[]).map(String).slice(0,20); r.buy=(raw.buy||[]).map(String).filter(Boolean).slice(0,6); r.thaw=String(raw.thaw||'').slice(0,140); return r; }).filter(r=>r.ing.length&&r.steps.length);
-  if(!rs.length) throw new Error('No dinners came back. Try again.');
+  if(!rs.length) throw new Error('No ideas came back. Try again.');
   return {recipes:rs,seen:(out.seen||[]).filter(x=>x&&x.name).slice(0,60)};
 }
 // on the fly: photos in, dinners and gaps out
 function openCook(){ stockSettle();
-  const st={files:[],text:'',people:Math.max(1,homeOn(dk(new Date())).length),useStock:stockNow().length>0};
+  const h=new Date().getHours(), st={meal:h<10?'breakfast':h<15?'lunch':'dinner',files:[],text:'',people:Math.max(1,homeOn(dk(new Date())).length),useStock:stockNow().length>0};
   modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
-    m.innerHTML=`<h2>📸 What can we make?</h2><p class="note">Take a couple of photos of the fridge and the freezer. You get three dinners made from what's there, and what (if anything) to pick up.</p>
+    m.innerHTML=`<h2>📸 What can we make?</h2><p class="note">Take a couple of photos of the fridge and the freezer. You get three ${st.meal==='lunch'?'lunches':st.meal+'s'} made from what's there, and what (if anything) to pick up.</p>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="save" id="phc" style="border-radius:14px;padding:14px 18px;font-weight:800">📷 ${st.files.length?'Another photo':'Take a photo'}</button><button class="cancel" id="ph" style="border-radius:14px;padding:14px 16px">🖼️ From my photos</button>${st.files.map((f,i)=>`<span class="ckph"><img src="data:${f.mime};base64,${f.data}" alt=""><button data-rm="${i}" aria-label="Remove">✕</button></span>`).join('')}</div>
       <input type="file" id="pf" accept="image/*" multiple hidden><input type="file" id="pfc" accept="image/*" capture="environment" hidden>
-      <div class="step">Anything else? <span style="font-weight:500">(optional)</span></div><input class="txt" id="tx" value="${esc(st.text)}" placeholder="e.g. feeling like Mexican, quick tonight, there's mince in the deep freezer">
+      <div class="opts" style="margin:4px 0 10px">${['breakfast','lunch','dinner'].map(k=>`<button class="opt sm ${st.meal===k?'on':''}" data-ml="${k}">${k==='breakfast'?'🥣 Breakfast':k==='lunch'?'🥪 Lunch':'🍽️ Dinner'}</button>`).join('')}</div><div class="step">Anything else? <span style="font-weight:500">(optional)</span></div><input class="txt" id="tx" value="${esc(st.text)}" placeholder="e.g. feeling like Mexican, quick tonight, there's mince in the deep freezer">
       <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">People <button id="pm">−</button> <b>${st.people}</b> <button id="pp">＋</button></span>
         ${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Also use the Kitchen stock list (${stockNow().length})</label>`:''}</div>
-      <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go">🍽️ Find dinners</button></div>`;
+      <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go">🍽️ Find ${st.meal==='lunch'?'lunches':st.meal+'s'}</button></div>`;
     const pf=m.querySelector('#pf'), pfc=m.querySelector('#pfc'), tx=m.querySelector('#tx'); tx.oninput=()=>st.text=tx.value;
     m.querySelector('#ph').onclick=()=>{ if(st.files.length>=4){ toast('Four photos is plenty'); return; } pf.click(); };
     m.querySelector('#phc').onclick=()=>{ if(st.files.length>=4){ toast('Four photos is plenty'); return; } pfc.click(); };
     pf.onchange=pfc.onchange=async e=>{ const inp=e.target; for(const f of [...inp.files].slice(0,4-st.files.length)){ try{ st.files.push(await fileForAI(f)); }catch(x){ toast(x.message); } } inp.value=''; draw(); };
     m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ st.files.splice(+b.dataset.rm,1); draw(); });
-    m.querySelector('#pm').onclick=()=>{ st.people=Math.max(1,st.people-1); draw(); }; m.querySelector('#pp').onclick=()=>{ st.people++; draw(); };
+    m.querySelectorAll('[data-ml]').forEach(b=>b.onclick=()=>{ st.text=m.querySelector('#tx').value; st.meal=b.dataset.ml; draw(); }); m.querySelector('#pm').onclick=()=>{ st.people=Math.max(1,st.people-1); draw(); }; m.querySelector('#pp').onclick=()=>{ st.people++; draw(); };
     const us=m.querySelector('#us'); if(us) us.onchange=()=>st.useStock=us.checked;
     m.querySelector('#c').onclick=close;
     m.querySelector('#go').onclick=async()=>{ if(!st.files.length&&!st.text.trim()&&!(st.useStock&&stockNow().length)){ toast('Add a photo, or say what you have'); return; }
       if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
-      close(); const done=aiBusy(st.files.length?'Looking in the fridge and freezer…':'Working out dinner…');
-      try{ const out=await dinnerIdeas(st); done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
+      close(); const done=aiBusy(st.files.length?'Looking in the fridge and freezer…':'Working out '+st.meal+'…');
+      try{ const out=await dinnerIdeas(st); out.meal=st.meal; done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
   }; draw(); });
 }
 function showCook(out){ const rs=out.recipes; let seenSaved=false;
   const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); foodNote('pick',r.name); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
-    const m=planMeal(key,'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
+    const m=planMeal(key,out.meal||'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
     const n=buyAdd(r.buy); save(); renderAll(); openMeals();
-    toast(r.name+(off?' is on tomorrow’s plan':' is on tonight’s plan')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
+    toast(r.name+' is on '+(off?'tomorrow’s':'today’s')+' plan for '+(out.meal||'dinner')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
     m.innerHTML=`<div class="tvhead"><h2>🍽️ You could make</h2><button class="save" id="x">Done</button></div>
       ${out.seen.length?`<p class="note">I could see: ${esc(out.seen.slice(0,14).map(x=>x.name).join(', '))}${out.seen.length>14?' and '+(out.seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
       <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji||'🍽️'}</span><span class="mrt"><b>${r.yours?(isFav(r.id)?'⭐ ':'📖 ')+'Your '+esc(r.name):esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb||'')}</small>
           <small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
-        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ Have it tonight</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button><button class="opt sm" data-no="${i}">👎 Not for us</button></div></div>`).join('')}</div>`;
+        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ ${out.meal==='dinner'?'Have it tonight':'Have it today'}</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button><button class="opt sm" data-no="${i}">👎 Not for us</button></div></div>`).join('')}</div>`;
     m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };
     const sv=m.querySelector('#sv'); if(sv) sv.onclick=()=>{ const n=stockAdd(out.seen); seenSaved=true; toast(n+' things kept in Kitchen stock'); draw(); };
     m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>openRecipe(rs[+b.dataset.i],{back:()=>showCook(out)}));
@@ -7510,7 +7510,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwpmdcsn';
+const FS_VERSION='fs-mwpoox4n';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
