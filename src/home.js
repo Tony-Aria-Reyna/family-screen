@@ -341,6 +341,8 @@ async function aiDirect(key,payload,onText,tried){
   if(!r.ok){ clearTimeout(timer); const t=await r.text().catch(()=>''); 
     // overloaded ("high demand"): set this model aside for an hour and use the next one down
     if((r.status===503||r.status===500||r.status===529)&&(tried.slow||0)<3){ tried.slow=(tried.slow||0)+1; const b=aiBad(); b[model]=Date.now()-11*3600e3; lsSet('fs.aiBad',b); await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
+    // retired model ("no longer available … use models/gemini-X-flash"): switch to the one Google names, for good
+    if(/no longer available|update your code to use/i.test(t)&&!tried.retired){ tried.retired=true; const b=aiBad(); b[model]=Date.now()+3650*864e5; lsSet('fs.aiBad',b); const nx=(t.match(/use models\/(gemini-[\w.-]*\w)/i)||[])[1]; if(nx) lsSet('fs.aiModel',nx); else await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
     if(r.status===404&&!tried.model){ tried.model=true; await aiModel(key,true); return aiDirect(key,payload,onText,tried); }
     if(r.status===400&&/think/i.test(t)&&!tried.think){ tried.think=true; return aiDirect(key,payload,onText,tried); }
     if(r.status===400&&/url_context|tool/i.test(t)&&!tried.url){ tried.url=true; return aiDirect(key,payload,onText,tried); }

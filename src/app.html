@@ -2548,6 +2548,7 @@ function doPost(e) {
   const call = model => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', { method: 'post', contentType: 'application/json', headers: { 'x-goog-api-key': gk }, muteHttpExceptions: true,
     payload: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json' } }) });
   let model = props.getProperty('GEMINI_MODEL') || 'gemini-3.6-flash', r = call(model);
+  if (r.getResponseCode() !== 200 && /no longer available|update your code to use/i.test(r.getContentText())) { const nx = (r.getContentText().match(/use models\\/(gemini-[\\w.-]*\\w)/i) || [])[1]; if (nx) { model = nx; props.setProperty('GEMINI_MODEL', model); r = call(model); } }
   if (r.getResponseCode() === 404) {   // model retired: pick the newest Flash model this key can use
     const list = JSON.parse(UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': gk }, muteHttpExceptions: true }).getContentText()).models || [];
     const ok = list.filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0 && /gemini-[\\d.]+-flash$/.test(m.name)).map(m => m.name.replace('models/', '')).sort((a, b) => parseFloat(b.split('-')[1]) - parseFloat(a.split('-')[1]));

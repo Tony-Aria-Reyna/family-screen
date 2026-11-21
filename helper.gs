@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 36;
+const HELPER_VERSION = 37;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -984,6 +984,10 @@ function gemini(key, parts, quick) {
   };
   let model = props.getProperty('GEMINI_MODEL') || 'gemini-3.6-flash', r = call(model, quick);
   if (quick && r.getResponseCode() === 400 && /think/i.test(r.getContentText())) r = call(model, false);
+  if (r.getResponseCode() !== 200 && /no longer available|update your code to use/i.test(r.getContentText())) {   // retired for new users: Google names the replacement
+    const nx = (r.getContentText().match(/use models\/(gemini-[\w.-]*\w)/i) || [])[1];
+    if (nx) { model = nx; props.setProperty('GEMINI_MODEL', model); r = call(model, quick); if (quick && r.getResponseCode() === 400 && /think/i.test(r.getContentText())) r = call(model, false); }
+  }
   if (r.getResponseCode() === 404) {   // that model was retired: use the newest Flash this key can use
     const list = JSON.parse(UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key }, muteHttpExceptions: true }).getContentText()).models || [];
     const ok = list.filter(m => (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0 && /gemini-[\d.]+-flash$/.test(m.name)).map(m => m.name.replace('models/', '')).sort((a, b) => parseFloat(b.split('-')[1]) - parseFloat(a.split('-')[1]));
