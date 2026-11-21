@@ -30,9 +30,9 @@ const mealsOn=(key,slot)=>(S.meals||[]).filter(m=>m.date===key&&m.slot===slot);
 function closeMeals(){ $('#mealLayer').innerHTML=''; }
 function openMeals(){
   if(isPhone()&&document.body.dataset.tab!=='meals'){ setTab('meals'); return; }
-  const L=$('#mealLayer'), mon=addDays(new Date(),-((new Date().getDay()+6)%7)+mealWeek*7), today=dk(new Date());
-  const days=[...Array(7)].map((_,i)=>dk(addDays(mon,i)));
-  const label=mealWeek===0?'This week':mealWeek===1?'Next week':mealWeek===-1?'Last week':fmtD(mon,{day:'numeric',month:'short'});
+  const L=$('#mealLayer'), mon=addDays(new Date(),mealWeek*8), today=dk(new Date());   // today and the next 7, then the 8 after that
+  const days=[...Array(8)].map((_,i)=>dk(addDays(mon,i)));
+  const label=mealWeek===0?'Today + 7 days':fmtD(mon,{day:'numeric',month:'short'})+' – '+fmtD(addDays(mon,7),{day:'numeric',month:'short'});
   const tile=(key,slot,big)=>{ const ms=mealsOn(key,slot), sl=MEAL_SLOTS.find(s=>s[0]===slot);
     if(!ms.length) return `<button class="mtile add ${big?'big':''}" data-pick="${key}|${slot}">＋ ${sl[1]}</button>`;
     return ms.map(m=>{ const r=m.rid&&recipeById(m.rid);
@@ -44,13 +44,14 @@ function openMeals(){
   const toShop=(S.meals||[]).filter(m=>days.includes(m.date)&&m.rid&&!m.shopped).length;
   L.innerHTML=`<div class="meals"><div class="mhead"><h2>🍽️ Meals</h2>
     <div class="mnav"><button data-wk="-1" aria-label="Previous week">‹</button><b>${label}</b><button data-wk="1" aria-label="Next week">›</button></div>
-    <div class="macts"><button id="mCook">📸 What can we make?</button><button id="mStock">🧊 Kitchen stock</button><button id="mIdeas">✨ Ideas</button><button id="mBook">📖 Recipes</button><button id="mShop" ${toShop?'':'disabled'}>🛒 Shopping list${toShop?` (${toShop})`:''}</button></div>
+    <div class="macts"><button id="mPlan" class="mbig">🗓️ Plan the next 8 days</button>${(S.ideaBoard||[]).length?`<button id="mBoard">💡 Our ideas (${(S.ideaBoard||[]).length})</button>`:''}<button id="mCook">📸 What can we make?</button><button id="mStock">🧊 Kitchen stock</button><button id="mIdeas">✨ Ideas</button><button id="mBook">📖 Recipes</button><button id="mShop" ${toShop?'':'disabled'}>🛒 Shopping list${toShop?` (${toShop})`:''}</button></div>
     <button class="mclose" id="mClose" aria-label="Close">✕</button></div>
     <div class="mweek">${days.map(dayHTML).join('')}</div></div>`;
   L.querySelectorAll('[data-wk]').forEach(b=>b.onclick=()=>{ mealWeek+=+b.dataset.wk; openMeals(); });
   L.querySelector('#mClose').onclick=()=>{ closeMeals(); if(isPhone()) setTab('cal'); };
   L.querySelector('#mIdeas').onclick=()=>openIdeas(); L.querySelector('#mCook').onclick=()=>openCook(); L.querySelector('#mStock').onclick=()=>openStock();
   L.querySelector('#mBook').onclick=()=>openRecipeBook();
+  L.querySelector('#mPlan').onclick=()=>openPlanWeek(); { const bb=L.querySelector('#mBoard'); if(bb) bb.onclick=()=>openBoard(); }
   L.querySelector('#mShop').onclick=()=>shopForMeals(days);
   L.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const [k,s]=b.dataset.pick.split('|'); pickMeal(k,s); });
   L.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ const m=(S.meals||[]).find(x=>x.id===b.dataset.meal); if(!m) return; const r=m.rid&&recipeById(m.rid); if(r) openRecipe(r,{meal:m}); else editNoteMeal(m); });
@@ -65,20 +66,22 @@ function whoHome(key){
     m.querySelector('#ok').onclick=()=>{ close(); openMeals(); }; }; draw(); });
 }
 let mealJust=null;
-function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; mealJust={key,at:Date.now()}; { const mon=d=>{ const x=kd(d); return addDays(x,-((x.getDay()+6)%7)); }, t=new Date(); t.setHours(0,0,0,0); mealWeek=Math.round((mon(key)-mon(dk(t)))/(7*864e5)); } if(slot==='dinner'&&r&&r.name&&typeof foodNote==='function') foodNote('pick',r.name); const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); mealJust.id=m.id; save(); return m; }
+function planMeal(key,slot,r,serves){ S.meals=S.meals||[]; mealJust={key,at:Date.now()}; { const t=new Date(); t.setHours(0,0,0,0); mealWeek=Math.floor(Math.round((kd(key)-t)/864e5)/8); } if(slot==='dinner'&&r&&r.name&&typeof foodNote==='function') foodNote('pick',r.name); const m={id:uid(),date:key,slot,rid:r.id,serves:serves||Math.max(1,homeOn(key).length)}; S.meals.push(m); mealJust.id=m.id; save(); return m; }
 // choose a meal for a day: favourites first, then everything, or ask for new ideas
 function pickMeal(key,slot,tab){
-  let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true;
-  const home=homeOn(key).length;
+  let q='', t=tab||((S.favs||[]).length?'fav':'all'), only=true; const key0=key;
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
     const pool=allRecipes().filter(r=>(!only||r.meal===slot||(slot!=='dinner'&&r.meal!=='dinner'))&&(t!=='fav'||isFav(r.id))), k=q.trim().toLowerCase();
     const list=pool.filter(r=>!k||(r.name+' '+(r.tags||[]).join(' ')).toLowerCase().includes(k)).sort((a,b)=>(isFav(b.id)-isFav(a.id))||a.name.localeCompare(b.name));
+    const home=homeOn(key).length;
     m.innerHTML=`<div class="tvhead"><h2>${MEAL_SLOTS.find(s=>s[0]===slot)[2]} ${fmtD(kd(key),{weekday:'short',day:'numeric',month:'short'})} · ${home} home</h2><button class="cancel" id="x">Close</button></div>
+      <div class="daychips">${dayChips(key,slot,key0)}</div>
       <div class="opts mtabs"><button class="opt sm ${t==='fav'?'on':''}" data-t="fav">⭐ Our favourites</button><button class="opt sm ${t==='all'?'on':''}" data-t="all">📖 All recipes</button><button class="opt sm" id="ai">✨ New ideas</button><button class="opt sm" id="note">📝 Just a note</button></div>
       <input class="txt" id="q" placeholder="Search, e.g. chicken, Mexican, quick" value="${esc(q)}" autocomplete="off">
       <label class="small" style="display:block;margin:6px 0"><input type="checkbox" id="only" ${only?'checked':''}> Only ${MEAL_SLOTS.find(s=>s[0]===slot)[1].toLowerCase()} recipes</label>
       <div class="tvlist">${list.map(r=>recRow(r)).join('')||`<p class="note">${t==='fav'?'No favourites yet. Open any recipe and tap ⭐ to add it to your favourites.':'Nothing matches.'}</p>`}</div>`;
     m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ t=b.dataset.t; draw(); });
+    m.querySelectorAll('[data-dk]').forEach(b=>b.onclick=()=>{ key=b.dataset.dk; draw(); });
     const qi=m.querySelector('#q'); qi.oninput=()=>{ q=qi.value; const p=qi.selectionStart; draw(); const n=m.querySelector('#q'); n.focus(); n.setSelectionRange(p,p); };
     m.querySelector('#only').onchange=e=>{ only=e.target.checked; draw(); };
     m.querySelector('#x').onclick=close;
@@ -138,7 +141,7 @@ function stockLine(){ const st=stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0
   return (st.length?'In their fridge, freezer and pantry now (oldest first): '+st.map(x=>x.name+(x.qty?' ('+x.qty+(x.unit?' '+x.unit:'')+')':'')).join(', ')+'. Build most of the recipes around these, the oldest first, so little extra needs buying. ':'')+(sa.length?'Sauces and staples on hand: '+sa.map(x=>x.name).join(', ')+'. ':'')+'\n'; }
 // is this ingredient already in the kitchen? (whole-word match either way: "chicken thighs" covers "chicken thigh", not "chicken stock")
 function inStock(name){ const w=t=>String(t).toLowerCase().replace(/[^a-z ]/g,' ').split(' ').filter(x=>x.length>2).map(x=>x.replace(/(es|s)$/,'')), a=w(name); if(!a.length) return null;
-  return (S.stock||[]).filter(x=>!x.used).find(x=>{ const b=w(x.name); return b.length&&(b.every(t=>a.includes(t))||a.every(t=>b.includes(t))); })||null; }
+  return (S.stock||[]).filter(x=>!x.used&&!x.out).find(x=>{ const b=w(x.name); return b.length&&(b.every(t=>a.includes(t))||a.every(t=>b.includes(t))); })||null; }
 // ---- shopping list from meals
 function addIngredients(list,after){
   const agg=new Map();
@@ -496,25 +499,15 @@ function openIdeas(plan){
       const prompt=`You are helping a New Zealand family (Auckland) plan ${st.meal}s. Suggest ${st.n} different ${st.meal} recipes for ${st.people} people.
 Feeling like: ${st.moods.join(', ')||'anything family-friendly'}. Their tastes: ${foodPrefs()} ${foodHistory()} ${st.extra?'Also: '+st.extra+'.':''}
 They already have these recipes, so suggest different ones: ${have}.${favs?' Their favourites (a hint to their taste): '+favs+'.':''}
-${stockLine()}Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
+${stockLine()}${kitchenKnowledge()}
+Keep it realistic for a weeknight at home with normal supermarket ingredients unless asked otherwise.
 Return JSON only: {"recipes":[ ...${st.n} objects shaped like ${RECIPE_SHAPE} ]} with "serves": ${st.people}.
 ${RECIPE_RULES}`;
       try{ const out=await aiAsk({prompt:withMemory(prompt,st.moods.join(' ')+' '+st.extra),json:true}); done(); const rs=(out.recipes||[]).map(cleanRecipe).filter(r=>r.ing.length&&r.steps.length); if(!rs.length) throw new Error('No ideas came back. Try again.'); showIdeas(rs,plan); }
       catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
   }; draw(); });
 }
-function showIdeas(rs,plan){
-  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
-    m.innerHTML=`<div class="tvhead"><h2>✨ Ideas</h2><button class="save" id="x">Done</button></div><p class="note">Tap one to see the full recipe. Save the ones you like${plan?' or put one straight on '+fmtD(kd(plan.key),{weekday:'long'}):''}.</p>
-      <div class="tvlist">${rs.map((r,i)=>{ const saved=!!recipeById(r.id); return `<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji}</span><span class="mrt"><b>${esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb)}</small></span></button>
-        <div class="ideab">${saved?`<span class="note">✓ Saved${isFav(r.id)?' ⭐':''}</span>`:`<button class="opt sm" data-sv="${i}">💾 Save</button><button class="opt sm" data-fv="${i}">⭐ Save as favourite</button>`}${plan?`<button class="opt sm" data-pl="${i}">📅 Have it ${fmtD(kd(plan.key),{weekday:'short'})}</button>`:''}</div></div>`; }).join('')}</div>`;
-    m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };
-    m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>openRecipe(rs[+b.dataset.i],{back:()=>showIdeas(rs,plan)}));
-    m.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>{ saveRecipe(rs[+b.dataset.sv]); draw(); });
-    m.querySelectorAll('[data-fv]').forEach(b=>b.onclick=()=>{ const r=saveRecipe(rs[+b.dataset.fv]); setFav(r.id,true); draw(); });
-    m.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{ const r=saveRecipe(rs[+b.dataset.pl]); planMeal(plan.key,plan.slot,r); close(); openMeals(); toast(r.name+' is on the plan'); });
-  }; draw(); });
-}
+function showIdeas(rs,plan){ const ids=boardAdd(rs,(plan&&plan.slot)||rs[0]&&rs[0].meal||'dinner','ideas'); openBoard({fresh:ids,day:plan&&plan.key}); }
 function aiSetup(update){
   const h=S.linkHelper;
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); let msg='', test='';
@@ -1659,6 +1652,7 @@ async function dinnerIdeas(o){ const M=o.meal||'dinner';
   const prompt=`You are helping a New Zealand family (Auckland) decide ${M} from what they ALREADY have, so nothing in the freezer or fridge is wasted.
 Their tastes: ${foodPrefs()}
 ${foodHistory()}
+${kitchenKnowledge()}
 ${o.files&&o.files.length?'Attached: '+o.files.length+' photo(s) of their fridge, freezer or pantry, taken just now. Work from what you can actually see.':''}
 ${stock.length?'Their kitchen stock list (oldest first; use the oldest and the frozen things first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
 ${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.'+(sh.some(x=>x.out)?' Run out of: '+sh.filter(x=>x.out).map(x=>x.name).join(', ')+'.':''):''}
@@ -1674,6 +1668,144 @@ Return JSON only: {"seen":[{"name":"...","qty":"","where":"freezer|fridge|pantry
   if(!rs.length) throw new Error('No ideas came back. Try again.');
   return {recipes:rs,seen:(out.seen||[]).filter(x=>x&&x.name).slice(0,60)};
 }
+/* ================= 4.2 Meal planning knowledge, the ideas board and planning 8 days at a time =================
+   Knowledge the AI is given with every meal question:
+   - "How we like to eat" (typed by the family) and the kitchen profile (written by the AI from the stock list, the saved
+     recipes and what has been picked, then editable), so it knows what this family actually cooks with;
+   - what's in season in New Zealand this month, and thawing rules for the freezer.
+   Every idea the AI comes up with goes on the ideas board, which is kept (with the family) until it's used or cleared.
+   Each idea can be put on any of the next 8 days, as breakfast, lunch or dinner, without leaving the board. */
+const NZ_SEASON=['stone fruit, berries, sweetcorn, tomatoes, courgettes, beans, lettuce, new potatoes','plums, nectarines, sweetcorn, tomatoes, capsicum, eggplant, courgettes, beans','apples, pears, feijoas (late), pumpkin, kūmara, capsicum, tomatoes, corn','feijoas, apples, pears, kiwifruit, pumpkin, kūmara, cauliflower, broccoli, mushrooms','kiwifruit, mandarins, feijoas, pumpkin, kūmara, cabbage, cauliflower, leeks, silverbeet','citrus, kiwifruit, cabbage, leeks, cauliflower, broccoli, parsnips, kūmara','citrus, kiwifruit, cabbage, leeks, parsnips, swede, silverbeet, kale','citrus, kiwifruit, leeks, cabbage, broccoli, spinach, kale, parsnips','asparagus, spinach, citrus, broccoli, silverbeet, spring onions, kale','asparagus, strawberries, new potatoes, spinach, lettuce, broad beans, peas','strawberries, cherries (late), new potatoes, asparagus, lettuce, peas, courgettes, beans','cherries, berries, stone fruit, new potatoes, sweetcorn, tomatoes, courgettes, beans, lettuce'];
+function kitchenKnowledge(){ const mo=new Date().getMonth();
+  return `In season in New Zealand this month (cheapest and best): ${NZ_SEASON[mo]}.
+Freezer rules: meat and fish are thawed overnight in the fridge (mince and thin fillets can go from frozen, or a quick thaw in cold water); a big roast needs a day and a half. Say what to take out and when.
+${S.foodKb?'What this family actually cooks with (their kitchen profile): '+S.foodKb:''}`; }
+// everything about the kitchen as text: for sharing, and for the AI to write the kitchen profile from
+function kitchenText(){ const now=stockNow(), sh=sauceShelf(), recs=(S.recipes||[]), l=S.foodLog||[], past=(S.meals||[]).filter(m=>m.rid&&m.date>=dk(addDays(new Date(),-60))&&m.date<=dk(new Date()));
+  return `KITCHEN STOCK (${fmtD(new Date(),{day:'numeric',month:'short',year:'numeric'})})
+${STOCK_PLACES.map(p=>{ const x=now.filter(i=>i.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return x.length?p[2]+' ('+x.length+'):\n'+x.map(i=>'- '+i.name+(i.qty?' — '+i.qty:'')+(stockAge(i)?' ('+stockAge(i)+' old)':'')).join('\n'):''; }).filter(Boolean).join('\n\n')}
+${sh.length?'\nSauce shelf:\n'+sh.map(i=>'- '+i.name+(i.out?' (run out)':'')).join('\n'):''}
+\nHOW WE LIKE TO EAT\n${foodPrefs()}
+${S.foodKb?'\nKITCHEN PROFILE\n'+S.foodKb:''}
+${recs.length?'\nOUR RECIPES ('+recs.length+')\n'+recs.map(r=>'- '+(isFav(r.id)?'⭐ ':'')+r.name+' ['+(r.meal||'dinner')+']').join('\n'):''}
+${past.length?'\nCOOKED IN THE LAST 60 DAYS\n'+past.map(m=>'- '+m.date+' '+m.slot+': '+(recipeById(m.rid)||{}).name).join('\n'):''}
+${l.length?'\nPICKED: '+l.filter(x=>x.k==='pick').map(x=>x.n).join('; ')+'\nTURNED DOWN: '+l.filter(x=>x.k==='no').map(x=>x.n).join('; '):''}`.replace(/\n{3,}/g,'\n\n').trim(); }
+function stockCsv(){ const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  return ['Where,Item,Amount,Added,Status'].concat((S.stock||[]).map(x=>[x.where==='sauce'?'Sauce shelf':(STOCK_PLACES.find(p=>p[0]===x.where)||[,,x.where])[2],x.name,x.qty||'',x.at?new Date(x.at).toISOString().slice(0,10):'',x.where==='sauce'?(x.out?'run out':'have'):(x.used?'used':'have')].map(q).join(','))).join('\r\n'); }
+function openKitchenExport(){ const txt=kitchenText();
+  modal((m,close)=>{ m.classList.add('wide','tvsheet');
+    m.innerHTML=`<div class="tvhead"><h2>⬇️ Export our kitchen</h2><button class="save" id="x">Done</button></div>
+      <p class="note">Everything in Kitchen stock, the sauce shelf, how you like to eat, your recipes and what you've cooked lately. Copy it into a chat with Claude, or save it.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0 10px"><button class="save" id="cp">📋 Copy as text</button><button class="cancel" id="sh">📤 Share</button><button class="cancel" id="csv">⬇️ Spreadsheet (.csv)</button><button class="cancel" id="tx">⬇️ Text file</button></div>
+      <textarea class="txt" readonly style="width:100%;min-height:46vh;font:14px/1.4 ui-monospace,monospace">${esc(txt)}</textarea>`;
+    const dl=(name,body,type)=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([body],{type})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); };
+    const d=dk(new Date());
+    m.querySelector('#x').onclick=close;
+    m.querySelector('#cp').onclick=async()=>{ try{ await navigator.clipboard.writeText(txt); toast('Copied. Paste it into Claude.'); }catch(e){ m.querySelector('textarea').select(); toast('Select all and copy'); } };
+    const shb=m.querySelector('#sh'); if(!navigator.share) shb.remove(); else shb.onclick=()=>navigator.share({title:'Our kitchen',text:txt}).catch(()=>{});
+    m.querySelector('#csv').onclick=()=>dl('Kitchen stock '+d+'.csv','﻿'+stockCsv(),'text/csv');
+    m.querySelector('#tx').onclick=()=>dl('Our kitchen '+d+'.txt',txt,'text/plain');
+  }); }
+async function buildKitchenProfile(){
+  const prompt=`Here is everything about a New Zealand family's kitchen: what's in their freezer, fridge and pantry, their sauces, how they like to eat, their recipes and what they've cooked and picked.
+${kitchenText().slice(0,14000)}
+Write their KITCHEN PROFILE for a meal-planning assistant: 8 to 12 short lines, plain text, no headings. Cover: the proteins they keep and in roughly what amounts; their go-to vegetables, carbs and dairy; the cuisines and flavours their staples point to; typical weeknight style (time, one-pan, batch cooking); what they bake; what's missing or rarely stocked; anything to use up soon. Only what the lists show; no guesses. Return JSON only: {"profile":"the lines, separated by \\n"}`;
+  const out=await aiAsk({prompt,json:true}); const t=String(out&&out.profile||'').trim().slice(0,1500); if(!t) throw new Error('Nothing came back. Try again.'); S.foodKb=t; save(); return t; }
+// ---- the ideas board
+function boardAdd(rs,slot,src){ S.ideaBoard=(S.ideaBoard||[]).filter(x=>Date.now()-(x.at||0)<21*864e5); const ids=[];
+  for(const r of (rs||[]).slice().reverse()){ const c=JSON.parse(JSON.stringify(r)); const id='i-'+uid(); S.ideaBoard.unshift({id,r:c,slot:c.meal&&MEAL_SLOTS.some(x=>x[0]===c.meal)?c.meal:slot,src,at:Date.now(),day:c.day||''}); ids.unshift(id); }
+  S.ideaBoard=S.ideaBoard.slice(0,40); save(); return ids; }
+const next8=()=>[...Array(8)].map((_,i)=>dk(addDays(new Date(),i)));
+function dayChips(sel,slot,mark){ return next8().map((k,i)=>{ const has=mealsOn(k,slot).length; return `<button class="dchip ${k===sel?'on':''} ${has?'has':''}" data-dk="${k}" title="${has?'Already has a '+slot:''}">${i===0?'Today':i===1?'Tmrw':fmtD(kd(k),{weekday:'short'})}<small>${fmtD(kd(k),{day:'numeric'})}${has?' •':''}</small>${mark&&k===mark?'<i>this day</i>':''}</button>`; }).join(''); }
+function stockUses(r){ const low=(r.uses||[]).map(x=>String(x).toLowerCase()); return stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id); }
+// putting an idea on the plan: its few missing things go straight on the shopping list (taken off again on Undo)
+function boardPlan(it,key,slot){ const r=saveRecipe(it.r); it.r.id=r.id; foodNote('pick',r.name); const m=planMeal(key,slot,r); m.uses=stockUses(it.r);
+  const before=new Set(S.groceries.map(g=>g.id)); const n=buyAdd((it.r.buy||[]).filter(x=>!inStock(x))); const got=S.groceries.filter(g=>!before.has(g.id)).map(g=>g.id);
+  it.planned={key,slot,mid:m.id,buy:got}; save(); renderAll(); return n; }
+function boardUnplan(it){ if(!it.planned) return; S.meals=(S.meals||[]).filter(m=>m.id!==it.planned.mid); const b=it.planned.buy||[]; if(b.length) S.groceries=S.groceries.filter(g=>!(b.includes(g.id)&&!g.done)); delete it.planned; save(); renderAll(); }
+// what the planned meals of the next 8 days still need from the shops (not in stock, not already on the list)
+function toBuyNext8(){ const days=next8(), ms=(S.meals||[]).filter(m=>days.includes(m.date)&&m.rid&&!m.shopped&&recipeById(m.rid)), onList=n=>S.groceries.some(g=>!g.done&&g.name.toLowerCase().startsWith(n.toLowerCase())), seen=new Set(), out=[];
+  for(const m of ms) for(const i of recipeById(m.rid).ing||[]){ const n=String(i[2]||'').toLowerCase(); if(!n||i[3]==='p'||seen.has(n)) continue; seen.add(n); if(!inStock(n)&&!onList(n)) out.push(i[2]); }
+  return {days,meals:ms.length,items:out}; }
+function openBoard(o){ o=o||{}; let slot0=null, seen=o.seen||[], seenSaved=false; const fresh=new Set(o.fresh||[]), picking={};
+  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const all=(S.ideaBoard||[]).filter(x=>x&&x.r), tb=toBuyNext8();
+    const sug=all.filter(x=>fresh.has(x.id)&&x.day&&!x.planned&&next8().includes(x.day));
+    m.innerHTML=`<div class="tvhead"><h2>💡 Our ideas</h2><button class="save" id="x">Done</button></div>
+      ${seen.length?`<p class="note">I could see: ${esc(seen.slice(0,14).map(x=>x.name).join(', '))}${seen.length>14?' and '+(seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
+      ${sug.length?`<button class="save" id="all" style="width:100%;margin:4px 0 8px;border-radius:14px;padding:12px">✅ Put ${sug.length>1?'all '+sug.length:'it'} on ${sug.length>1?'their':'its'} suggested day${sug.length>1?'s':''}</button>`:''}
+      <p class="note">Pick a day under any idea to put it on the plan. You stay here, so you can keep going. Ideas are kept for 3 weeks.</p>
+      <div class="tvlist">${all.map(x=>{ const r=x.r, pl=x.planned&&(S.meals||[]).some(mm=>mm.id===x.planned.mid)?x.planned:null, sl=x.slot||'dinner', open=picking[x.id];
+        return `<div class="idea ${fresh.has(x.id)?'fresh':''} ${pl?'done':''}"><button class="mrow" data-open="${x.id}"><span class="me">${r.emoji||'🍽️'}</span><span class="mrt"><b>${r.yours?(isFav(r.id)?'⭐ ':'📖 ')+'Your '+esc(r.name):esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb||'')}</small>
+          ${(r.uses||[]).length?`<small class="ckok">🧊 Uses: ${esc(r.uses.slice(0,6).join(', '))}</small>`:''}${r.buy?`<small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>`:''}${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
+          ${pl?`<div class="ideab"><span class="pill-ok">✓ ${esc(MEAL_SLOTS.find(s=>s[0]===pl.slot)[1])} ${pl.key===dk(new Date())?'today':fmtD(kd(pl.key),{weekday:'short',day:'numeric'})}</span><button class="opt sm" data-mv="${x.id}">↔️ Change day</button><button class="opt sm" data-un="${x.id}">Undo</button></div>`
+          :`<div class="ideab"><span class="slotsw">${MEAL_SLOTS.map(s=>`<button class="opt sm ${sl===s[0]?'on':''}" data-sl="${x.id}|${s[0]}" title="${s[1]}">${s[2]}</button>`).join('')}</span>${x.day&&next8().includes(x.day)&&!open?`<button class="opt sm on" data-pl="${x.id}|${x.day}">📅 ${x.day===dk(new Date())?'Today':fmtD(kd(x.day),{weekday:'short',day:'numeric'})}</button>`:''}${o.day&&!open&&o.day!==x.day?`<button class="opt sm on" data-pl="${x.id}|${o.day}">📅 ${fmtD(kd(o.day),{weekday:'short',day:'numeric'})}</button>`:''}<button class="opt sm" data-pk="${x.id}">${open?'Hide days':'📅 Pick a day'}</button><button class="opt sm" data-fv="${x.id}">${r.id&&isFav(r.id)?'⭐':'☆'}</button><button class="opt sm" data-no="${x.id}" title="Not for us">👎</button><button class="opt sm" data-rm="${x.id}" title="Remove">🗑</button></div>
+          ${open?`<div class="daychips">${dayChips('',sl,o.day).replace(/data-dk="/g,'data-pl="'+x.id+'|')}</div>`:''}`}</div>`; }).join('')||'<p class="note">No ideas yet. Tap 🗓️ Plan the next 8 days or ✨ Ideas.</p>'}</div>
+      <div class="boardfoot"><span>${tb.meals?`${tb.meals} meal${tb.meals===1?'':'s'} planned · ${tb.items.length?`🛒 <b>${tb.items.length}</b> more thing${tb.items.length===1?'':'s'} not yet on the list`:'🛒 shopping list is up to date'}`:'Nothing planned for the next 8 days yet'}</span>${tb.items.length?'<button class="save" id="shop">Check & add…</button>':''}<button class="cancel" id="more">✨ More ideas</button>${all.length?'<button class="cancel" id="clr">Clear used</button>':''}</div>`;
+    const find=id=>(S.ideaBoard||[]).find(x=>x.id===id);
+    m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML||isPhone()) openMeals(); };
+    const sv=m.querySelector('#sv'); if(sv) sv.onclick=()=>{ const n=stockAdd(seen); seenSaved=true; toast(n+' things kept in Kitchen stock'); draw(); };
+    const al=m.querySelector('#all'); if(al) al.onclick=()=>{ let nb=0; sug.forEach(x=>{ nb+=boardPlan(x,x.day,x.slot||'dinner'); }); toast(sug.length+' meals on the plan'+(nb?' · 🛒 '+nb+' added to shopping':'')); draw(); };
+    m.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.open); if(x) openRecipe(x.r,{back:()=>openBoard(o)}); });
+    m.querySelectorAll('[data-sl]').forEach(b=>b.onclick=()=>{ const [id,sl]=b.dataset.sl.split('|'), x=find(id); if(x){ x.slot=sl; save(); draw(); } });
+    m.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{ picking[b.dataset.pk]=!picking[b.dataset.pk]; draw(); });
+    m.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{ const [id,k]=b.dataset.pl.split('|'), x=find(id); if(!x) return; const sl=x.slot||'dinner', had=mealsOn(k,sl).length;
+      if(seen.length&&!seenSaved){ stockAdd(seen); seenSaved=true; } const nb=boardPlan(x,k,sl); delete picking[id]; toast((nb?'🛒 +'+nb+' to shopping · ':'')+x.r.name+' · '+MEAL_SLOTS.find(s=>s[0]===sl)[1]+' '+(k===dk(new Date())?'today':fmtD(kd(k),{weekday:'long'}))+(had?' (as well as what was there)':'')+(x.r.thaw?'. 🧊 '+x.r.thaw:'')); draw(); });
+    m.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.un); if(x){ boardUnplan(x); draw(); } });
+    m.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.mv); if(x){ boardUnplan(x); picking[x.id]=true; draw(); } });
+    m.querySelectorAll('[data-fv]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.fv); if(!x) return; const r=saveRecipe(x.r); x.r.id=r.id; setFav(r.id,!isFav(r.id)); save(); draw(); });
+    m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.no); if(!x) return; foodNote('no',x.r.name); S.ideaBoard=S.ideaBoard.filter(y=>y!==x); save(); toast('Noted. Ideas like '+x.r.name+' won’t come up again.'); draw(); });
+    m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ S.ideaBoard=(S.ideaBoard||[]).filter(y=>y.id!==b.dataset.rm); save(); draw(); });
+    const sh=m.querySelector('#shop'); if(sh) sh.onclick=()=>shopForMeals(tb.days);
+    m.querySelector('#more').onclick=()=>{ close(); openPlanWeek(); };
+    const cl=m.querySelector('#clr'); if(cl) cl.onclick=()=>{ const n=(S.ideaBoard||[]).length; S.ideaBoard=(S.ideaBoard||[]).filter(x=>!(x.planned&&(S.meals||[]).some(mm=>mm.id===x.planned.mid))); toast((n-S.ideaBoard.length)+' planned ideas cleared'); save(); draw(); };
+  }; draw(); });
+}
+// ---- plan the next 8 days, starting from what's in the house
+function openPlanWeek(){ stockSettle();
+  const free=next8().filter(k=>!mealsOn(k,'dinner').length);
+  const st={slot:'dinner',days:free.length?free:next8().slice(0,5),moods:[],extra:'',spare:2,useStock:stockNow().length>0};
+  modal((m,close)=>{ m.classList.add('wide'); const draw=()=>{
+    m.innerHTML=`<h2>🗓️ Plan the next 8 days</h2><p class="note">Meals built from what's already in the house (oldest first), sharing ingredients so the shopping list stays short. They go on your ideas board, each with a suggested day.</p>
+      <div class="step">Which meal</div><div class="opts">${MEAL_SLOTS.map(s=>`<button class="opt sm ${st.slot===s[0]?'on':''}" data-meal="${s[0]}">${s[2]} ${s[1]}</button>`).join('')}</div>
+      <div class="step">Which days <span style="font-weight:500">(• already planned)</span></div><div class="daychips">${next8().map((k,i)=>{ const has=mealsOn(k,st.slot).length; return `<button class="dchip ${st.days.includes(k)?'on':''} ${has?'has':''}" data-d="${k}">${i===0?'Today':i===1?'Tmrw':fmtD(kd(k),{weekday:'short'})}<small>${fmtD(kd(k),{day:'numeric'})}${has?' •':''} · ${homeOn(k).length}👤</small></button>`; }).join('')}</div>
+      <div class="step">Feeling like <span style="font-weight:500">(optional)</span></div><div class="opts">${MOODS.map(x=>`<button class="opt sm ${st.moods.includes(x)?'on':''}" data-mood="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+      <div class="step">Anything else?</div><input class="txt" id="ex" value="${esc(st.extra)}" placeholder="e.g. pizza night Friday, Aria's friend over Tuesday, use the lamb">
+      <div class="row" style="margin-top:10px;gap:18px;flex-wrap:wrap"><span class="serves">Spare ideas <button id="sm">−</button> <b>${st.spare}</b> <button id="sp">＋</button></span>${stockNow().length?`<label class="small"><input type="checkbox" id="us" ${st.useStock?'checked':''}> Start from Kitchen stock (${stockNow().length})</label>`:'<span class="note">Kitchen stock is empty: list the freezer first for better plans.</span>'}</div>
+      <div class="mact"><button class="cancel" id="c">Cancel</button><button class="save" id="go" ${st.days.length?'':'disabled'}>✨ Plan ${st.days.length} day${st.days.length===1?'':'s'}</button></div>`;
+    m.querySelectorAll('[data-meal]').forEach(b=>b.onclick=()=>{ st.slot=b.dataset.meal; draw(); });
+    m.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{ const k=b.dataset.d; st.days=st.days.includes(k)?st.days.filter(x=>x!==k):st.days.concat(k).sort(); draw(); });
+    m.querySelectorAll('[data-mood]').forEach(b=>b.onclick=()=>{ const x=b.dataset.mood; st.moods=st.moods.includes(x)?st.moods.filter(y=>y!==x):[...st.moods,x]; draw(); });
+    const ex=m.querySelector('#ex'); ex.oninput=()=>st.extra=ex.value;
+    m.querySelector('#sm').onclick=()=>{ st.spare=Math.max(0,st.spare-1); draw(); }; m.querySelector('#sp').onclick=()=>{ st.spare=Math.min(4,st.spare+1); draw(); };
+    const us=m.querySelector('#us'); if(us) us.onchange=()=>st.useStock=us.checked;
+    m.querySelector('#c').onclick=close;
+    m.querySelector('#go').onclick=async()=>{ if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
+      close(); const done=aiBusy('Planning '+st.days.length+' '+(st.slot==='lunch'?'lunches':st.slot+'s')+' from what you have…');
+      try{ const rs=await planWeekIdeas(st); done(); const ids=boardAdd(rs,st.slot,'plan'); openBoard({fresh:ids}); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
+  }; draw(); });
+}
+async function planWeekIdeas(st){
+  const stock=st.useStock?stockNow().slice().sort((a,b)=>(a.at||0)-(b.at||0)):[], sh=sauceShelf(), n=st.days.length+st.spare, M=st.slot==='lunch'?'lunches':st.slot+'s';
+  const already=next8().map(k=>{ const ms=mealsOn(k,st.slot).map(x=>x.rid&&recipeById(x.rid)).filter(Boolean); return ms.length?fmtD(kd(k),{weekday:'short'})+': '+ms.map(r=>r.name).join(', '):''; }).filter(Boolean);
+  const mine=(S.recipes||[]).filter(r=>(r.meal||'dinner')===st.slot).sort((a,b)=>isFav(b.id)-isFav(a.id)).slice(0,40);
+  const prompt=`You are planning ${M} for a New Zealand family (Auckland) for these days: ${st.days.map(k=>k+' ('+fmtD(kd(k),{weekday:'long'})+', '+homeOn(k).length+' people)').join('; ')}.
+Their tastes: ${foodPrefs()}
+${foodHistory()}
+${kitchenKnowledge()}
+${stock.length?'What they have now (oldest first; build the plan around these, oldest and frozen first): '+stock.map(x=>x.name+(x.qty?' ('+x.qty+')':'')+' ['+x.where+(stockAge(x)?', '+stockAge(x)+' old':'')+']').join('; ')+'.':''}
+${sh.length?'Sauces and staples in the house: '+sh.filter(x=>!x.out).map(x=>x.name).join(', ')+'.':''}
+${already.length?'Already planned (don\'t repeat these): '+already.join('; ')+'.':''}
+${mine.length?'Their own recipes (⭐ = favourite): '+mine.map(r=>(isFav(r.id)?'⭐ ':'')+r.name).join('; ')+'. Include one or two of these when they fit what is in the house (exact name, "saved":true).':''}
+${st.moods.length?'Feeling like: '+st.moods.join(', ')+'.':''} ${st.extra?'They said: +String(st.extra).slice(0,500)+.':''}
+Plan ${n} ${M}: one for each day listed (in "day", as YYYY-MM-DD) and ${st.spare} spare (empty "day"). Vary cuisines and proteins across the days; put the meals that use fresh things early and freezer things later (with thaw times); share ingredients between meals so the shopping list is short; weeknights quick, a bigger cook at the weekend.
+Return JSON only: {"recipes":[ ${n} objects shaped like ${RECIPE_SHAPE} plus "day":"YYYY-MM-DD or empty","uses":["things they have that it uses, named exactly as in their list"],"buy":["each thing to buy"],"thaw":"what to take out of the freezer and when, or empty" ]}, "serves" = the people that day.
+${RECIPE_RULES}`;
+  const out=await aiAsk({prompt:withMemory(prompt,st.extra||M),json:true});
+  const own=x=>(S.recipes||[]).find(r=>r.name.trim().toLowerCase()===String(x||'').trim().toLowerCase());
+  const rs=(out.recipes||[]).map(raw=>{ const sv=raw.saved&&own(raw.name), r=sv?Object.assign(JSON.parse(JSON.stringify(sv)),{yours:true}):cleanRecipe(raw);
+    r.uses=(raw.uses||[]).map(String).slice(0,20); r.buy=(raw.buy||[]).map(String).filter(Boolean).slice(0,8); r.thaw=String(raw.thaw||'').slice(0,160); r.day=st.days.includes(String(raw.day||''))?String(raw.day):''; return r; }).filter(r=>r.ing&&r.ing.length&&r.steps&&r.steps.length);
+  if(!rs.length) throw new Error('No plan came back. Try again.');
+  return rs; }
 // on the fly: photos in, dinners and gaps out
 function openCook(){ stockSettle();
   const h=new Date().getHours(), st={meal:h<10?'breakfast':h<15?'lunch':'dinner',files:[],text:'',people:Math.max(1,homeOn(dk(new Date())).length),useStock:stockNow().length>0};
@@ -1699,24 +1831,7 @@ function openCook(){ stockSettle();
       try{ const out=await dinnerIdeas(st); out.meal=st.meal; done(); showCook(out); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
   }; draw(); });
 }
-function showCook(out){ const rs=out.recipes; let seenSaved=false;
-  const plan=(r,off)=>{ const key=dk(addDays(new Date(),off)); saveRecipe(r); foodNote('pick',r.name); if(out.seen.length&&!seenSaved){ stockAdd(out.seen); seenSaved=true; }
-    const m=planMeal(key,out.meal||'dinner',r), low=r.uses.map(x=>x.toLowerCase()); m.uses=stockNow().filter(x=>low.some(u=>u===x.name.toLowerCase()||u.includes(x.name.toLowerCase())||x.name.toLowerCase().includes(u))).map(x=>x.id);
-    const n=buyAdd(r.buy); save(); renderAll(); openMeals();
-    toast(r.name+' is on '+(off?'tomorrow’s':'today’s')+' plan for '+(out.meal||'dinner')+(n?'. '+n+' thing'+(n>1?'s':'')+' added to shopping':'')+(r.thaw?'. 🧊 '+r.thaw:'')); };
-  modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{
-    m.innerHTML=`<div class="tvhead"><h2>🍽️ You could make</h2><button class="save" id="x">Done</button></div>
-      ${out.seen.length?`<p class="note">I could see: ${esc(out.seen.slice(0,14).map(x=>x.name).join(', '))}${out.seen.length>14?' and '+(out.seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
-      <div class="tvlist">${rs.map((r,i)=>`<div class="idea"><button class="mrow" data-i="${i}"><span class="me">${r.emoji||'🍽️'}</span><span class="mrt"><b>${r.yours?(isFav(r.id)?'⭐ ':'📖 ')+'Your '+esc(r.name):esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb||'')}</small>
-          <small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
-        <div class="ideab"><button class="opt sm" data-pl="${i}|0">🍽️ ${out.meal==='dinner'?'Have it tonight':'Have it today'}</button><button class="opt sm" data-pl="${i}|1">📅 Tomorrow</button><button class="opt sm" data-no="${i}">👎 Not for us</button></div></div>`).join('')}</div>`;
-    m.querySelector('#x').onclick=()=>{ close(); if($('#mealLayer').innerHTML) openMeals(); };
-    const sv=m.querySelector('#sv'); if(sv) sv.onclick=()=>{ const n=stockAdd(out.seen); seenSaved=true; toast(n+' things kept in Kitchen stock'); draw(); };
-    m.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>openRecipe(rs[+b.dataset.i],{back:()=>showCook(out)}));
-    m.querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>{ const [i,off]=b.dataset.pl.split('|'); close(); plan(rs[+i],+off); });
-    m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{ const r=rs[+b.dataset.no]; foodNote('no',r.name); rs.splice(+b.dataset.no,1); toast('Noted. Ideas like '+r.name+' won’t come up again.'); if(!rs.length){ close(); return; } draw(); });
-  }; draw(); });
-}
+function showCook(out){ const ids=boardAdd(out.recipes,out.meal||'dinner','cook'); openBoard({fresh:ids,seen:out.seen}); }
 /* one 📷 button: asks camera or photos */
 function photoChoice(cam,gal){ modal((m,close)=>{ m.classList.add('pchoose');
   m.innerHTML=`<h2>📷 Add a photo</h2><div class="opts" style="flex-direction:column;align-items:stretch;gap:10px"><button class="opt big" id="pc1">📷 Take a photo</button><button class="opt big" id="pc2">🖼️ Choose from my photos</button></div><div class="mact"><button class="cancel" id="pc0">Cancel</button></div>`;
@@ -1774,6 +1889,9 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
       ${sh.length?SAUCES.map(g=>g[0]).concat(['Ours']).map(g=>{ const l=sh.filter(x=>(x.grp||'Ours')===g); return l.length?`<div class="note" style="margin:6px 0 2px"><b>${g}</b></div><div class="stk">${l.map(x=>`<button class="stki sauce ${x.out?'out':''}" data-sc="${x.id}">${x.out?'🛒 ':'✓ '}${esc(x.name)}</button>`).join('')}</div>`:''; }).join('')+`<div class="row" style="margin-top:8px;gap:8px"><input class="txt" id="snew" placeholder="Add a sauce or staple" style="flex:1"><button class="xbtn" id="sadd">Add</button></div>`
         :`<p class="note">Key sauces and staples for Japanese, Mexican and Kiwi cooking, gluten-light. Dinners assume these are in the house.</p><button class="xbtn" id="seed">＋ Start with the suggested list (${SAUCES.reduce((a,g)=>a+g[1].length,0)})</button>`}
       ${(S.foodLog||[]).length?`<div class="step">What the AI has learnt from your picks</div><div class="stk">${(S.foodLog||[]).slice().reverse().slice(0,16).map(x=>`<span class="stki">${x.k==='pick'?'👍':'👎'} ${esc(x.n)}<button data-fl="${esc(x.n)}|${x.k}" aria-label="Forget">✕</button></span>`).join('')}</div>`:''}
+      <div class="step">🧠 Our kitchen profile</div><p class="note" style="margin:0 0 6px">What you actually cook with, worked out from this list, your recipes and your picks. Every meal idea uses it. Rebuild it after a big shop, or edit it.</p>
+      <textarea class="txt" id="kb" rows="5" placeholder="Not built yet" style="font:inherit;font-size:16px;line-height:1.4;min-height:120px;resize:vertical">${esc(S.foodKb||'')}</textarea>
+      <div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><button class="xbtn" id="kbb">✨ ${S.foodKb?'Rebuild':'Build'} it</button><button class="xbtn" id="kbs">Save</button><button class="xbtn" id="exp">⬇️ Export our kitchen</button></div>
       <div class="step">How we like to eat</div><p class="note" style="margin:0 0 6px">Tells the AI how your family eats. Every dinner idea follows it.</p><textarea class="txt" id="food" rows="5" style="font:inherit;font-size:17px;line-height:1.4;min-height:130px;resize:vertical">${esc(foodPrefs())}</textarea><div class="row" style="margin-top:6px"><button class="xbtn" id="fsave">Save</button></div>`;
     m.querySelector('#x').onclick=close;
     m.querySelector('#din').onclick=async()=>{ if(!stockNow().length){ toast('Add what’s in the house first, or use photos'); return; } if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; }
@@ -1796,6 +1914,10 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
     const seed=m.querySelector('#seed'); if(seed) seed.onclick=()=>{ SAUCES.forEach(g=>g[1].forEach(n=>S.stock.push({id:uid(),name:n,where:'sauce',grp:g[0],out:false,at:Date.now()}))); save(); draw(); toast('Tap any you don’t have and it goes on the shopping list'); };
     const sa=m.querySelector('#sadd'); if(sa) sa.onclick=()=>{ const v=m.querySelector('#snew').value.trim(); if(!v) return; S.stock.push({id:uid(),name:v.slice(0,50),where:'sauce',grp:'Ours',out:false,at:Date.now()}); save(); draw(); };
     m.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>{ const [n,k]=b.dataset.fl.split('|'); S.foodLog=(S.foodLog||[]).filter(x=>!(x.n===n&&x.k===k)); save(); draw(); });
+    m.querySelector('#exp').onclick=()=>openKitchenExport();
+    m.querySelector('#kbs').onclick=()=>{ S.foodKb=m.querySelector('#kb').value.trim().slice(0,1500); save(); toast('Saved'); };
+    m.querySelector('#kbb').onclick=async()=>{ if(!aiOK()){ toast('This needs AI: ⚙️ Settings → Connections → ✨ AI'); return; } if(!stockNow().length&&!(S.recipes||[]).length){ toast('List some stock first'); return; }
+      const done=aiBusy('Reading your kitchen…'); try{ await buildKitchenProfile(); done(); draw(); toast('Kitchen profile built. Have a read and fix anything.'); }catch(e){ done(); if(e.message!=='quiet') toast(e.message); } };
     m.querySelector('#fsave').onclick=()=>{ S.food=m.querySelector('#food').value.trim().slice(0,600); save(); toast('Saved. Every dinner idea follows this.'); };
   }; draw(); });
 }
