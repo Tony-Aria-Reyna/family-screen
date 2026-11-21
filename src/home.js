@@ -1595,7 +1595,7 @@ async function saverPhotos(){ try{ const c=await caches.open('fs-photos'), r=awa
 async function saverOn(){ themeDark(true);
   const el=document.createElement('div'); el.id='saver'; document.body.appendChild(el);
   const pics=await saverPhotos(); let urls=[];
-  try{ const c=await caches.open('fs-photos'); for(const k of pics.slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
+  try{ const c=await caches.open('fs-photos'); const sh=a=>{ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }; for(const k of sh(pics.slice()).slice(0,150)){ const r=await c.match('p/'+k); if(r) urls.push(URL.createObjectURL(await r.blob())); } }catch(e){}
   const draw=()=>{ if(!document.getElementById('saver')) return; const now=new Date(), t=now.toLocaleTimeString('en-NZ',{hour:'numeric',minute:'2-digit'});
     const tk=dk(now), hh=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
     const nxIt=[tk,dk(addDays(now,1))].flatMap(k=>itemsForDay(k).filter(it=>it.k==='ev').map(it=>({e:it.e,day:k,t:it.e.time||''})).sort((a,b)=>a.t.localeCompare(b.t)))
@@ -1604,7 +1604,7 @@ async function saverOn(){ themeDark(true);
     let away=''; if(r&&r.air) away=`✈️ ${tName(tp)} flying to ${r.a?r.a[0]:''} · lands ${relTime(fE(r.air),now)}`;
       else if(r&&r.a){ const lt=hm(now,r.a[1]); away=`${r.a[3]||'📍'} ${tName(tp)} in ${r.a[0]} · ${lt.txt}${lt.ap||''} there`; }
     if(!saverPhotosNow(now)){ el.className='night'; el.innerHTML=`<div class="sv-clock" style="transform:translate(${Math.round(Math.random()*60-30)}px,${Math.round(Math.random()*60-30)}px)"><div>${esc(t)}${away?`<div class="sv-away">${esc(away)}</div>`:''}</div></div>`; return; }
-    el.className=''; const u=urls.length?urls[saverI++%urls.length]:'';
+    el.className=''; if(urls.length>2&&saverI%urls.length===0){ const last=urls[urls.length-1]; for(let i=urls.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [urls[i],urls[j]]=[urls[j],urls[i]]; } if(urls[0]===last) urls.push(urls.shift()); } const u=urls.length?urls[saverI++%urls.length]:'';
     el.innerHTML=`${u?`<img src="${u}" alt="">`:''}<div class="sv-info"><div class="sv-time">${esc(t)}</div><div class="sv-date">${esc(jaDate(now))}</div>${away?`<div class="sv-next">${esc(away)}</div>`:''}${nx?`<div class="sv-next">${esc((nx.date===dk(now)?tr('Today'):tr('Tomorrow'))+' · '+(nx.time?jaTime(nx.time)+' ':'')+(nx.title||''))}</div>`:''}</div>`; };
   draw(); clearInterval(saverT); saverT=setInterval(draw,20e3);
   if(navigator.onLine&&S.voiceUrl&&Date.now()-(+lsGet('fs.photosAt',0)||0)>20*3600e3) saverFetch();
