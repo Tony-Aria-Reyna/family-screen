@@ -1749,7 +1749,9 @@ function openBoard(o){ o=o||{}; let slot0=null, seen=o.seen||[], seenSaved=false
     m.innerHTML=`<div class="tvhead"><h2>💡 Our ideas</h2><button class="save" id="x">Done</button></div>
       ${seen.length?`<p class="note">I could see: ${esc(seen.slice(0,14).map(x=>x.name).join(', '))}${seen.length>14?' and '+(seen.length-14)+' more':''}. ${seenSaved?'✓ Saved to Kitchen stock.':`<button class="xbtn" id="sv">💾 Keep these in Kitchen stock</button>`}</p>`:''}
       ${sug.length?`<button class="save" id="all" style="width:100%;margin:4px 0 8px;border-radius:14px;padding:12px">✅ Put ${sug.length>1?'all '+sug.length:'it'} on ${sug.length>1?'their':'its'} suggested day${sug.length>1?'s':''}</button>`:''}
-      <p class="note">Pick a day under any idea to put it on the plan. You stay here, so you can keep going. Ideas are kept for 3 weeks.</p>
+      <div class="wkgrid"><span></span>${next8().map((k,i)=>`<b class="${i===0?'tod':''}">${i===0?'Today':fmtD(kd(k),{weekday:'short'})}<small>${kd(k).getDate()}</small></b>`).join('')}
+        ${MEAL_SLOTS.slice().reverse().map(s=>{ const n=next8().filter(k=>mealsOn(k,s[0]).length).length; return `<span class="wkl">${s[2]}<small>${n}/8</small></span>`+next8().map(k=>{ const ms=mealsOn(k,s[0]); const nm=ms.map(mm=>{ const r=mm.rid&&recipeById(mm.rid); return r?r.name:(mm.note||mm.text||'Planned'); }).join(', '); return ms.length?`<button class="wkc ok" data-wk="${esc(nm)}" title="${esc(nm)}">✓</button>`:`<span class="wkc"></span>`; }).join(''); }).join('')}</div>
+      <p class="note" style="margin:2px 0 6px">${(()=>{ const e=next8().filter(k=>!mealsOn(k,'dinner').length); return e.length?'<b>Dinners still to fill:</b> '+e.map(k=>k===dk(new Date())?'today':fmtD(kd(k),{weekday:'short',day:'numeric'})).join(', ')+'.':'✅ Every dinner for the 8 days is planned.'; })()} Tap ✓ to see what's on.</p>
       <div class="tvlist">${all.map(x=>{ const r=x.r, pl=x.planned&&(S.meals||[]).some(mm=>mm.id===x.planned.mid)?x.planned:null, sl=x.slot||'dinner', open=picking[x.id];
         return `<div class="idea ${fresh.has(x.id)?'fresh':''} ${pl?'done':''}"><button class="mrow" data-open="${x.id}"><span class="me">${r.emoji||'🍽️'}</span><span class="mrt"><b>${r.yours?(isFav(r.id)?'⭐ ':'📖 ')+'Your '+esc(r.name):esc(r.name)}</b><small>${r.mins?r.mins+' min · ':''}${esc(r.blurb||'')}</small>
           ${(r.uses||[]).length?`<small class="ckok">🧊 Uses: ${esc(r.uses.slice(0,6).join(', '))}</small>`:''}${r.buy?`<small class="${r.buy.length?'ckgap':'ckok'}">${r.buy.length?'🛒 To pick up: '+esc(r.buy.join(', ')):'✅ Everything is in the house'}</small>`:''}${r.thaw?`<small>🧊 ${esc(r.thaw)}</small>`:''}</span></button>
@@ -1770,6 +1772,7 @@ function openBoard(o){ o=o||{}; let slot0=null, seen=o.seen||[], seenSaved=false
     m.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.mv); if(x){ boardUnplan(x); picking[x.id]=true; draw(); } });
     m.querySelectorAll('[data-fv]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.fv); if(!x) return; const r=saveRecipe(x.r); x.r.id=r.id; setFav(r.id,!isFav(r.id)); save(); draw(); });
     m.querySelectorAll('[data-no]').forEach(b=>b.onclick=()=>{ const x=find(b.dataset.no); if(!x) return; foodNote('no',x.r.name); S.ideaBoard=S.ideaBoard.filter(y=>y!==x); save(); toast('Noted. Ideas like '+x.r.name+' won’t come up again.'); draw(); });
+    m.querySelectorAll('[data-wk]').forEach(c=>c.onclick=()=>toast(c.dataset.wk));
     m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ S.ideaBoard=(S.ideaBoard||[]).filter(y=>y.id!==b.dataset.rm); save(); draw(); });
     const sh=m.querySelector('#shop'); if(sh) sh.onclick=()=>shopForMeals(tb.days);
     m.querySelector('#more').onclick=()=>{ close(); openPlanWeek(); };
