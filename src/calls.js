@@ -16,7 +16,15 @@ function callFor(){ const me=mePerson(); if(isPhone()) return me?[me]:[];
 const callFam=()=>isPhone()?!!mePerson():lsGet('fs.callFam','1')==='1';
 
 /* ---- how the two screens find each other: free public address-finders, plus a relay if the helper has one set up ---- */
-function callIce(){ const c=lsGet('fs.ice',null), extra=c&&c.until>Date.now()&&Array.isArray(c.ice)?c.ice:[];
+/* Safety switch: relayed call time is counted for the whole household each month. Past RELAY_CAP_H hours the relay is
+   left out (calls still work on the same Wi-Fi), so the relay's free allowance can never be reached. */
+const RELAY_CAP_H=100;
+const relayMonth=()=>new Date().toISOString().slice(0,7);
+const relayUsed=()=>S.relayUse&&S.relayUse.m===relayMonth()?(+S.relayUse.s||0):0;
+const relayCapped=()=>relayUsed()>=RELAY_CAP_H*3600;
+async function callRelayCheck(c){ try{ const st=await c.pc.getStats(); let pair=null; st.forEach(r=>{ if(r.type==='transport'&&r.selectedCandidatePairId) pair=st.get(r.selectedCandidatePairId)||pair; }); if(!pair) st.forEach(r=>{ if(r.type==='candidate-pair'&&r.state==='succeeded'&&(r.nominated||r.selected)) pair=pair||r; });
+  if(!pair) return; const l=st.get(pair.localCandidateId), r=st.get(pair.remoteCandidateId); c.relay=!!((l&&l.candidateType==='relay')||(r&&r.candidateType==='relay')); }catch(e){} }
+function callIce(){ const c=lsGet('fs.ice',null), extra=!relayCapped()&&c&&c.until>Date.now()&&Array.isArray(c.ice)?c.ice:[];
   return [{urls:['stun:stun.l.google.com:19302','stun:stun.cloudflare.com:3478']}].concat(extra); }
 async function callIceRefresh(){ const c=lsGet('fs.ice',null); if((c&&c.until>Date.now()+3600e3)||!S.voiceUrl||!navigator.onLine||(SYNC.isLimited&&SYNC.isLimited())) return;
   const r=await helperDo('call_ice'), ok=r&&Array.isArray(r.ice);
@@ -76,7 +84,7 @@ function callPC(c){
   // addresses found after the offer or answer has been sent are passed on a moment later
   pc.onicecandidate=e=>{ if(!e.candidate||!c.sdpRead) return; c.late.push(JSON.stringify(e.candidate.toJSON?e.candidate.toJSON():e.candidate)); if(c.sdpSent) callLateSend(c); };
   pc.onconnectionstatechange=()=>{ const s=pc.connectionState; if(call!==c) return;
-    if(s==='connected'){ c.weak=false; clearTimeout(c.connT); if(c.st!=='live'){ c.st='live'; c.startAt=Date.now(); callRingStop(); callTell(); } callDraw(); }
+    if(s==='connected'){ c.weak=false; clearTimeout(c.connT); if(c.st!=='live'){ c.st='live'; c.startAt=Date.now(); callRingStop(); callTell(); } setTimeout(()=>{ if(call===c) callRelayCheck(c); },2500); callDraw(); }
     else if(s==='failed') callFinish(c.startAt?'lost':'failed',true);
     else if(s==='disconnected'){ c.weak=true; callDraw(); setTimeout(()=>{ if(call===c&&pc.connectionState==='disconnected') callFinish('lost',true); },12e3); } };
   return pc; }
@@ -157,6 +165,7 @@ async function callAnswer(video){
 function callFinish(why,mine){ const c=call; if(!c) return; call=null;
   clearTimeout(c.ringT); clearTimeout(c.connT); clearTimeout(c.lateT); clearInterval(c.tick); callRingStop(); callGone.add(c.id); callClearNotes();
   const dur=c.startAt?Math.round((Date.now()-c.startAt)/1000):0;
+  if(c.relay&&dur&&c.role==='out'){ S.relayUse={m:relayMonth(),s:relayUsed()+dur}; try{ save(); }catch(e){} }
   try{ if(mine&&c.dc&&c.dc.readyState==='open') c.dc.send(JSON.stringify({bye:1})); }catch(e){}
   if(c.role==='out'&&c.sdpSent){ if(mine) SYNC.callPatch(c.id,{st:'end',why}).catch(()=>{}); setTimeout(()=>SYNC.callDrop(c.id),mine?5000:800); callLog(c,dur); }
   else if(c.role==='in'&&mine&&!(c.st==='ringing'&&c.to==='fam')) SYNC.callPatch(c.id,{st:'end',why}).catch(()=>{});   // declining a Family call only stops this screen ringing
