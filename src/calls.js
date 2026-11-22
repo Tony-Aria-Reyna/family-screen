@@ -17,8 +17,8 @@ const callFam=()=>isPhone()?!!mePerson():lsGet('fs.callFam','1')==='1';
 
 /* ---- how the two screens find each other: free public address-finders, plus a relay if the helper has one set up ---- */
 /* Safety switch: the data that goes through the relay is counted for the whole household each month. Past RELAY_CAP_GB
-   the relay is left out (calls still work on the same Wi-Fi), so the relay's free monthly allowance (20 GB) is never passed. */
-const RELAY_CAP_GB=18;
+   the relay is left out (calls still work on the same Wi-Fi), so the relay's free monthly allowance (Cloudflare: 1,000 GB) is never passed. */
+const RELAY_CAP_GB=500;
 const relayMonth=()=>new Date().toISOString().slice(0,7);
 const relayUsed=()=>S.relayUse&&S.relayUse.m===relayMonth()?(+S.relayUse.b||0):0;
 const relayCapped=()=>relayUsed()>=RELAY_CAP_GB*1e9;
