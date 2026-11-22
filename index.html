@@ -5489,7 +5489,6 @@ function openMsgs(th){
           if(x.call) return sep+`<div class="mcall ${x.call.ok?'':'miss'}">${x.call.kind==='video'?'🎥':'📞'} ${esc(x.call.ok?(x.call.kind==='video'?'Video call':'Voice call')+' · '+callDur(x.call.dur):mine?'No answer':'Missed '+(x.call.kind==='video'?'video':'voice')+' call')} <small>${msgTime(x.at).replace(/^.* /,'')}</small>${x.call.ok?'':`<button class="cancel" data-cb="${x.call.kind==='video'?'video':'audio'}">${mine?'Call again':'Call back'}</button>`}</div>`;
           const pic=x.pic&&/^[\w-]+$/.test(x.pic.id||'')?`<span class="mpic" data-pic="${x.pic.id}" data-pg="${/^[\w-]+$/.test(x.g||'')?x.g:''}" style="aspect-ratio:${Math.max(1,+x.pic.w||4)}/${Math.max(1,+x.pic.h||3)};${picTiny(x.pic.t)?`background-image:url(${picTiny(x.pic.t)})`:''}">${picUrls[x.pic.id]?`<img src="${picUrls[x.pic.id]}" alt="Photo">`:''}</span>`:'';
           return sep+`<div class="mb ${mine?'me':''}">${!mine&&fam?`<small class="mfrom" style="color:${col(x.from)};filter:brightness(.6)">${esc(nm(x.from))}</small>`:''}${pic}${pic&&x.text==='📷 Photo'?'':`<span class="mtxt" ${mine?'':`style="background:${col(x.from)}"`}>${esc(x.text)}</span>`}<small class="mat">${msgTime(x.at).replace(/^.* /,'')}${mine&&!fam&&(x.seen||[]).includes(other)?' · Seen':''}</small></div>`; }).join(''):'<p class="note" style="text-align:center;margin-top:30px">No messages yet. Say hello 👋</p>'}</div>
-        <div class="mquick">${MSG_QUICK.map((q,i)=>`<button class="cancel" data-q="${i}">${esc(q)}</button>`).join('')}</div>
         <form class="msend" id="mf"><button type="button" class="cancel" id="mpB" aria-label="Send a photo">📷</button><input type="file" id="mpC" accept="image/*" capture="environment" hidden><input type="file" id="mpP" accept="image/*" multiple hidden><input id="mi" placeholder="Message" autocomplete="off" maxlength="600">${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
       const box=m.querySelector('#mb'); box.scrollTop=box.scrollHeight;
       m.querySelector('#x').onclick=shut; m.querySelector('#bk').onclick=()=>{ msgOpen.th=null; draw(); };
@@ -6354,7 +6353,7 @@ function callClearNotes(){ try{ navigator.serviceWorker&&navigator.serviceWorker
 
 /* ---- the call screen: built once, then only its labels and buttons change (so the video never restarts) ---- */
 function callShow(){ let el=document.getElementById('callUI'); if(el) el.remove(); el=document.createElement('div'); el.id='callUI';
-  el.innerHTML=`<video id="cvR" autoplay playsinline></video><div class="cinfo"><span class="cface" id="cFace"></span><div><h2 id="cName"></h2><p id="cSt"></p></div></div><video id="cvL" autoplay playsinline muted></video><button class="cmini" id="cMin" aria-label="Make the call small">⌄</button><div class="cbar" id="cBar"></div>`;
+  el.innerHTML=`<video id="cvR" autoplay playsinline muted></video><audio id="caR" autoplay></audio><div class="cinfo"><span class="cface" id="cFace"></span><div><h2 id="cName"></h2><p id="cSt"></p></div></div><video id="cvL" autoplay playsinline muted></video><button class="cmini" id="cMin" aria-label="Make the call small">⌄</button><div class="cbar" id="cBar"></div>`;
   document.body.appendChild(el);
   el.querySelector('#cMin').onclick=e=>{ e.stopPropagation(); el.classList.add('c-mini'); };
   el.addEventListener('click',()=>{ if(el.classList.contains('c-mini')) el.classList.remove('c-mini'); });
@@ -6379,6 +6378,7 @@ function callDraw(){ const c=call, el=document.getElementById('callUI'); if(!c||
     on('cMic',callMic); on('cCam',callCam); on('cFlip',callFlip); on('cEnd',()=>callFinish(call&&call.st==='live'?'ended':'cancelled',true)); }
   const R=el.querySelector('#cvR'), L=el.querySelector('#cvL');
   if(c.remote&&R.srcObject!==c.remote){ R.srcObject=c.remote; const p=R.play&&R.play(); if(p&&p.catch) p.catch(()=>{}); }
+  { const A=el.querySelector('#caR'); if(A&&c.remote&&A.srcObject!==c.remote){ A.srcObject=c.remote; const p=A.play&&A.play(); if(p&&p.catch) p.catch(()=>{}); } }   // sound plays from its own element: a phone may hold back a video element's sound until a picture arrives
   if(c.local&&L.srcObject!==c.local){ L.srcObject=c.local; const p=L.play&&L.play(); if(p&&p.catch) p.catch(()=>{}); } }
 
 /* ---- microphone, camera and the connection ---- */
@@ -7738,7 +7738,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwrjqhsg';
+const FS_VERSION='fs-mwrjyn23';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;

@@ -44,7 +44,7 @@ function callClearNotes(){ try{ navigator.serviceWorker&&navigator.serviceWorker
 
 /* ---- the call screen: built once, then only its labels and buttons change (so the video never restarts) ---- */
 function callShow(){ let el=document.getElementById('callUI'); if(el) el.remove(); el=document.createElement('div'); el.id='callUI';
-  el.innerHTML=`<video id="cvR" autoplay playsinline></video><div class="cinfo"><span class="cface" id="cFace"></span><div><h2 id="cName"></h2><p id="cSt"></p></div></div><video id="cvL" autoplay playsinline muted></video><button class="cmini" id="cMin" aria-label="Make the call small">⌄</button><div class="cbar" id="cBar"></div>`;
+  el.innerHTML=`<video id="cvR" autoplay playsinline muted></video><audio id="caR" autoplay></audio><div class="cinfo"><span class="cface" id="cFace"></span><div><h2 id="cName"></h2><p id="cSt"></p></div></div><video id="cvL" autoplay playsinline muted></video><button class="cmini" id="cMin" aria-label="Make the call small">⌄</button><div class="cbar" id="cBar"></div>`;
   document.body.appendChild(el);
   el.querySelector('#cMin').onclick=e=>{ e.stopPropagation(); el.classList.add('c-mini'); };
   el.addEventListener('click',()=>{ if(el.classList.contains('c-mini')) el.classList.remove('c-mini'); });
@@ -69,6 +69,7 @@ function callDraw(){ const c=call, el=document.getElementById('callUI'); if(!c||
     on('cMic',callMic); on('cCam',callCam); on('cFlip',callFlip); on('cEnd',()=>callFinish(call&&call.st==='live'?'ended':'cancelled',true)); }
   const R=el.querySelector('#cvR'), L=el.querySelector('#cvL');
   if(c.remote&&R.srcObject!==c.remote){ R.srcObject=c.remote; const p=R.play&&R.play(); if(p&&p.catch) p.catch(()=>{}); }
+  { const A=el.querySelector('#caR'); if(A&&c.remote&&A.srcObject!==c.remote){ A.srcObject=c.remote; const p=A.play&&A.play(); if(p&&p.catch) p.catch(()=>{}); } }   // sound plays from its own element: a phone may hold back a video element's sound until a picture arrives
   if(c.local&&L.srcObject!==c.local){ L.srcObject=c.local; const p=L.play&&L.play(); if(p&&p.catch) p.catch(()=>{}); } }
 
 /* ---- microphone, camera and the connection ---- */

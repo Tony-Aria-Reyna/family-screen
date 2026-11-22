@@ -23,7 +23,7 @@ async def main():
         print('threads:', await pg.locator('.mrow').count(), '| unread dots:', await pg.locator('.mrow .mdot').all_inner_texts())
         await pg.click('.mrow.unread >> nth=0'); await pg.wait_for_timeout(200)
         await pg.fill('#mi','On my way'); await pg.screenshot(path='/tmp/msg0.png'); await pg.click('#ms'); await pg.wait_for_timeout(200)
-        await pg.click('[data-q="0"]'); await pg.wait_for_timeout(200); await pg.screenshot(path='/tmp/msg2.png')
+        await pg.fill('#mi','I’m home 🏠'); await pg.click('#ms'); await pg.wait_for_timeout(200); await pg.screenshot(path='/tmp/msg2.png')
         print('bubbles:', await pg.locator('.mb').count(), 'mine:', await pg.locator('.mb.me').count(), '| unread now', await pg.evaluate('msgUnreadAll()'))
         await pg.evaluate("S.msgs.push({id:'m9',th:msgOpen.th,from:msgOpen.th.split('|').find(x=>x!==msgAs),text:'Thanks Dad',at:Date.now()+5,seen:[]}); renderAll()"); await pg.wait_for_timeout(300)
         print('live bubble:', await pg.locator('.mb').count())
