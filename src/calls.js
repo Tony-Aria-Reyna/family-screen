@@ -26,7 +26,7 @@ async function callRelayCheck(c){ try{ const st=await c.pc.getStats(); let pair=
   if(!pair) return; const l=st.get(pair.localCandidateId), r=st.get(pair.remoteCandidateId); c.relay=!!((l&&l.candidateType==='relay')||(r&&r.candidateType==='relay')); if(c.relay) c.relayB=Math.max(c.relayB||0,(+pair.bytesSent||0)+(+pair.bytesReceived||0)); }catch(e){} }
 function callIce(){ const c=lsGet('fs.ice',null), extra=!relayCapped()&&c&&c.until>Date.now()&&Array.isArray(c.ice)?c.ice:[];
   return [{urls:['stun:stun.l.google.com:19302','stun:stun.cloudflare.com:3478']}].concat(extra); }
-async function callIceRefresh(){ const c=lsGet('fs.ice',null); if((c&&c.until>Date.now()+3600e3)||!S.voiceUrl||!navigator.onLine||(SYNC.isLimited&&SYNC.isLimited())) return;
+async function callIceRefresh(){ const c=lsGet('fs.ice',null); if((c&&c.until>Date.now()+3600e3&&(c.ice||[]).length)||!S.voiceUrl||!navigator.onLine||(SYNC.isLimited&&SYNC.isLimited())) return;
   const r=await helperDo('call_ice'), ok=r&&Array.isArray(r.ice);
   lsSet('fs.ice',{ice:ok?r.ice.filter(x=>x&&x.urls&&x.username):[],until:Date.now()+(ok?Math.max(3600,(+r.ttl||43200)-4*3600):3600)*1000}); }
 setTimeout(()=>{ callIceRefresh().catch(()=>{}); },40e3);
@@ -78,6 +78,8 @@ async function callMedia(video){
   catch(e){ if(!video) throw e; const s=await navigator.mediaDevices.getUserMedia({audio:CALL_MIC,video:false}); toast('The camera isn’t available, so this is voice only'); return s; } }
 const callSender=(c,kind)=>{ const t=c.pc&&c.pc.getTransceivers().find(x=>x.receiver&&x.receiver.track&&x.receiver.track.kind===kind); return t&&t.sender; };
 const callGather=pc=>new Promise(ok=>{ if(pc.iceGatheringState==='complete') return ok(); const chk=()=>{ if(pc.iceGatheringState==='complete') done(); }, done=()=>{ clearTimeout(t); pc.removeEventListener('icegatheringstatechange',chk); ok(); }, t=setTimeout(done,2200); pc.addEventListener('icegatheringstatechange',chk); });
+// make sure this device has the relay before a call (a phone may have checked before the relay was set up)
+async function callRelayReady(){ const c=lsGet('fs.ice',null); if(c&&c.until>Date.now()&&(c.ice||[]).length) return; try{ localStorage.removeItem('fs.ice'); await Promise.race([callIceRefresh(),new Promise(r=>setTimeout(r,3500))]); }catch(e){} }
 function callPC(c){
   const pc=c.pc=new RTCPeerConnection({iceServers:callIce()}); c.remote=new MediaStream(); c.late=[]; c.iceSeen=new Set();
   pc.ontrack=e=>{ if(!c.remote.getTracks().includes(e.track)) c.remote=new MediaStream(c.remote.getTracks().concat(e.track)); callDraw(); };   // a fresh stream each time, so every browser notices the new track
@@ -123,6 +125,7 @@ async function callStart(me,th,kind){
     catch(e){ if(call===c){ call=null; clearInterval(c.tick); const el=document.getElementById('callUI'); if(el) el.remove(); toast('The microphone is blocked. Allow it for Family Screen in the browser’s site settings, then try again.'); } return; }
     if(call!==c){ c.local.getTracks().forEach(t=>t.stop()); return; }   // hung up while the permission box was open
     c.camOn=!!c.local.getVideoTracks().length; c.wasVideo=c.camOn; callDraw();
+    await callRelayReady();
     const pc=callPC(c), at=pc.addTransceiver('audio',{direction:'sendrecv'}), vt=pc.addTransceiver('video',{direction:'sendrecv'});
     await at.sender.replaceTrack(c.local.getAudioTracks()[0]); if(c.camOn) await vt.sender.replaceTrack(c.local.getVideoTracks()[0]);
     c.dc=pc.createDataChannel('ctl'); callCtl(c);
@@ -149,6 +152,7 @@ async function callAnswer(video){
     catch(e){ if(call===c){ toast('The microphone is blocked. Allow it for Family Screen in the browser’s site settings, then call back.'); callFinish('declined',true); } return; }
     if(call!==c){ c.local.getTracks().forEach(t=>t.stop()); return; }
     c.camOn=!!c.local.getVideoTracks().length; c.wasVideo=c.camOn;
+    await callRelayReady();
     const pc=callPC(c); pc.ondatachannel=e=>{ c.dc=e.channel; callCtl(c); };
     await pc.setRemoteDescription(c.doc.offer);
     for(const t of pc.getTransceivers()){ const k=t.receiver&&t.receiver.track&&t.receiver.track.kind; if(k!=='audio'&&k!=='video') continue; t.direction='sendrecv';
