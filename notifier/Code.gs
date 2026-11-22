@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 37;
+const HELPER_VERSION = 38;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -894,6 +894,13 @@ function callRing(h, b) {
    each screen is handed a pass that lasts a day. */
 function callIce() {
   const p = PropertiesService.getScriptProperties(), id = p.getProperty('TURN_KEY_ID'), tok = p.getProperty('TURN_KEY_TOKEN');
+  const url = p.getProperty('TURN_URL');   // a free relay (Open Relay by Metered): the credentials link from its dashboard, key included
+  if (url && /^https:\/\//.test(url)) {
+    const q = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (q.getResponseCode() >= 300) return { ok: false, ice: [], ttl: 3600, error: 'Relay: ' + q.getResponseCode() };
+    const j = JSON.parse(q.getContentText()), list = Array.isArray(j) ? j : (j.iceServers || []);
+    return { ok: true, ice: list.filter(function (s) { return s && s.urls && s.username; }).map(function (s) { return { urls: s.urls, username: s.username, credential: s.credential }; }), ttl: 43200 };
+  }
   if (!id || !tok) return { ok: true, ice: [], ttl: 43200 };
   const r = UrlFetchApp.fetch('https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(id) + '/credentials/generate-ice-servers', { method: 'post', contentType: 'application/json',
     headers: { Authorization: 'Bearer ' + tok }, payload: JSON.stringify({ ttl: 86400 }), muteHttpExceptions: true });
