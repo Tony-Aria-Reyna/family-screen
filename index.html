@@ -6372,10 +6372,10 @@ function callDraw(){ const c=call, el=document.getElementById('callUI'); if(!c||
   const bar=el.querySelector('#cBar'), key=[c.st==='ringing',c.micOn,c.camOn,c.canFlip,c.kind].join('|');
   if(bar.dataset.k!==key){ bar.dataset.k=key;
     bar.innerHTML=c.st==='ringing'?b('cNo','✕','Decline','red')+(v?b('cYesV','🎥','Answer','green'):'')+b('cYes','📞',v?'Voice only':'Answer','green')
-      :b('cMic','🎤',c.micOn?'Mute':'Muted',c.micOn?'':'off')+b('cCam','🎥',c.camOn?'Camera':'Camera off',c.camOn?'':'off')+(c.camOn&&c.canFlip?b('cFlip','🔄','Flip'):'')+b('cEnd','📞','End','red end');
+      :b('cMic','🎤',c.micOn?'Mute':'Muted',c.micOn?'':'off')+b('cCam','🎥',c.camOn?'Camera':'Camera off',c.camOn?'':'off')+(c.outs&&c.outs.length>1?b('cSpk',c.spk?'🔊':'📱',c.spk?'Speaker':'Phone',c.spk?'':'off'):'')+(c.camOn&&c.canFlip?b('cFlip','🔄','Flip'):'')+b('cEnd','📞','End','red end');
     const on=(id,fn)=>{ const x=bar.querySelector('#'+id); if(x) x.onclick=e=>{ e.stopPropagation(); fn(); }; };
     on('cNo',()=>callFinish('declined',true)); on('cYes',()=>callAnswer(false)); on('cYesV',()=>callAnswer(true));
-    on('cMic',callMic); on('cCam',callCam); on('cFlip',callFlip); on('cEnd',()=>callFinish(call&&call.st==='live'?'ended':'cancelled',true)); }
+    on('cMic',callMic); on('cSpk',callSpk); on('cCam',callCam); on('cFlip',callFlip); on('cEnd',()=>callFinish(call&&call.st==='live'?'ended':'cancelled',true)); }
   const R=el.querySelector('#cvR'), L=el.querySelector('#cvL');
   if(c.remote&&R.srcObject!==c.remote){ R.srcObject=c.remote; const p=R.play&&R.play(); if(p&&p.catch) p.catch(()=>{}); }
   { const A=el.querySelector('#caR'); if(A&&c.remote&&A.srcObject!==c.remote){ A.srcObject=c.remote; const p=A.play&&A.play(); if(p&&p.catch) p.catch(()=>{}); } }   // sound plays from its own element: a phone may hold back a video element's sound until a picture arrives
@@ -6390,13 +6390,19 @@ const callSender=(c,kind)=>{ const t=c.pc&&c.pc.getTransceivers().find(x=>x.rece
 const callGather=pc=>new Promise(ok=>{ if(pc.iceGatheringState==='complete') return ok(); const chk=()=>{ if(pc.iceGatheringState==='complete') done(); }, done=()=>{ clearTimeout(t); pc.removeEventListener('icegatheringstatechange',chk); ok(); }, t=setTimeout(done,2200); pc.addEventListener('icegatheringstatechange',chk); });
 // make sure this device has the relay before a call (a phone may have checked before the relay was set up)
 async function callRelayReady(){ const c=lsGet('fs.ice',null); if(c&&c.until>Date.now()&&(c.ice||[]).length) return; try{ localStorage.removeItem('fs.ice'); await Promise.race([callIceRefresh(),new Promise(r=>setTimeout(r,3500))]); }catch(e){} }
+/* Speaker or the phone's ear speaker. Only possible where the browser lets a page choose where sound plays (setSinkId)
+   and the phone lists both outputs; otherwise the button stays hidden and the phone decides. */
+async function callOuts(c){ try{ const A=document.getElementById('caR'); if(!A||!A.setSinkId) return; const d=(await navigator.mediaDevices.enumerateDevices()).filter(x=>x.kind==='audiooutput');
+  const ear=d.find(x=>/earpiece|receiver|handset|phone/i.test(x.label)), spk=d.find(x=>/speaker/i.test(x.label))||d.find(x=>x.deviceId==='default');
+  if(ear&&spk&&ear.deviceId!==spk.deviceId){ c.outs=[ear.deviceId,spk.deviceId]; if(c.spk==null){ c.spk=!!c.camOn; await A.setSinkId(c.spk?spk.deviceId:ear.deviceId).catch(()=>{}); } callDraw(); } }catch(e){} }
+async function callSpk(){ const c=call, A=document.getElementById('caR'); if(!c||!c.outs||!A) return; c.spk=!c.spk; try{ await A.setSinkId(c.spk?c.outs[1]:c.outs[0]); }catch(e){ c.spk=!c.spk; toast('This phone won’t let the app switch the speaker'); } callDraw(); }
 function callPC(c){
   const pc=c.pc=new RTCPeerConnection({iceServers:callIce()}); c.remote=new MediaStream(); c.late=[]; c.iceSeen=new Set();
   pc.ontrack=e=>{ if(!c.remote.getTracks().includes(e.track)) c.remote=new MediaStream(c.remote.getTracks().concat(e.track)); callDraw(); };   // a fresh stream each time, so every browser notices the new track
   // addresses found after the offer or answer has been sent are passed on a moment later
   pc.onicecandidate=e=>{ if(!e.candidate||!c.sdpRead) return; c.late.push(JSON.stringify(e.candidate.toJSON?e.candidate.toJSON():e.candidate)); if(c.sdpSent) callLateSend(c); };
   pc.onconnectionstatechange=()=>{ const s=pc.connectionState; if(call!==c) return;
-    if(s==='connected'){ c.weak=false; clearTimeout(c.connT); if(c.st!=='live'){ c.st='live'; c.startAt=Date.now(); callRingStop(); callTell(); } setTimeout(()=>{ if(call===c) callRelayCheck(c); },2500); clearInterval(c.relayT); c.relayT=setInterval(()=>{ if(call===c) callRelayCheck(c); else clearInterval(c.relayT); },8000); callDraw(); }
+    if(s==='connected'){ c.weak=false; clearTimeout(c.connT); if(c.st!=='live'){ c.st='live'; c.startAt=Date.now(); callRingStop(); callTell(); } setTimeout(()=>{ if(call===c) callRelayCheck(c); },2500); callOuts(c); clearInterval(c.relayT); c.relayT=setInterval(()=>{ if(call===c) callRelayCheck(c); else clearInterval(c.relayT); },8000); callDraw(); }
     else if(s==='failed') callFinish(c.startAt?'lost':'failed',true);
     else if(s==='disconnected'){ c.weak=true; callDraw(); setTimeout(()=>{ if(call===c&&pc.connectionState==='disconnected') callFinish('lost',true); },12e3); } };
   return pc; }
@@ -7738,7 +7744,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwrjyn23';
+const FS_VERSION='fs-mwrk8lzq';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
