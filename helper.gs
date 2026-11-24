@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 38;
+const HELPER_VERSION = 39;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -889,8 +889,11 @@ function msgPush(h, pre) {
     const from = people.find(function (p) { return p.id === m.from; }) || { name: 'Family' };
     // written by a linked account: it must speak as itself, or no alert goes out
     if (m.byE && String(from.email || '').toLowerCase() !== String(m.byE).toLowerCase()) { patch(path + '/' + m._id, { pushed: now }); return; }
-    const to = m.th === 'fam' ? people.filter(function (p) { return p.id !== m.from && p.id !== 'all'; }) : people.filter(function (p) { return String(m.th).split('|').indexOf(p.id) >= 0 && p.id !== m.from; });
-    const off = m.th === 'fam' ? (h.chatOff || []).map(function (e) { return String(e).toLowerCase(); }) : [];   // linked accounts left out of the Family chat
+    const grp = m.th === 'fam' || m.th === 'fam2';
+    const to = grp ? people.filter(function (p) { return p.id !== m.from && p.id !== 'all'; }) : people.filter(function (p) { return String(m.th).split('|').indexOf(p.id) >= 0 && p.id !== m.from; });
+    const only = (h.chatOnly || []).map(function (e) { return String(e).toLowerCase(); });
+    // linked accounts left out of this group chat: Family leaves out chatOff; the second family chat is for the messages-only accounts
+    const off = m.th === 'fam' ? (h.chatOff || []).map(function (e) { return String(e).toLowerCase(); }).concat(only) : m.th === 'fam2' ? (h.limited || []).map(function (e) { return String(e).toLowerCase(); }).filter(function (e) { return only.indexOf(e) < 0; }) : [];   // linked accounts left out of the Family chat
     const emails = to.map(function (p) { return String(p.email || '').toLowerCase(); }).filter(function (e) { return e && off.indexOf(e) < 0; });
     Object.keys(devices).forEach(function (hash) { const dev = devices[hash]; if (!dev || !dev.token || !dev.email || emails.indexOf(String(dev.email).toLowerCase()) < 0) return;
       try { send(h, hash, '💬 ' + from.name + (m.th === 'fam' ? ' → Family' : ''), String(m.text || '').slice(0, 180), 'msg-' + m.th); n++; } catch (e) {} });

@@ -1179,16 +1179,17 @@ const msgFolk=()=>S.people.filter(p=>p.id!=='all');
 function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me];
   const kids=msgFolk().filter(p=>!p.email).map(p=>p.id); if(!isPhone()&&kids.length) return kids;
   return me?[me]:msgFolk().map(p=>p.id); }
-const msgThread=(a,b)=>b==='fam'?'fam':[a,b].sort().join('|');
+const msgThread=(a,b)=>b==='fam'||b==='fam2'?b:[a,b].sort().join('|');
 // 4.1 chats with a linked family (Masako ↔ Tony's family) are kept in that family's records; here they are threads "g~…"
 const msgG=th=>typeof th==='string'&&th.indexOf('g~')===0&&SYNC.guestTh?SYNC.guestTh(th):null;
-const msgIsFam=th=>th==='fam'||!!(msgG(th)&&msgG(th).fam);
-const msgOther=(th,me)=>{ const G=msgG(th); return G?(G.fam?th:G.other):th==='fam'?'fam':String(th).split('|').find(x=>x!==me)||me; };
-const msgName=o=>o==='fam'?'Family':msgG(o)?msgG(o).label:nm(o);
-const msgMine=(m,me)=>m.g?me===mePerson():(m.th==='fam'||String(m.th).split('|').includes(me));
+const msgIsFam=th=>th==='fam'||th==='fam2'||!!(msgG(th)&&msgG(th).fam);
+const msgOther=(th,me)=>{ const G=msgG(th); return G?(G.fam?th:G.other):th==='fam'||th==='fam2'?th:String(th).split('|').find(x=>x!==me)||me; };
+const msgOnly=()=>S.people.filter(p=>p.email&&(S.chatOnly||[]).includes(p.email)).map(p=>p.name);
+const msgName=o=>o==='fam'?'Family':o==='fam2'?'Family + '+(msgOnly().join(' & ')||'guests'):msgG(o)?msgG(o).label:nm(o);
+const msgMine=(m,me)=>m.g?me===mePerson():(m.th==='fam'||m.th==='fam2'||String(m.th).split('|').includes(me));
 const msgLinkedIn=()=>SYNC.chatEm?SYNC.chatEm('fam').map(e=>{ const p=S.people.find(q=>q.email===e); return p?p.name:''; }).filter(Boolean):[];
 // a record written by a linked account (it carries that account's address) only counts if it speaks as that person, in a chat that person is in
-const msgOk=m=>!m.byE||((person(m.from)||{}).email===m.byE&&(m.g||m.th==='fam'||String(m.th).split('|').includes(m.from)));
+const msgOk=m=>!m.byE||((person(m.from)||{}).email===m.byE&&(m.g||m.th==='fam'||m.th==='fam2'||String(m.th).split('|').includes(m.from)));
 const msgAll=()=>(S.msgs||[]).filter(msgOk);
 const msgIn=th=>msgAll().filter(m=>m.th===th).sort((a,b)=>a.at-b.at);
 const msgUnread=(me,th)=>msgAll().filter(m=>(th?m.th===th:msgMine(m,me))&&m.from!==me&&!(m.seen||[]).includes(me)).length;
@@ -1208,7 +1209,7 @@ function msgSend(me,th,text,extra){ text=String(text||'').trim().slice(0,600); i
   if(S.voiceUrl&&S.voiceKey) setTimeout(()=>{ fetch(S.voiceUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:S.voiceKey,action:'msg_push'}),redirect:'follow'}).catch(()=>{}); },1500); }
 function msgMarkSeen(me,th){ let ch=false; (S.msgs||[]).forEach(m=>{ if(m.th===th&&m.from!==me&&!(m.seen||[]).includes(me)){ m.seen=(m.seen||[]).concat(me); if(m.g) SYNC.guestMsgSeen(m.id); else ch=true; } }); if(ch) save(); }
 const msgTime=t=>{ const d=new Date(t), today=dk(d)===dk(new Date()); return (today?'':fmtD(d,{weekday:'short',day:'numeric',month:'short'})+' ')+t12(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')); };
-const msgFace=id=>id==='fam'||msgG(id)?`<span class="mface" style="background:#ffe9b8">👪</span>`:`<span class="mface" style="background:${col(id)}">${esc((nm(id)||'?').charAt(0))}</span>`;
+const msgFace=id=>id==='fam'||id==='fam2'||msgG(id)?`<span class="mface" style="background:#ffe9b8">👪</span>`:`<span class="mface" style="background:${col(id)}">${esc((nm(id)||'?').charAt(0))}</span>`;
 /* ---- photos in Messages: made a sensible size on the device, kept one per record in the family's database, and saved
    on each screen the first time a chat shows it. The message itself carries only a tiny blurred preview. ---- */
 const picUrls={};
@@ -1251,7 +1252,7 @@ function openMsgs(th){
       const me=msgAs;
       if(!msgOpen.th){
         const own=msgFolk().filter(p=>p.id!==me).map(p=>p.id), gc=me===mePerson()&&SYNC.guestChats?SYNC.guestChats():[];
-        const list=(own.length||!gc.length?[{o:'fam',t:'fam'}]:[]).concat(own.map(o=>({o,t:msgThread(me,o)})));   // someone on their own with a linked family sees that family's chats, not an empty "Family"
+        const list=(own.length||!gc.length?[{o:'fam',t:'fam'}].concat(msgOnly().length?[{o:'fam2',t:'fam2'}]:[]):[]).concat(own.map(o=>({o,t:msgThread(me,o)})));   // someone on their own with a linked family sees that family's chats, not an empty "Family"
         gc.forEach(c=>{ if(c.fam) list.push({o:c.fam,t:c.fam}); c.people.forEach(p=>list.push({o:p.id,t:p.th})); });
         const rows=list.map(({o,t})=>{ const ms=msgIn(t), last=ms[ms.length-1], n=msgUnread(me,t); return {o,t,last,n}; })
           .sort((a,b)=>(b.last?b.last.at:0)-(a.last?a.last.at:0));
@@ -1259,7 +1260,7 @@ function openMsgs(th){
           <div class="mlist">${rows.map(r=>`<button class="mrow ${r.n?'unread':''}" data-th="${r.t}">${msgFace(r.o)}<span class="mmid"><b>${esc(msgName(r.o))}</b><small>${r.last?esc((r.last.from===me?'You: ':msgIsFam(r.t)?nm(r.last.from)+': ':'')+r.last.text):'Say hello 👋'}</small></span><span class="mend">${r.last?`<small>${msgTime(r.last.at)}</small>`:''}${r.n?`<i class="mdot">${r.n}</i>`:''}</span></button>`).join('')}</div>`;
         m.querySelector('#x').onclick=shut; const sw=m.querySelector('#sw'); if(sw) sw.onclick=()=>{ msgAs=''; draw(); };
         m.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ msgOpen.th=b.dataset.th; draw(); }); return; }
-      const t=msgOpen.th, fam=msgIsFam(t), other=msgOther(t,me), ms=msgIn(t), also=t==='fam'?msgLinkedIn():[]; msgMarkSeen(me,t);
+      const t=msgOpen.th, fam=msgIsFam(t), other=msgOther(t,me), ms=msgIn(t), also=t==='fam'?msgLinkedIn():t==='fam2'?msgOnly():[]; msgMarkSeen(me,t);
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let lastDay='';
       m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${esc(msgName(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>
         <div class="mbubs" id="mb">${also.length?`<div class="mday">👥 Everyone at home, and ${esc(also.join(', '))}</div>`:''}${ms.length?ms.map(x=>{ const d=dk(new Date(x.at)), sep=d!==lastDay?`<div class="mday">${d===dk(new Date())?'Today':fmtD(new Date(x.at),{weekday:'long',day:'numeric',month:'short'})}</div>`:''; lastDay=d; const mine=x.from===me;
