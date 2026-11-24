@@ -550,10 +550,10 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .rrow span{font-size:15px;color:var(--muted)}
 .rrow.off{opacity:.45}
 .away-ev{background:repeating-linear-gradient(135deg,var(--c) 0 10px,color-mix(in srgb,var(--c) 55%,#fff) 10px 20px)}
-.modal.wide{width:min(1180px,97vw)}
+.modal.wide{width:min(1180px,97vw);overflow-x:hidden;scrollbar-gutter:stable}
 .modal>.mact{position:sticky;bottom:-22px;background:var(--card);margin:14px -28px -22px;padding:12px 28px 16px;border-top:1px solid var(--line);z-index:3}
 .addgrid{display:grid;grid-template-columns:1.2fr 1fr;gap:0 30px}
-.whatwhere{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
+.whatwhere{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 30px}.whatwhere .txt{min-width:0;width:100%;box-sizing:border-box}
 @media (min-width:901px){
   .modal.wide{padding:18px 26px}
   .modal.wide .step{margin:10px 0 6px}
@@ -3196,18 +3196,29 @@ function timelineHTML(key){
 }
 /* Click (or hold, on a touch screen) on an empty part of a day and drag down to pick the time, like Outlook. A plain tap still adds a one-hour entry. */
 function slotDrag(col,pxHour,keyOf){ if(col._sd) return; col._sd=1;
-  let st=null, hold=null, box=null;
-  const minAt=y=>{ const r=col.getBoundingClientRect(); return Math.max(0,Math.min(1440,Math.round((y-r.top)/pxHour*4)*15)); };
-  const draw=(a,b)=>{ const s=Math.min(a,b), e=Math.max(a,b,s+15); if(!box){ box=document.createElement('div'); box.className='fw-sel'; col.appendChild(box); } box.style.top=(s/60*pxHour)+'px'; box.style.height=((e-s)/60*pxHour)+'px'; box.textContent=t12(fromMin(s))+' – '+t12(fromMin(e%1440)); };
-  const stop=()=>{ clearTimeout(hold); hold=null; if(box){ box.remove(); box=null; } st=null; };
-  col.addEventListener('pointerdown',e=>{ if(e.target!==col||e.button>0) return; const a=Math.floor(minAt(e.clientY)/15)*15; stop();
-    const go=()=>{ st={a,b:a+60,on:true}; try{ col.setPointerCapture(e.pointerId); }catch(_){} draw(st.a,st.b); try{ navigator.vibrate&&navigator.vibrate(15); }catch(_){} };
-    if(e.pointerType==='mouse') st={a,b:a,on:false,mouse:true}; else hold=setTimeout(go,350); });
-  col.addEventListener('pointermove',e=>{ if(hold&&e.pointerType!=='mouse'&&(Math.abs(e.movementY)>4)){ clearTimeout(hold); hold=null; return; } if(!st) return;
-    const b=minAt(e.clientY); if(st.mouse&&!st.on){ if(Math.abs(b-st.a)<15) return; st.on=true; try{ col.setPointerCapture(e.pointerId); }catch(_){} } st.b=b<=st.a?st.a+15:Math.ceil(b/15)*15; draw(st.a,st.b); });
+  // the other day columns beside this one, so a drag can run on into the next day
+  const sib=()=>{ const a=[...col.parentElement.children].filter(x=>x.getAttribute&&(x.dataset.fwcol||x.dataset.pwcol)); return a.length?a:[col]; };
+  const keyAt=c=>c.dataset.fwcol||c.dataset.pwcol||keyOf();
+  let st=null, hold=null, boxes=[];
+  const minAt=(c,y)=>{ const r=c.getBoundingClientRect(); return Math.max(0,Math.min(1440,Math.round((y-r.top)/pxHour*4)*15)); };
+  const colAt=x=>{ const l=sib(); let best=col; for(const c of l){ const r=c.getBoundingClientRect(); if(x>=r.left&&x<r.right) best=c; } return best; };
+  const clear=()=>{ boxes.forEach(b=>b.remove()); boxes=[]; };
+  const put=(c,s,e,txt)=>{ const b=document.createElement('div'); b.className='fw-sel'; b.style.top=(s/60*pxHour)+'px'; b.style.height=(Math.max(15,e-s)/60*pxHour)+'px'; b.textContent=txt||''; c.appendChild(b); boxes.push(b); };
+  const draw=()=>{ clear(); const l=sib(), i0=l.indexOf(col), i1=Math.max(i0,l.indexOf(st.c)); const end=st.days*1440+st.b, label=t12(fromMin(st.a))+' – '+(st.days?fmtD(addDays(kd(keyAt(col)),st.days),{weekday:'short'})+' ':'')+t12(fromMin(st.b%1440));
+    if(!st.days){ put(col,st.a,st.b,label); return; }
+    put(col,st.a,1440,label); for(let i=i0+1;i<i1;i++) put(l[i],0,1440); if(l[i1]&&i1>i0) put(l[i1],0,st.b); };
+  const stop=()=>{ clearTimeout(hold); hold=null; clear(); st=null; };
+  const move=(x,y)=>{ const c=colAt(x), l=sib(); let days=Math.round((kd(keyAt(c))-kd(keyAt(col)))/DAYMS); if(days<0){ days=0; } const m=days?minAt(c,y):minAt(col,y);
+    st.c=days?c:col; st.days=days; st.b=days?Math.max(15,Math.ceil(m/15)*15):(m<=st.a?st.a+15:Math.ceil(m/15)*15); draw(); };
+  col.addEventListener('pointerdown',e=>{ if(e.target!==col||e.button>0) return; const a=Math.floor(minAt(col,e.clientY)/15)*15; stop();
+    const go=()=>{ st={a,b:a+60,days:0,c:col,on:true}; try{ col.setPointerCapture(e.pointerId); }catch(_){} draw(); try{ navigator.vibrate&&navigator.vibrate(15); }catch(_){} };
+    if(e.pointerType==='mouse') st={a,b:a,days:0,c:col,on:false,mouse:true,y0:e.clientY,x0:e.clientX}; else hold=setTimeout(go,350); });
+  col.addEventListener('pointermove',e=>{ if(hold&&e.pointerType!=='mouse'&&Math.abs(e.movementY)>4){ clearTimeout(hold); hold=null; return; } if(!st) return;
+    if(st.mouse&&!st.on){ if(Math.abs(e.clientY-st.y0)<pxHour/4&&Math.abs(e.clientX-st.x0)<20) return; st.on=true; try{ col.setPointerCapture(e.pointerId); }catch(_){} } move(e.clientX,e.clientY);
+    { const sc=col.closest('.fw-scroll,.pw-scroll,.tlwrap')||col.parentElement.closest('[class*=scroll]'); if(sc){ const r=sc.getBoundingClientRect(); if(e.clientY>r.bottom-40) sc.scrollTop+=14; else if(e.clientY<r.top+40) sc.scrollTop-=14; } } });   // scroll the grid when the drag reaches its edge
   col.addEventListener('touchmove',e=>{ if(st&&st.on) e.preventDefault(); },{passive:false});
-  col.addEventListener('pointerup',()=>{ clearTimeout(hold); hold=null; if(!st||!st.on){ st=null; return; } const a=st.a, b=st.b; stop(); col._dragged=Date.now();
-    openAdd({date:keyOf(),time:fromMin(a),dur:Math.max(15,b-a)}); });
+  col.addEventListener('pointerup',()=>{ clearTimeout(hold); hold=null; if(!st||!st.on){ st=null; return; } const a=st.a, dur=Math.max(15,st.days*1440+st.b-st.a); stop(); col._dragged=Date.now();
+    openAdd({date:keyAt(col),time:fromMin(a),dur}); });
   col.addEventListener('pointercancel',stop); col.addEventListener('contextmenu',e=>{ if(e.target===col) e.preventDefault(); }); }
 function wireTimeline(box,key){
   box.querySelectorAll('[data-ev]').forEach(b=>{ b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } openEvent(ev,b.dataset.occ); }; movable(b,S.events.find(x=>x.id===b.dataset.ev),b.dataset.occ); });
@@ -7852,7 +7863,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwuz0p7x';
+const FS_VERSION='fs-mwuz9647';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
