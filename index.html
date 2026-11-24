@@ -300,6 +300,7 @@ body.simple{overflow:hidden}
 .tdial .wheel{height:150px}.tdial .wheel .pad,.tdial .wi{height:50px}.tdial .wheels:before{height:50px;margin-top:-25px}
 .tdial .wi{font-size:24px}.tdial .wi.sel{font-size:34px}
 .tdial .typed input{width:74px;height:58px;font-size:32px}
+.tday .opts{flex-wrap:wrap;gap:6px}.tday .tdl{min-width:78px}
 .tlen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0 90px;font-size:18px}
 .tquick{display:flex;gap:6px;flex-wrap:wrap}
 .opt.sm{padding:6px 12px;font-size:15px;min-height:0}
@@ -2794,7 +2795,7 @@ function monday(d){ const x=new Date(d); x.setHours(12,0,0,0); return addDays(x,
 const uid=()=>Math.random().toString(36).slice(2,10);
 const navUrl=a=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(a);
 function endOf(hm,dur){ const [h,m]=hm.split(':').map(Number), t=Math.min(23*60+59,h*60+m+(dur||0)); return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
-function tRange(e){ return e.time?t12(e.time)+(e.dur?'–'+t12(endOf(e.time,e.dur)):''):'All day'; }
+function tRange(e){ if(!e.time) return 'All day'; const s=toMin(e.time), n=Math.floor((s+(e.dur||0))/1440); if(e.dur&&n>0){ const f=fromMin(s+e.dur); return t12(e.time)+' – '+fmtD(addDays(kd(e.date),n),{weekday:'short',day:'numeric'})+' '+t12(f); } return t12(e.time)+(e.dur?'–'+t12(endOf(e.time,e.dur)):''); }
 // When this phone is overseas: name of where it is, and the same moment in its local time ("7:30pm Los Angeles")
 const HERE=(()=>{ if(!AWAY_TZ) return ''; const a=Object.values(AIRPORTS).find(v=>v[1]===DEVICE_TZ); return a?a[0]:DEVICE_TZ.split('/').pop().replace(/_/g,' '); })();
 const hereT=d=>{ if(!AWAY_TZ) return ''; const dd=new Date(d), sameDay=new Intl.DateTimeFormat('en-CA',{timeZone:DEVICE_TZ}).format(dd)===new Intl.DateTimeFormat('en-CA',{timeZone:HOME_TZ}).format(dd);
@@ -3002,7 +3003,7 @@ function toggleShow(id){ const p=person(id); if(!p) return;
 function openWhoFilter(){
   modal((m,close)=>{ const draw=()=>{
     m.innerHTML=`<h2>👥 Whose calendar to show</h2><p class="note">Just for this device. Hiding someone here doesn't hide them anywhere else.</p>
-      <div class="opts" style="flex-direction:column;align-items:stretch">${S.people.concat(guestPeople()).map(p=>`<button class="opt ${p.show?'on':''}" data-who="${p.id}"><span class="tick">${p.show?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')}</div>
+      <div class="opts" style="flex-direction:column;align-items:stretch">${S.people.filter(notChat).concat(guestPeople()).map(p=>`<button class="opt ${p.show?'on':''}" data-who="${p.id}"><span class="tick">${p.show?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')}</div>
       <div class="mact">${hiddenPeople().length?'<button class="cancel" id="all">Show everyone</button>':''}<button class="save" id="ok">Done</button></div>`;
     m.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>{ toggleShow(b.dataset.who); draw(); });
     const a=m.querySelector('#all'); if(a) a.onclick=()=>{ showEveryone(); draw(); };
@@ -3156,8 +3157,8 @@ function dayBlocks(key){
   for(const it of its){
     if(it.k==='ev'){ const e=it.e, names=e.whos.map(nm).filter(Boolean).join(' + '), tk=(e.priv?LOCK:'')+(e.todoId?(e.done?'✅ ':'☐ '):'');
       if(!e.time){ all.push({bg:evBg(e.whos),title:tk+e.title,sub:[e.rpt?'🔁':'',names].filter(Boolean).join(' '),addr:e.addr,attr:`data-ev="${e.id}" data-occ="${key}"`}); continue; }
-      const [h,m]=e.time.split(':').map(Number), s=h*60+m;
-      timed.push({s,e:Math.min(1440,s+(e.dur||60)),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e)+(AWAY_TZ&&e.time?' NZ':'')+evHere(e,key),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
+      const [h,m]=e.time.split(':').map(Number), s0=h*60+m, off=it.off||0, s=off?0:s0;
+      timed.push({s,e:Math.min(1440,s0+(e.dur||60)-off*1440),bg:evBg(e.whos),title:tk+e.title,sub:[tRange(e)+(AWAY_TZ&&e.time?' NZ':'')+evHere(e,key),names].filter(Boolean).join(' · '),addr:e.addr,done:e.done,attr:`data-ev="${e.id}" data-occ="${key}"`}); }
     else if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null; all.push({bg:`repeating-linear-gradient(135deg,${col(it.who)} 0 10px,#fff8 10px 20px)`,title:it.part?(/^home/.test(it.part)?`🏠 ${tName(person(it.who))} ${it.part}`:`✈️ ${tName(person(it.who))} away ${it.part}`):a?`💼 ${tName(person(it.who))} away · ${a[0]} ${a[3]}`:`✈️ ${tName(person(it.who))} away · flying`,sub:'All day',attr:'data-where="1"'}); }
     else if(it.k==='taxi'){ const f=it.f, a0=it.kind==='pick'?it.t:it.t2, b0=it.kind==='pick'?it.t2:it.t, c=col(f.who);
       const s=Math.max(0,mins(a0)), e=Math.min(1440,mins(b0));
@@ -3231,7 +3232,8 @@ const privCan=()=>!LOCAL&&!!(SYNC.me&&SYNC.me());
 const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p.show; });
 function itemsForDay(key){
   const out=[];
-  for(const e of S.events) if(vis(e)&&shown(e.whos)&&occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+  for(const e of S.events) if(vis(e)&&shown(e.whos)){ if(occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
+    else if(!e.rpt&&e.time&&e.dur&&key>e.date){ const off=Math.round((kd(key)-kd(e.date))/DAYMS), end=toMin(e.time)+e.dur; if(end>off*1440) out.push({k:'ev',sort:'00:00',e,key,off}); } }
   for(const b of S.bills||[]) if(b.due===key&&['check','due','paid'].includes(b.status)) out.push({k:'ev',sort:'00:00',e:{id:'bl-'+b.id,title:(b.status==='paid'?'✅ ':b.directDebit?'💳 ':'🧾 ')+b.biller+' '+$m(b.amount)+(b.status==='paid'?' paid':b.directDebit?' direct debit':' due'),whos:[],date:key,time:''},key});
   for(const r of S.renewals||[]) if(r.due===key) out.push({k:'ev',sort:'00:00',e:{id:'rn-'+r.id,title:renewTitle(r)+' due',whos:[],date:key,time:''},key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
@@ -3480,7 +3482,7 @@ function openTodo(t){
   modal((m,close)=>{ const draw=()=>{
     m.innerHTML=`<h2>Job</h2><div class="step">What needs doing?</div><input class="txt" id="jIn" value="${esc(st.title)}">
     <div class="step">Whose job is it?</div>
-    <div class="opts"><button class="opt ${!st.who?'on':''}" data-who="">Anyone</button>${S.people.map(p=>`<button class="opt ${st.who===p.id?'on':''}" data-who="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
+    <div class="opts"><button class="opt ${!st.who?'on':''}" data-who="">Anyone</button>${S.people.filter(notChat).map(p=>`<button class="opt ${st.who===p.id?'on':''}" data-who="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`).join('')}</div>
     ${privCan()?`<div class="opts" style="margin-top:10px"><button class="opt ${st.priv?'on':''}" id="privBtn"><span class="tick">${st.priv?'✓':''}</span>🔒 Private: only I can see it</button></div>`:''}
     ${t.from&&person(t.from)?`<p class="note">Added by ${esc(nm(t.from))}${t.at?' · '+fmtD(new Date(t.at),{day:'numeric',month:'short'}):''}</p>`:''}
     <div class="mact"><button class="del" id="dBtn">Delete</button><button class="cancel" id="sch">📅 Put on calendar</button><button class="save" id="sBtn">Save</button></div>`;
@@ -3697,6 +3699,7 @@ function makeWheel(values,idx,onPick,cls,opt){
   requestAnimationFrame(()=>w.setTo(idx));
   return w;
 }
+const notChat=p=>!(p&&p.email&&(S.chatOnly||[]).includes(p.email));   // Nana, Pop: messages only, never on the calendar
 const toMin=hm=>{ const [h,m]=hm.split(':').map(Number); return h*60+m; };
 const fromMin=n=>{ n=((n%1440)+1440)%1440; return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); };
 const durTxt=n=>{ const h=Math.floor(n/60), m=n%60; return (h?h+' hr'+(h>1?'s':''):'')+(h&&m?' ':'')+(m?m+' min':''); };
@@ -3710,12 +3713,17 @@ function timePicker(box,st){
     if(!st.dur) st.dur=60;
     const area=box.querySelector('#tpArea');
     const endHM=()=>fromMin(toMin(st.time)+st.dur);
-    const lenTxt=()=>`${durTxt(st.dur)}${toMin(st.time)+st.dur>=1440?' · finishes the next day':''}`;
+    const endDay=()=>Math.floor((toMin(st.time)+st.dur)/1440);
+    const lenTxt=()=>{ const d=Math.floor(st.dur/1440), r=st.dur%1440; return d?(d+' day'+(d>1?'s':'')+(r?' '+durTxt(r):'')):durTxt(st.dur); };
+    const dayName=n=>st.date?fmtD(addDays(kd(st.date),n),{weekday:'short',day:'numeric',month:'short'}):(n?'+'+n+' day'+(n>1?'s':''):'');
     area.innerHTML=`<div class="tdial"><div class="tdl">Starts</div><div id="d0"></div></div>
-      <div class="tdial"><div class="tdl">Finishes</div><div id="d1"></div></div>
+      <div class="tdial tday"><div class="tdl">Finishes on</div><div class="opts" id="eDay">${[0,1,2,3].map(n=>`<button class="opt sm ${endDay()===n?'on':''}" data-ed="${n}">${n===0?'Same day':n===1?'Next day':n+' days later'}</button>`).join('')}${endDay()>3?`<button class="opt sm on" data-ed="${endDay()}">${esc(dayName(endDay()))}</button>`:''}<label class="opt sm" style="gap:6px">📅 <input type="date" id="eDate" style="border:none;background:none;font:inherit;width:9.5em" value="${st.date?dk(addDays(kd(st.date),endDay())):''}" ${st.date?`min="${st.date}"`:''}></label></div></div>
+      <div class="tdial"><div class="tdl">Finishes at</div><div id="d1"></div></div>
       <div class="tlen"><b id="lenTxt">${lenTxt()}</b><span class="tquick">${[30,60,90,120].map(n=>`<button class="opt sm ${st.dur===n?'on':''}" data-q="${n}">${durTxt(n)}</button>`).join('')}</span></div>
       <div class="note" style="margin-top:4px">Tap the hour or the minutes to type them.</div>`;
-    const refresh=()=>{ area.querySelector('#lenTxt').textContent=lenTxt(); area.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('on',+b.dataset.q===st.dur)); };
+    const refresh=()=>{ area.querySelector('#lenTxt').textContent=lenTxt(); area.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('on',+b.dataset.q===st.dur)); area.querySelectorAll('[data-ed]').forEach(b=>b.classList.toggle('on',+b.dataset.ed===endDay())); const ed=area.querySelector('#eDate'); if(ed&&st.date) ed.value=dk(addDays(kd(st.date),endDay())); };
+    // moving the finishing day keeps the finishing time
+    const setEndDay=n=>{ const clock=(toMin(st.time)+st.dur)%1440; let d=n*1440+clock-toMin(st.time); if(d<=0) d=n===0?d+1440:15; st.dur=d; draw(); };
     const dial=(el,get,set,which)=>{
       let [H,M]=get().split(':').map(Number);
       const put=()=>set(String(H).padStart(2,'0')+':'+String(M).padStart(2,'0'));
@@ -3743,7 +3751,9 @@ function timePicker(box,st){
     };
     let endDial=null;
     dial(area.querySelector('#d0'),()=>st.time,v=>{ st.time=v; if(endDial) endDial.set(endHM()); refresh(); },'start');    // moving the start keeps the length
-    endDial=dial(area.querySelector('#d1'),endHM,v=>{ let d=toMin(v)-toMin(st.time); if(d<=0) d+=1440; st.dur=d; refresh(); },'end');
+    endDial=dial(area.querySelector('#d1'),endHM,v=>{ const n=endDay(); let d=n*1440+toMin(v)-toMin(st.time); if(d<=0) d=n===0?d+1440:15; st.dur=d; refresh(); },'end');
+    area.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>setEndDay(+b.dataset.ed));
+    { const ed=area.querySelector('#eDate'); if(ed) ed.onchange=()=>{ if(!ed.value||!st.date) return; const n=Math.round((kd(ed.value)-kd(st.date))/DAYMS); if(n>=0&&n<=60) setEndDay(n); }; }
     area.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ st.dur=+b.dataset.q; if(endDial) endDial.set(endHM()); else draw(); refresh(); });
   };
   draw();
@@ -3798,7 +3808,7 @@ function openAdd(existing,onSaved,heading,opt){
     </div></div>
     <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
     const drawWho=()=>{ const b=m.querySelector('#whoBox');
-      b.innerHTML=S.people.concat(guestPeople()).map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
+      b.innerHTML=S.people.filter(notChat).concat(guestPeople()).map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
       b.querySelectorAll('[data-who]').forEach(x=>x.onclick=()=>{ const id=x.dataset.who; st.whos=st.whos.includes(id)?st.whos.filter(i=>i!==id):[...st.whos,id]; drawWho(); }); };
     const drawDays=()=>{ const b=m.querySelector('#dayBox');
       b.innerHTML=dayOpts.map(o=>`<button class="opt ${cur().date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
@@ -7793,7 +7803,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwuehh5r';
+const FS_VERSION='fs-mwuyea1e';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
