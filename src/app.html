@@ -583,7 +583,7 @@ details.how ol{margin:8px 0 2px 0;padding-left:22px;line-height:1.5}
 .rdrop{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;border:2.5px dashed #c9c1b2;border-radius:16px;padding:26px 14px;margin:6px 0 10px;cursor:pointer;background:var(--soft)}.rdrop b{font-size:19px}.rdrop span{font-size:14px;color:var(--muted)}.rdrop.over{border-color:#30a46c;background:#e6f6ec}
 .samt{display:inline-block;background:#fff1d6;color:#8a4b00;border-radius:7px;padding:0 6px;margin-left:2px;font-weight:800;font-size:.9em;white-space:nowrap}
 #chatHome{display:none}body.chatonly>.app,body.chatonly>.tabbar,body.chatonly>.pc-fab,body.chatonly>#spaceLayer,body.chatonly>#mealLayer{display:none!important}
-body.chatonly #chatHome{display:flex;flex-direction:column;gap:14px;align-items:stretch;max-width:460px;margin:0 auto;padding:28px 18px;text-align:center}#chatHome h1{margin:0;font-size:28px}#chatHome #chOut{padding:12px;border-radius:14px;font-size:17px}#chatHome .chbig{font-size:24px;padding:22px;border-radius:20px}#chatHome .chbig .mdot{position:static;display:inline-block;margin-left:6px}
+body.chatonly #chatHome{display:flex;flex-direction:column;gap:14px;align-items:stretch;max-width:460px;margin:0 auto;padding:28px 18px;text-align:center}#chatHome h1{margin:0;font-size:28px}#chatHome #chBack,#chatHome #chOut{padding:12px;border-radius:14px;font-size:17px}#chatHome .chbig{font-size:24px;padding:22px;border-radius:20px}#chatHome .chbig .mdot{position:static;display:inline-block;margin-left:6px}
 .wkgrid{display:grid;grid-template-columns:44px repeat(8,1fr);gap:3px;margin:2px 0 4px;font-size:12px;text-align:center;align-items:center}
 .wkgrid>b{font-weight:800;color:var(--muted);line-height:1.1}.wkgrid>b small{display:block;font-weight:600}.wkgrid>b.tod{color:var(--ink)}
 .wkl{font-size:16px;line-height:1}.wkl small{display:block;font-size:11px;font-weight:700;color:var(--muted)}
@@ -3023,7 +3023,7 @@ function openSettings(at){
     ${LOCAL?'':`<div class="step">Family accounts: these accounts can open Family Screen</div>
       ${SYNC.getMembers().map(e=>`<div class="prow"><span style="font-size:18px">${esc(e)}${e===SYNC.me()?' <span class="note">(you)</span>':''}${e===SYNC.getOwner()?' <span class="note">· set it up</span>':''}</span>${(S.chatOnly||[]).includes(e)?' <span class="note">· 💬 messages only</span>':SYNC.getLimited().includes(e)?' <span class="note">· 📅 calendar only</span>':''}</span>${e!==SYNC.me()&&e!==SYNC.getOwner()&&SYNC.me()===SYNC.getOwner()?`${e!==SYNC.getOwner()&&CONFIG&&CONFIG.admin&&SYNC.me()===CONFIG.admin.toLowerCase()?`<button class="xbtn" data-mown="${esc(e)}">🏠 Own household</button>`:''}<button class="xbtn" data-mlim="${esc(e)}">${SYNC.getLimited().includes(e)?'Give full access':'📅 Calendar only'}</button><button class="xbtn" data-mrm="${esc(e)}">Remove</button>`:''}</div>`).join('')}
       <div class="row" style="margin-top:10px"><input type="email" id="mIn" placeholder="e.g. reyna@gmail.com" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:300px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAdd">＋ Add account</button>${SYNC.me()===SYNC.getOwner()?'<button class="xbtn" id="mAddCal">＋ Add, 📅 calendar only</button>':''}</div>
-      ${SYNC.me()===SYNC.getOwner()?`<div class="row" style="margin-top:8px"><input id="mNm" placeholder="Their name, e.g. Nana" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:200px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAddChat">＋ Add, 💬 messages only</button></div><p class="note"><b>💬 Messages only</b> (grandparents, say): type their email address above and their name here. They get Messages, calls and photos with each of you and a family chat of their own with you (“Family + their names”), and nothing else: no calendar, lists, meals or bills. They sign in with Google, or with an email address they confirm.</p>`:''}
+      ${SYNC.me()===SYNC.getOwner()?`<div class="row" style="margin-top:8px"><input id="mNm" placeholder="Their name, e.g. Nana" style="border:2px solid var(--line);border-radius:12px;padding:10px;font-size:18px;width:200px;user-select:text;-webkit-user-select:text"><button class="xbtn" id="mAddChat">＋ Add, 💬 messages only</button><button class="xbtn" id="mSeeChat">👀 Preview their view</button></div><p class="note"><b>💬 Messages only</b> (grandparents, say): type their email address above and their name here. They get Messages, calls and photos with each of you and a family chat of their own with you (“Family + their names”), and nothing else: no calendar, lists, meals or bills. They sign in with Google, or with an email address they confirm.</p>`:''}
       ${SYNC.linkedPeople&&SYNC.linkedPeople().filter(p=>!(S.chatOnly||[]).includes(p.email)).length?`<div class="row small" style="gap:6px 14px;flex-wrap:wrap;margin:8px 0">💬 In our Family chat: ${SYNC.linkedPeople().filter(p=>!(S.chatOnly||[]).includes(p.email)).map(p=>`<label><input type="checkbox" data-fch="${esc(p.email)}" ${(S.chatOff||[]).includes(p.email)?'':'checked'}> ${esc(p.name)}</label>`).join('')}</div>
       <p class="note">Someone with their own household (linked by calendar) can message and call each of you one-to-one, and sees only the chats they are part of. Ticked, they are also in the Family chat from now on (not its earlier messages). A call to Family only rings this household.</p>`:''}
       <p class="note"><b>📅 Calendar only</b> accounts don’t need to confirm their email address when they sign in with email and password. It lets someone see and add calendar entries (and Reyna’s roster) and get reminders, and gives them their own separate jobs, shopping list and meal plan that nobody else sees. They don’t see the family’s jobs, shopping, meals, bills, documents or Settings, and see only the chats they are part of. The database enforces it, not just the screen. After adding someone, they open Family Screen on their phone and sign in: with Google for a Gmail address, or with “Sign in with email” for Outlook, iCloud or any other address (the first time, they tap “Create my password” and confirm the address from the email they get).</p>
@@ -3111,6 +3111,7 @@ function openSettings(at){
     m.querySelectorAll('[data-sgo]').forEach(b=>b.onclick=()=>{ const t=m.querySelector('#s-'+b.dataset.sgo); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); });
     if(!LOCAL){ wireHealth(m,draw,close); wireBillSetup(m,draw); wireInboxSetup(m,draw); }
     if(!LOCAL){
+      { const sc=m.querySelector('#mSeeChat'); if(sc) sc.onclick=()=>{ close(); chatPreview=true; document.body.classList.add('chatonly'); renderChatHome(); }; }
       const mch=m.querySelector('#mAddChat'); if(mch) mch.onclick=async()=>{ const v=m.querySelector('#mIn').value.trim().toLowerCase(), nmv=m.querySelector('#mNm').value.trim();
         if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ toast('Type their full email address in the box above'); return; } if(!nmv){ toast('Type their name, e.g. Nana'); return; }
         if(SYNC.getMembers().includes(v)&&!SYNC.getLimited().includes(v)){ toast('That account already has full access'); return; }
@@ -3141,21 +3142,22 @@ const SET_SECS=[['health','🩺 Health'],['family','👪 Family'],['mail','✉�
    household of its own behind the scenes; all it ever sees is this card and Messages. */
 // signed in but not confirmed yet: it would land in the other family's record as calendar-only, which it may not read
 const chatOnlyWait=()=>!!(SYNC.isLimited&&SYNC.isLimited()&&(S.chatOnly||[]).includes(SYNC.me()));
-let chatOnlyOpened=false;
+let chatOnlyOpened=false, chatPreview=false;
 function applyChatOnly(){
   if(chatOnlyWait()){ SYNC.stop(); gate('verify'); return; }
   const on=!!(SYNC.chatOnlyMe&&SYNC.chatOnlyMe()); if(on) lsSet('fs.chatonly','1'); else if(SYNC.guestsReady&&SYNC.guestsReady()) lsSet('fs.chatonly','');   // remembered, so the full app never flashes up while the linked family loads
-  const show=on||lsGet('fs.chatonly','')==='1'; document.body.classList.toggle('chatonly',show); if(!show) return;
+  const show=on||chatPreview||lsGet('fs.chatonly','')==='1'; document.body.classList.toggle('chatonly',show); if(!show) return;
   renderChatHome(); if(on&&!chatOnlyOpened&&!$('#layer').innerHTML&&mePerson()){ chatOnlyOpened=true; msgAs=mePerson(); openMsgs(); } }
 function renderChatHome(){ let el=$('#chatHome'); if(!el){ el=document.createElement('div'); el.id='chatHome'; document.body.appendChild(el); }
   const st=alertsState(), un=typeof msgUnreadAll==='function'&&mePerson()?msgUnreadAll():0;
   el.innerHTML=`<h1>👪 Family Screen</h1><p class="note">${esc(SYNC.me()||'')}</p>
     <button class="save chbig" id="chMsg">✉️ Messages${un?` <i class="mdot">${un}</i>`:''}</button>
     <div class="hlth ${st?'warn':''}"><h4>🔔 Alerts for messages and calls</h4>${st==='off'?`<button class="save" id="chAl">Turn on alerts</button>`:st==='blocked'?`<p class="note">Alerts are blocked in this phone’s settings.</p>`:st==='ios'?`<p class="note">On an iPhone, add Family Screen to the Home Screen first: tap Share, then “Add to Home Screen”, and open it from there.</p>`:`<p class="note">✓ Alerts are on</p>`}</div>
-    <button class="cancel" id="chOut">Sign out</button>`;
+    ${chatPreview?`<p class="note">👀 Preview: this is all a messages-only person sees. Their chat list shows only you, Reyna, Aria and the “Family + …” chat.</p><button class="cancel" id="chBack">← Back to the full app</button>`:`<button class="cancel" id="chOut">Sign out</button>`}`;
+  { const bk=el.querySelector('#chBack'); if(bk) bk.onclick=()=>{ chatPreview=false; document.body.classList.remove('chatonly'); renderAll(); }; }
   el.querySelector('#chMsg').onclick=()=>{ msgAs=mePerson(); openMsgs(); };
   const al=el.querySelector('#chAl'); if(al) al.onclick=async()=>{ al.disabled=true; await turnOnPush(); setTimeout(renderChatHome,900); };
-  el.querySelector('#chOut').onclick=async()=>{ lsSet('fs.chatonly',''); await SYNC.signOut(); }; }
+  if(el.querySelector('#chOut')) el.querySelector('#chOut').onclick=async()=>{ lsSet('fs.chatonly',''); await SYNC.signOut(); }; }
 function applyLimited(){ const on=!!(SYNC.isLimited&&SYNC.isLimited()), was=document.body.classList.contains('limited');
   document.body.classList.toggle('limited',on); if(on&&!was){ setTab('cal',true); renderAll(); } else if(!on&&was) renderAll(); }
 function openLimitedSettings(){ modal((m,close)=>{ const draw=()=>{ const st=alertsState();
