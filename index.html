@@ -304,6 +304,7 @@ body.simple{overflow:hidden}
 .when{display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:center}.when .wl{font-weight:800;color:var(--muted);font-size:18px}
 .when .wr{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.when input[type=date],.when .tsel{font:inherit;font-size:20px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;min-height:52px}
 .when .tsel{min-width:9em}.when .wck{display:flex;gap:8px;align-items:center;font-size:19px}.when .wck input{width:24px;height:24px}.when .wlen{font-weight:800;margin-left:auto}.when .wq{gap:6px}
+.fw-sel.off{background:#e5e7eb88;border-color:#9ca3af;color:#6b7280;border-style:dashed}
 .fw-sel{position:absolute;left:3px;right:3px;background:#7cc4ff88;border:2px solid #2b8be6;border-radius:8px;pointer-events:none;z-index:5;font-weight:800;font-size:13px;padding:2px 6px;color:#0b4a85}
 .tday .opts{flex-wrap:wrap;gap:6px}.tday .tdl{min-width:78px}
 .tlen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0 90px;font-size:18px}
@@ -3209,7 +3210,10 @@ function slotDrag(col,pxHour,keyOf){ if(col._sd) return; col._sd=1;
     if(!st.days){ put(col,st.a,st.b,label); return; }
     put(col,st.a,1440,label); for(let i=i0+1;i<i1;i++) put(l[i],0,1440); if(l[i1]&&i1>i0) put(l[i1],0,st.b); };
   const stop=()=>{ clearTimeout(hold); hold=null; clear(); st=null; };
-  const move=(x,y)=>{ const c=colAt(x), l=sib(); let days=Math.round((kd(keyAt(c))-kd(keyAt(col)))/DAYMS); if(days<0){ days=0; } const m=days?minAt(c,y):minAt(col,y);
+  // dragged off the calendar: let go there and nothing is added
+  const area=()=>col.closest('.fw-scroll,.pw-scroll,.tl')||col.parentElement;
+  const outside=(x,y)=>{ const r=area().getBoundingClientRect(); return x<r.left-4||x>r.right+4||y<r.top-4||y>r.bottom+4; };
+  const move=(x,y)=>{ st.x=x; st.y=y; if(outside(x,y)){ st.off=true; boxes.forEach((b,i)=>{ b.classList.add('off'); b.textContent=i?'':'Let go to cancel'; }); return; } st.off=false; const c=colAt(x), l=sib(); let days=Math.round((kd(keyAt(c))-kd(keyAt(col)))/DAYMS); if(days<0){ days=0; } const m=days?minAt(c,y):minAt(col,y);
     st.c=days?c:col; st.days=days; st.b=days?Math.max(15,Math.ceil(m/15)*15):(m<=st.a?st.a+15:Math.ceil(m/15)*15); draw(); };
   col.addEventListener('pointerdown',e=>{ if(e.target!==col||e.button>0) return; const a=Math.floor(minAt(col,e.clientY)/15)*15; stop();
     const go=()=>{ st={a,b:a+60,days:0,c:col,on:true}; try{ col.setPointerCapture(e.pointerId); }catch(_){} draw(); try{ navigator.vibrate&&navigator.vibrate(15); }catch(_){} };
@@ -3218,7 +3222,7 @@ function slotDrag(col,pxHour,keyOf){ if(col._sd) return; col._sd=1;
     if(st.mouse&&!st.on){ if(Math.abs(e.clientY-st.y0)<pxHour/4&&Math.abs(e.clientX-st.x0)<20) return; st.on=true; try{ col.setPointerCapture(e.pointerId); }catch(_){} } move(e.clientX,e.clientY);
     { const sc=col.closest('.fw-scroll,.pw-scroll,.tlwrap')||col.parentElement.closest('[class*=scroll]'); if(sc){ const r=sc.getBoundingClientRect(); if(e.clientY>r.bottom-40) sc.scrollTop+=14; else if(e.clientY<r.top+40) sc.scrollTop-=14; } } });   // scroll the grid when the drag reaches its edge
   col.addEventListener('touchmove',e=>{ if(st&&st.on) e.preventDefault(); },{passive:false});
-  col.addEventListener('pointerup',()=>{ clearTimeout(hold); hold=null; if(!st||!st.on){ st=null; return; } const a=st.a, dur=Math.max(15,st.days*1440+st.b-st.a); stop(); col._dragged=Date.now();
+  col.addEventListener('pointerup',e=>{ clearTimeout(hold); hold=null; if(!st||!st.on){ st=null; return; } if(st.off||outside(e.clientX,e.clientY)){ stop(); col._dragged=Date.now(); toast('Cancelled'); return; } const a=st.a, dur=Math.max(15,st.days*1440+st.b-st.a); stop(); col._dragged=Date.now();
     openAdd({date:keyAt(col),time:fromMin(a),dur}); });
   col.addEventListener('pointercancel',stop); col.addEventListener('contextmenu',e=>{ if(e.target===col) e.preventDefault(); }); }
 function wireTimeline(box,key){
@@ -7864,7 +7868,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwuzdjd5';
+const FS_VERSION='fs-mwuzf1y6';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
