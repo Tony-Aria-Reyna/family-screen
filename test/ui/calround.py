@@ -26,8 +26,7 @@ async def main():
         vis=await P.evaluate("(()=>{ const b=document.querySelector('#sBtn').getBoundingClientRect(); return b.bottom<=innerHeight&&b.top>=0; })()")
         print('3 Save button visible without scrolling:', vis)
         await P.screenshot(path='/tmp/c_form.png')
-        await P.locator('#d0 .wheel').nth(1).locator('.wi.sel').click(); await P.wait_for_timeout(300)
-        print('4 tap minutes focuses minutes:', await P.evaluate("document.activeElement&&document.activeElement.className"))
+        print('4 start and end shown as date + time:', await P.evaluate("[document.querySelector('#wsD').value,document.querySelector('#wsT').value,document.querySelector('#weD').value,document.querySelector('#weT').value].join(' ')"))
         await P.evaluate("closeModal()")
         ev=await P.evaluate("JSON.stringify(clashesFor({date:dk(addDays(new Date(),1)),time:'15:30',dur:60,whos:['p1']}).map(c=>c.who.name+':'+c.e.title))"); print('5 clash found:', ev)
         # drag Dentist to the next day at about 2pm with the mouse

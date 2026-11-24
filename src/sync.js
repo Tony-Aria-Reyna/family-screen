@@ -148,13 +148,14 @@ export const setHiddenG = l => { try { localStorage.setItem('fs.hiddenG', JSON.s
 const gLabel = G => { const o = (G.people || []).find(p => p.email && p.email === G.owner); return o ? o.name + '’s family' : 'Other family'; };
 export function guestPeople() {
   const out = [];
-  for (const g of guestIds) { const G = guests[g]; if (!G || !G.people) continue;
+  for (const g of guestIds) { const G = guests[g]; if (!G || !G.people) continue; if (gChatOnly(G)) continue;   // Nana's or Pop's own little household: messages only, never on the calendar
     for (const p of G.people) { if (p.email && S && S.people.some(q => q.email === p.email)) continue;
       out.push({ id: gId(g, p.id), name: p.id === 'all' ? gLabel(G) : p.name, color: p.color, show: !hiddenG().includes(gId(g, p.id)), guest: g, traveller: !!p.traveller, email: p.email || '', family: gLabel(G) }); } }
   return out;
 }
 export const guestPerson = id => isG(id) ? guestPeople().find(p => p.id === id) : undefined;
-export const guestFamilies = () => guestIds.filter(g => guests[g] && guests[g].people).map(g => ({ id: g, label: gLabel(guests[g]) }));
+const gChatOnly = G => !!(S && G.owner && (S.chatOnly || []).includes(G.owner));
+export const guestFamilies = () => guestIds.filter(g => guests[g] && guests[g].people && !gChatOnly(guests[g])).map(g => ({ id: g, label: gLabel(guests[g]) }));
 const whoIn = (g, pid) => { const G = guests[g], fp = G && (G.people || []).find(p => p.id === pid), lp = fp && fp.email && S.people.find(q => q.email === fp.email); return lp ? lp.id : gId(g, pid); };
 function whoOut(g, id) {
   if (isG(id)) return gOf(id) === g ? rawOf(id) : null;

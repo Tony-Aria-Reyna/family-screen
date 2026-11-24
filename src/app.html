@@ -300,6 +300,10 @@ body.simple{overflow:hidden}
 .tdial .wheel{height:150px}.tdial .wheel .pad,.tdial .wi{height:50px}.tdial .wheels:before{height:50px;margin-top:-25px}
 .tdial .wi{font-size:24px}.tdial .wi.sel{font-size:34px}
 .tdial .typed input{width:74px;height:58px;font-size:32px}
+.when{display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:center}.when .wl{font-weight:800;color:var(--muted);font-size:18px}
+.when .wr{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.when input[type=date],.when .tsel{font:inherit;font-size:20px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;min-height:52px}
+.when .tsel{min-width:9em}.when .wck{display:flex;gap:8px;align-items:center;font-size:19px}.when .wck input{width:24px;height:24px}.when .wlen{font-weight:800;margin-left:auto}.when .wq{gap:6px}
+.fw-sel{position:absolute;left:3px;right:3px;background:#7cc4ff88;border:2px solid #2b8be6;border-radius:8px;pointer-events:none;z-index:5;font-weight:800;font-size:13px;padding:2px 6px;color:#0b4a85}
 .tday .opts{flex-wrap:wrap;gap:6px}.tday .tdl{min-width:78px}
 .tlen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 0 90px;font-size:18px}
 .tquick{display:flex;gap:6px;flex-wrap:wrap}
@@ -1416,12 +1420,28 @@ function timelineHTML(key){
     scrollTo: isToday?Math.max(0,(nm_/60-1.5)*HOUR):Math.max(0,((timed[0]?timed[0].s:7*60)/60-0.75)*HOUR)
   };
 }
+/* Click (or hold, on a touch screen) on an empty part of a day and drag down to pick the time, like Outlook. A plain tap still adds a one-hour entry. */
+function slotDrag(col,pxHour,keyOf){ if(col._sd) return; col._sd=1;
+  let st=null, hold=null, box=null;
+  const minAt=y=>{ const r=col.getBoundingClientRect(); return Math.max(0,Math.min(1440,Math.round((y-r.top)/pxHour*4)*15)); };
+  const draw=(a,b)=>{ const s=Math.min(a,b), e=Math.max(a,b,s+15); if(!box){ box=document.createElement('div'); box.className='fw-sel'; col.appendChild(box); } box.style.top=(s/60*pxHour)+'px'; box.style.height=((e-s)/60*pxHour)+'px'; box.textContent=t12(fromMin(s))+' – '+t12(fromMin(e%1440)); };
+  const stop=()=>{ clearTimeout(hold); hold=null; if(box){ box.remove(); box=null; } st=null; };
+  col.addEventListener('pointerdown',e=>{ if(e.target!==col||e.button>0) return; const a=Math.floor(minAt(e.clientY)/15)*15; stop();
+    const go=()=>{ st={a,b:a+60,on:true}; try{ col.setPointerCapture(e.pointerId); }catch(_){} draw(st.a,st.b); try{ navigator.vibrate&&navigator.vibrate(15); }catch(_){} };
+    if(e.pointerType==='mouse') st={a,b:a,on:false,mouse:true}; else hold=setTimeout(go,350); });
+  col.addEventListener('pointermove',e=>{ if(hold&&e.pointerType!=='mouse'&&(Math.abs(e.movementY)>4)){ clearTimeout(hold); hold=null; return; } if(!st) return;
+    const b=minAt(e.clientY); if(st.mouse&&!st.on){ if(Math.abs(b-st.a)<15) return; st.on=true; try{ col.setPointerCapture(e.pointerId); }catch(_){} } st.b=b<=st.a?st.a+15:Math.ceil(b/15)*15; draw(st.a,st.b); });
+  col.addEventListener('touchmove',e=>{ if(st&&st.on) e.preventDefault(); },{passive:false});
+  col.addEventListener('pointerup',()=>{ clearTimeout(hold); hold=null; if(!st||!st.on){ st=null; return; } const a=st.a, b=st.b; stop(); col._dragged=Date.now();
+    openAdd({date:keyOf(),time:fromMin(a),dur:Math.max(15,b-a)}); });
+  col.addEventListener('pointercancel',stop); col.addEventListener('contextmenu',e=>{ if(e.target===col) e.preventDefault(); }); }
 function wireTimeline(box,key){
   box.querySelectorAll('[data-ev]').forEach(b=>{ b.onclick=()=>{ const ev=S.events.find(x=>x.id===b.dataset.ev); if(!ev){ virtualOpen(b.dataset.ev); return; } openEvent(ev,b.dataset.occ); }; movable(b,S.events.find(x=>x.id===b.dataset.ev),b.dataset.occ); });
   box.querySelectorAll('[data-fl]').forEach(b=>b.onclick=()=>openFlight(S.flights.find(x=>x.id===b.dataset.fl)));
   box.querySelectorAll('[data-where]').forEach(b=>b.onclick=()=>{ if(isPhone()) setTab('where'); else openGlobe(); });
   const tl=box.querySelector('.tl');
-  if(tl) tl.onclick=e=>{ if(e.target!==tl&&!e.target.classList.contains('tl-h')) return; const r=tl.getBoundingClientRect(), m=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HOUR*4)*15));
+  if(tl) slotDrag(tl,HOUR,()=>key);
+  if(tl) tl.onclick=e=>{ if(tl._dragged&&Date.now()-tl._dragged<500) return; if(e.target!==tl&&!e.target.classList.contains('tl-h')) return; const r=tl.getBoundingClientRect(), m=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HOUR*4)*15));
     openAdd({date:key,time:String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}); };
 }
 // week view: a red "now" line in today's column, between what's been and what's still to come
@@ -1547,7 +1567,8 @@ function renderCal(){
       <div class="fw-scroll"><div class="fw-grid" style="height:${24*FW}px">${hours}<div class="fw-cols">${cols}</div>${hasToday?`<div class="fw-nowlbl" style="top:${nmin/60*FW}px"><span>${fmtTime(now,'Pacific/Auckland')}</span></div>`:''}</div></div></div>`;
     const sc=cal.querySelector('.fw-scroll'); sc.scrollTop=st!=null?st:Math.max(0,((hasToday?nmin-120:Math.min(first,7*60)-30)/60)*FW);
     cal.querySelectorAll('[data-fday]').forEach(b=>b.onclick=()=>openFridgeDay(b.dataset.fday));
-    cal.querySelectorAll('[data-fwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/FW*4)*15));
+    cal.querySelectorAll('[data-fwcol]').forEach(c=>slotDrag(c,FW,()=>c.dataset.fwcol));
+    cal.querySelectorAll('[data-fwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c||(c._dragged&&Date.now()-c._dragged<500)) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/FW*4)*15));
       openAdd({date:c.dataset.fwcol,time:String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0')}); });
   } else {
     const t=new Date(), first=new Date(t.getFullYear(),t.getMonth()+monthOff,1), start=monday(first), mon=first.getMonth();
@@ -1931,6 +1952,34 @@ const fromMin=n=>{ n=((n%1440)+1440)%1440; return String(Math.floor(n/60)).padSt
 const durTxt=n=>{ const h=Math.floor(n/60), m=n%60; return (h?h+' hr'+(h>1?'s':''):'')+(h&&m?' ':'')+(m?m+' min':''); };
 // next whole hour (between 7am and 8pm) for a new entry
 function defaultTime(){ const h=new Date().getHours()+1; return String(Math.min(20,Math.max(7,h))).padStart(2,'0')+':00'; }
+/* Start and end, each a date and a time (like Outlook). Changing the start keeps the length; changing the end changes it.
+   c holds date (start day), time ('' = all day) and dur (minutes). */
+const TIMES=Array.from({length:96},(_,i)=>fromMin(i*15));
+function whenPicker(box,c){
+  const draw=()=>{
+    const timed=!!c.time; if(timed&&!c.dur) c.dur=60;
+    const sMin=timed?toMin(c.time):0, endAbs=sMin+(c.dur||0), endDate=dk(addDays(kd(c.date),Math.floor(endAbs/1440))), endT=fromMin(endAbs);
+    const sel=(id,v)=>`<select id="${id}" class="tsel">${(TIMES.includes(v)?TIMES:TIMES.concat(v).sort()).map(t=>`<option value="${t}" ${t===v?'selected':''}>${t12(t)}</option>`).join('')}</select>`;
+    const len=()=>{ const d=Math.floor(c.dur/1440), r=c.dur%1440; return d?d+' day'+(d>1?'s':'')+(r?' '+durTxt(r):''):durTxt(c.dur); };
+    box.innerHTML=`<div class="when">
+      <div class="wl">Starts</div><div class="wr"><input type="date" id="wsD" value="${c.date}">${timed?sel('wsT',c.time):''}</div>
+      ${timed?`<div class="wl">Ends</div><div class="wr"><input type="date" id="weD" value="${endDate}" min="${c.date}">${sel('weT',endT)}</div>`:''}
+      <div></div><div class="wr"><label class="wck"><input type="checkbox" id="wAll" ${timed?'':'checked'}> All day</label>${timed?`<span class="wlen">${esc(len())}</span>`:''}</div>
+      ${timed?`<div></div><div class="wr wq">${[30,60,90,120].map(n=>`<button class="opt sm ${c.dur===n?'on':''}" data-q="${n}">${durTxt(n)}</button>`).join('')}</div>`:''}
+      <div></div><div class="wr wq"><button class="opt sm" data-dq="0">Today</button><button class="opt sm" data-dq="1">Tomorrow</button></div></div>`;
+    const q=x=>box.querySelector(x);
+    q('#wsD').onchange=e=>{ if(e.target.value){ c.date=e.target.value; draw(); } };
+    q('#wAll').onchange=e=>{ if(e.target.checked) c.time=''; else { c.time=defaultTime(); c.dur=c.dur||60; } draw(); };
+    box.querySelectorAll('[data-dq]').forEach(b=>b.onclick=()=>{ c.date=dk(addDays(new Date(),+b.dataset.dq)); draw(); });
+    if(!timed) return;
+    q('#wsT').onchange=e=>{ c.time=e.target.value; draw(); };   // the length stays, so the end moves with it
+    const setEnd=()=>{ const ed=q('#weD').value||endDate, et=q('#weT').value; const n=Math.round((kd(ed)-kd(c.date))/DAYMS); let d=n*1440+toMin(et)-toMin(c.time);
+      if(d<=0){ if(n<=0) d+=1440; else d=15; } c.dur=d; draw(); };
+    q('#weD').onchange=setEnd; q('#weT').onchange=setEnd;
+    box.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{ c.dur=+b.dataset.q; draw(); });
+  };
+  draw();
+}
 function timePicker(box,st){
   const draw=()=>{
     box.innerHTML=`<div class="opts" style="margin-bottom:10px"><button class="opt ${st.time?'on':''}" data-allday="0">Set a time</button><button class="opt ${!st.time?'on':''}" data-allday="1">All day</button></div><div id="tpArea"></div>`;
@@ -2026,17 +2075,16 @@ function openAdd(existing,onSaved,heading,opt){
     <div><div class="step">📍 Where? <span style="font-weight:500">(optional)</span></div><div class="row addrrow" style="flex-wrap:nowrap"><input class="txt" id="evAddr" value="${esc(st.addr)}" placeholder="Start typing an address or place" autocomplete="off"><div class="addrlist" id="addrList" hidden></div>${st.addr?`<a class="xbtn navbtn" href="${navUrl(st.addr)}" target="_blank" rel="noopener">🧭 Go</a>`:''}</div></div></div>
     <div class="addgrid"><div>
     <div class="step">2. Who is it for? <span style="font-weight:500">Tap everyone who's going</span></div><div class="opts" id="whoBox"></div>
-    <div class="step">3. Which day?</div><div class="opts" id="dayBox"></div>
     ${canRepeat?'<div class="step">Does it repeat?</div><div id="rptBox"></div>':''}
     ${privCan()?'<div class="opts" style="margin-top:10px"><button class="opt" id="privBtn"></button></div>':''}
     </div><div>
-    <div class="step">4. What time, and how long?</div>${AWAY_TZ?`<div class="opts" id="zoneBox" style="margin-bottom:6px"><button class="opt sm" data-zone="nz">🇳🇿 NZ time</button><button class="opt sm" data-zone="here">📍 ${esc(HERE)} time</button></div><div class="nzwarn" id="zoneEq"></div>`:''}<div id="timeBox"></div>
+    <div class="step">3. When?</div>${AWAY_TZ?`<div class="opts" id="zoneBox" style="margin-bottom:6px"><button class="opt sm" data-zone="nz">🇳🇿 NZ time</button><button class="opt sm" data-zone="here">📍 ${esc(HERE)} time</button></div><div class="nzwarn" id="zoneEq"></div>`:''}<div id="timeBox"></div>
     </div></div>
     <div class="mact">${isNew?'':'<button class="del" id="dBtn">Delete</button>'}${!isNew&&existing.todoId&&!existing.done?'<button class="cancel" id="doneBtn">✓ Job done</button>':''}<button class="cancel" id="cBtn">Cancel</button><button class="save" id="sBtn">${isNew?'Add it':'Save'}</button></div>`;
     const drawWho=()=>{ const b=m.querySelector('#whoBox');
       b.innerHTML=S.people.filter(notChat).concat(guestPeople()).map(p=>{ const on=st.whos.includes(p.id); return `<button class="opt ${on?'on':''}" data-who="${p.id}"><span class="tick">${on?'✓':''}</span><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</button>`; }).join('');
       b.querySelectorAll('[data-who]').forEach(x=>x.onclick=()=>{ const id=x.dataset.who; st.whos=st.whos.includes(id)?st.whos.filter(i=>i!==id):[...st.whos,id]; drawWho(); }); };
-    const drawDays=()=>{ const b=m.querySelector('#dayBox');
+    const drawDays=()=>{ const b=m.querySelector('#dayBox'); if(!b) return;
       b.innerHTML=dayOpts.map(o=>`<button class="opt ${cur().date===o[0]?'on':''}" data-day="${o[0]}">${o[1]}</button>`).join('')+`<label class="opt" style="display:flex;align-items:center;gap:8px">📅 Other <input type="date" id="dIn" style="font-size:19px;border:0;background:none"></label>`;
       b.querySelectorAll('[data-day]').forEach(x=>x.onclick=()=>{ cur().date=x.dataset.day; drawDays(); });
       b.querySelector('#dIn').onchange=e=>{ if(e.target.value){ cur().date=e.target.value; ensure(); drawDays(); } }; };
@@ -2048,12 +2096,12 @@ function openAdd(existing,onSaved,heading,opt){
     const eqT=zq?setInterval(eq,400):null;
     if(zb) zb.querySelectorAll('[data-zone]').forEach(b=>b.onclick=()=>{ const z=b.dataset.zone; if(z===st.zone) return;
       if(z==='here'){ const h=nzToHere(st.date,st.time); vs.date=h.date; vs.time=h.time; vs.dur=st.dur; vs.typing=false; } else syncNz();
-      st.zone=z; buildDays(); ensure(); drawDays(); drawZone(); timePicker(m.querySelector('#timeBox'),cur()); eq(); });
+      st.zone=z; drawZone(); whenPicker(m.querySelector('#timeBox'),cur()); eq(); });
     drawZone();
     const pb=m.querySelector('#privBtn'), drawPriv=()=>{ if(!pb) return; pb.classList.toggle('on',st.priv); pb.innerHTML=`<span class="tick">${st.priv?'✓':''}</span>🔒 Private: only I can see it`; };
     if(pb) pb.onclick=()=>{ st.priv=!st.priv; drawPriv(); }; drawPriv();
     const ap=m.querySelector('#addPdf'); if(ap) ap.onclick=()=>{ close(); requirePin(()=>pickRosterPdf()); };
-    drawWho(); drawDays(); timePicker(m.querySelector('#timeBox'),cur()); if(typeof eq==='function') eq(); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
+    drawWho(); whenPicker(m.querySelector('#timeBox'),cur()); if(typeof eq==='function') eq(); if(canRepeat) repeatPicker(m.querySelector('#rptBox'),st);
     const ti=m.querySelector('#evTitle'); ti.oninput=()=>st.title=ti.value;
     const ad=m.querySelector('#evAddr'); addrSearch(ad,m.querySelector('#addrList'),v=>st.addr=v);
     m.querySelector('#cBtn').onclick=close;
@@ -3507,7 +3555,8 @@ function renderPWeek(el){
   $('#pcToday').onclick=()=>{ pSel=dk(new Date()); pMonth=null; pwScroll=null; renderPCal(); updateFab(); };
   $('#pwDPrev').onclick=e=>{ e.stopPropagation(); pick(dk(addDays(kd(pSel),-1))); }; $('#pwDNext').onclick=e=>{ e.stopPropagation(); pick(dk(addDays(kd(pSel),1))); };
   el.querySelectorAll('[data-pwd]').forEach(b=>b.onclick=()=>{ if(suppressClick) return; pick(b.dataset.pwd); });
-  el.querySelectorAll('[data-pwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c||suppressClick) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HW*4)*15));
+  el.querySelectorAll('[data-pwcol]').forEach(c=>slotDrag(c,HW,()=>c.dataset.pwcol));
+  el.querySelectorAll('[data-pwcol]').forEach(c=>c.onclick=e=>{ if(e.target!==c||suppressClick||(c._dragged&&Date.now()-c._dragged<500)) return; const r=c.getBoundingClientRect(), mm=Math.max(0,Math.min(1425,Math.floor((e.clientY-r.top)/HW*4)*15));
     openAdd({date:c.dataset.pwcol,time:String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0')}); });
   // slide the day panel with a finger, then settle on the nearest stop (a quick flick moves one stop)
   const ORDER=['top','split','low'];
