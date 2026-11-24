@@ -1266,11 +1266,14 @@ function openMsgs(th){
           if(x.call) return sep+`<div class="mcall ${x.call.ok?'':'miss'}">${x.call.kind==='video'?'🎥':'📞'} ${esc(x.call.ok?(x.call.kind==='video'?'Video call':'Voice call')+' · '+callDur(x.call.dur):mine?'No answer':'Missed '+(x.call.kind==='video'?'video':'voice')+' call')} <small>${msgTime(x.at).replace(/^.* /,'')}</small>${x.call.ok?'':`<button class="cancel" data-cb="${x.call.kind==='video'?'video':'audio'}">${mine?'Call again':'Call back'}</button>`}</div>`;
           const pic=x.pic&&/^[\w-]+$/.test(x.pic.id||'')?`<span class="mpic" data-pic="${x.pic.id}" data-pg="${/^[\w-]+$/.test(x.g||'')?x.g:''}" style="aspect-ratio:${Math.max(1,+x.pic.w||4)}/${Math.max(1,+x.pic.h||3)};${picTiny(x.pic.t)?`background-image:url(${picTiny(x.pic.t)})`:''}">${picUrls[x.pic.id]?`<img src="${picUrls[x.pic.id]}" alt="Photo">`:''}</span>`:'';
           return sep+`<div class="mb ${mine?'me':''}">${!mine&&fam?`<small class="mfrom" style="color:${col(x.from)};filter:brightness(.6)">${esc(nm(x.from))}</small>`:''}${pic}${pic&&x.text==='📷 Photo'?'':`<span class="mtxt" ${mine?'':`style="background:${col(x.from)}"`}>${esc(x.text)}</span>`}<small class="mat">${msgTime(x.at).replace(/^.* /,'')}${mine&&!fam&&(x.seen||[]).includes(other)?' · Seen':''}</small></div>`; }).join(''):'<p class="note" style="text-align:center;margin-top:30px">No messages yet. Say hello 👋</p>'}</div>
-        <form class="msend" id="mf"><button type="button" class="cancel" id="mpB" aria-label="Send a photo">📷</button><input type="file" id="mpC" accept="image/*" capture="environment" hidden><input type="file" id="mpP" accept="image/*" multiple hidden><input id="mi" placeholder="Message" autocomplete="off" maxlength="600">${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
+        <form class="msend" id="mf"><button type="button" class="cancel" id="mpB" aria-label="Send a photo">📷</button><input type="file" id="mpC" accept="image/*" capture="environment" hidden><input type="file" id="mpP" accept="image/*" multiple hidden><textarea id="mi" rows="1" placeholder="Message" autocomplete="off" maxlength="600" enterkeyhint="send"></textarea>${SR?'<button type="button" class="cancel" id="mic" aria-label="Speak">🎤</button>':''}<button class="save" id="ms" aria-label="Send">➤</button></form>`;
       const box=m.querySelector('#mb'); box.scrollTop=box.scrollHeight;
       m.querySelector('#x').onclick=shut; m.querySelector('#bk').onclick=()=>{ msgOpen.th=null; draw(); };
       const inp=m.querySelector('#mi'), go=txt=>{ msgSend(me,t,txt); draw(); };
       m.querySelector('#mf').onsubmit=e=>{ e.preventDefault(); if(inp.value.trim()) go(inp.value); };
+      // the box grows with the message (up to about 5 lines, then scrolls); Enter sends on a keyboard, Shift+Enter for a new line
+      const fit=()=>{ inp.style.height='auto'; inp.style.height=Math.min(inp.scrollHeight+4,160)+'px'; }; inp.addEventListener('input',fit); setTimeout(fit,0);
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!matchMedia('(pointer:coarse)').matches){ e.preventDefault(); m.querySelector('#mf').requestSubmit(); } });
       m.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>go(MSG_QUICK[+b.dataset.q]));
       { const C=m.querySelector('#mpC'), P=m.querySelector('#mpP'); m.querySelector('#mpB').onclick=()=>matchMedia('(pointer:coarse)').matches?photoChoice(C,P):P.click();
         C.onchange=P.onchange=e=>{ const fs=[...(e.target.files||[])]; e.target.value=''; if(fs.length) msgSendPics(me,t,fs); };
@@ -1292,7 +1295,7 @@ function msgRefresh(){
   const who=msgWho(), fresh=msgAll().filter(m=>m.at>msgSeenAt&&!who.includes(m.from)&&who.some(id=>msgMine(m,id))&&!who.every(id=>(m.seen||[]).includes(id))).sort((a,b)=>a.at-b.at);
   if(fresh.length){ const last=fresh[fresh.length-1]; msgSeenAt=last.at;
     if(!(msgOpen&&msgOpen.th===last.th)){ const h=new Date().getHours(); if(isPhone()||(h>=7&&h<21)) msgChime(); toast('💬 '+nm(last.from)+': '+last.text.slice(0,80)); if(typeof saverOff==='function') saverOff(); } }
-  if(msgOpen&&msgOpen.draw){ const i=document.querySelector('#msgBox #mi'), v=i?i.value:'', f=i&&document.activeElement===i; msgOpen.draw(); const j=document.querySelector('#msgBox #mi'); if(j&&v){ j.value=v; } if(j&&f) j.focus(); }
+  if(msgOpen&&msgOpen.draw){ const i=document.querySelector('#msgBox #mi'), v=i?i.value:'', f=i&&document.activeElement===i; msgOpen.draw(); const j=document.querySelector('#msgBox #mi'); if(j&&v){ j.value=v; j.dispatchEvent(new Event('input')); } if(j&&f) j.focus(); }
   const n=msgUnreadAll(), b=document.querySelector('#msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; }
 }
 
