@@ -7694,7 +7694,7 @@ function renderPCal(){
   const first=new Date(pMonth), start=monday(first), lastDay=new Date(first.getFullYear(),first.getMonth()+1,0);
   let days=[]; for(let i=0;i<42;i++) days.push(addDays(start,i)); if(dk(days[35])>dk(lastDay)) days=days.slice(0,35);
   const rows=days.length/7, selRow=Math.max(0,days.findIndex(d=>dk(d)===pSel)>=0?Math.floor(days.findIndex(d=>dk(d)===pSel)/7):0);
-  const cells=days.map(d=>{ const k=dk(d), ls=dayLines(k), other=d.getMonth()!==pMonth.getMonth();
+  const cells=days.map(d=>{ const k=dk(d), ls=dayLines(k,true), other=d.getMonth()!==pMonth.getMonth();
     return `<button class="pc-cell ${other?'other':''} ${k===todayK?'today':''} ${k===pSel?'sel':''} ${d.getDay()===0?'sun':''}" data-pd="${k}" data-drop="${k}"><span class="n">${d.getDate()}</span>
       <span class="lines">${ls.slice(0,4).map(l=>`<i class="ln" style="background:${l.c}"></i>`).join('')}</span>
       <span class="titles">${ls.slice(0,3).map(l=>`<span class="tt" style="background:${l.c}">${esc(l.t)}</span>`).join('')}${ls.length>3?`<span class="more">+${ls.length-3}</span>`:''}</span></button>`; }).join('');
@@ -7750,14 +7750,14 @@ function renderPCal(){
   drag(el.querySelector('.pc-grab'),false); drag($('#psHead'),false); drag($('#pcWrap'),true);
 }
 function setPMode(m){ pMode=m; lsSet('fs.pmode2',m); renderPCal(); }
-function dayLines(key){ return itemsForDay(key).map(it=>{
-  if(it.k==='ev') return {k:'ev',c:evBg(it.e.whos),t:(it.e.priv?LOCK:'')+(it.e.time?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
+function dayLines(key,noTime){ return itemsForDay(key).map(it=>{
+  if(it.k==='ev') return {k:'ev',c:evBg(it.e.whos),t:(it.e.priv?LOCK:'')+(it.e.time&&!noTime?t12(it.e.time).replace(':00','')+' ':'')+it.e.title};
   const me=mePerson(), who=id=>id===me?'':(tName(person(id))||nm(id));   // on your own phone the lines don't repeat your name
   if(it.k==='away'){ const a=it.w.code?AIRPORTS[it.w.code]:null, n=who(it.who);
     return {k:'away',c:col(it.who),t:it.part?(/^home /.test(it.part)?'🏠 '+(n?n+' home ':'Home ')+it.part.slice(5):'✈️ '+(n?n+' away ':'Away ')+it.part):a?'💼 '+(n?n+' in ':'')+a[0]:'✈️ '+(n?n+' flying':'Flying')}; }
-  if(it.k==='arr'){ const n=who(it.f.who); return {k:'arr',c:col(it.f.who),t:'🛬 '+(n?n+' lands ':'Land ')+fmtTime(fE(it.f),'Pacific/Auckland')}; }
-  if(it.k==='taxi') return {k:'taxi',c:col(it.f.who),t:'🚕 Taxi '+fmtTime(it.t,'Pacific/Auckland')};
-  return {k:'fl',c:col(it.f.who),t:'✈️ '+fmtTime(fS(it.f),'Pacific/Auckland')+' '+it.f.from+'→'+it.f.to};
+  if(it.k==='arr'){ const n=who(it.f.who); return {k:'arr',c:col(it.f.who),t:'🛬 '+(n?n+' lands':'Land')+(noTime?'':' '+fmtTime(fE(it.f),'Pacific/Auckland'))}; }
+  if(it.k==='taxi') return {k:'taxi',c:col(it.f.who),t:'🚕 Taxi'+(noTime?'':' '+fmtTime(it.t,'Pacific/Auckland'))};
+  return {k:'fl',c:col(it.f.who),t:'✈️ '+(noTime?'':fmtTime(fS(it.f),'Pacific/Auckland')+' ')+it.f.from+'→'+it.f.to};
 }); }
 function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.innerHTML=`<span>Add on ${d.getDate()} ${fmtD(d,{month:'short'})}</span><b>＋</b>`; f.onclick=()=>openAdd({date:pSel}); }
 
@@ -7869,7 +7869,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwx5ew0s';
+const FS_VERSION='fs-mwx7l878';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
