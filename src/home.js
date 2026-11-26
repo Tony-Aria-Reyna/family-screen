@@ -1189,7 +1189,7 @@ const msgName=o=>o==='fam'?'Family':o==='fam2'?'Family + '+(msgOnly().join(' & '
 const msgMine=(m,me)=>m.g?me===mePerson():(m.th==='fam'||m.th==='fam2'||String(m.th).split('|').includes(me));
 const msgLinkedIn=()=>SYNC.chatEm?SYNC.chatEm('fam').map(e=>{ const p=S.people.find(q=>q.email===e); return p?p.name:''; }).filter(Boolean):[];
 // a record written by a linked account (it carries that account's address) only counts if it speaks as that person, in a chat that person is in
-const msgOk=m=>!m.byE||((person(m.from)||{}).email===m.byE&&(m.g||m.th==='fam'||m.th==='fam2'||String(m.th).split('|').includes(m.from)));
+const msgOk=m=>!m.byE||m.from==='fs'||((person(m.from)||{}).email===m.byE&&(m.g||m.th==='fam'||m.th==='fam2'||String(m.th).split('|').includes(m.from)));
 const msgAll=()=>(S.msgs||[]).filter(msgOk);
 const msgIn=th=>msgAll().filter(m=>m.th===th).sort((a,b)=>a.at-b.at);
 const msgUnread=(me,th)=>msgAll().filter(m=>(th?m.th===th:msgMine(m,me))&&m.from!==me&&!(m.seen||[]).includes(me)).length;
@@ -1717,6 +1717,18 @@ function kitchenToday(now){ now=now||new Date(); const tk=dk(now), mk=dk(addDays
     if(frozen.length) out.push({k:'thaw',t:'🧊 Take out: '+frozen.slice(0,3).join(', ')});
     else { const tw=ms.map(m=>{ const r=m.rid&&recipeById(m.rid); return r&&r.thaw; }).filter(Boolean)[0]; if(tw) out.push({k:'thaw',t:'🧊 '+tw}); } }
   return out; }
+/* Sunday 6pm: the fridge posts the coming week in the Family chat (once a week, whichever screen gets there first). */
+function weekSummary(from){ const mon=from||monday(addDays(new Date(),1)), days=[...Array(7)].map((_,i)=>addDays(mon,i)), L=[];
+  const d=x=>fmtD(x,{weekday:'short',day:'numeric'});
+  L.push('📋 The week ahead: '+d(days[0])+' – '+d(days[6])+' '+fmtD(days[6],{month:'short'}));
+  const fl=[]; for(const x of days){ const its=itemsForDay(dk(x)), ls=dayLines(dk(x)); its.forEach((it,i)=>{ const l=ls[i]; if(!l) return; if(it.k==='fl') fl.push(d(x)+' ✈️ '+nm(it.f.who)+' flies '+l.t.replace(/^✈️ /,'')); else if(it.k==='arr') fl.push(d(x)+' '+l.t); }); }
+  if(fl.length) L.push(...fl.slice(0,6));
+  for(const x of days){ const ev=dayLines(dk(x)).filter(l=>l.k==='ev').map(l=>l.t); if(ev.length) L.push('📅 '+d(x)+': '+ev.slice(0,4).join(', ')+(ev.length>4?' +'+(ev.length-4)+' more':'')); }
+  const empty=days.filter(x=>!mealsOn(dk(x),'dinner').length);
+  L.push(empty.length?'🍽️ Dinners to plan: '+(empty.length===7?'all week':empty.map(x=>fmtD(x,{weekday:'short'})).join(', ')):'🍽️ Every dinner is planned ✅');
+  let t=''; for(const l of L){ if((t+'\n'+l).length>590){ t+='\n…'; break; } t+=(t?'\n':'')+l; } return t; }
+function weekSumCheck(){ const n=new Date(); if(n.getDay()!==0||n.getHours()<18||n.getHours()>=22||!S.people.length) return;
+  const wk=dk(addDays(n,1)); if(S.weekSum===wk) return; S.weekSum=wk; save(); setTimeout(()=>{ try{ msgSend('fs','fam',weekSummary()); }catch(e){} },1500); }
 function buyAdd(names){ let n=0; for(const raw of names||[]){ const name=String(raw||'').trim(); if(!name) continue;
     if(S.groceries.some(g=>!g.done&&g.name.toLowerCase().startsWith(name.toLowerCase()))) continue; const sid=suggestShop(name);
     S.groceries.push({id:uid(),name:name.charAt(0).toUpperCase()+name.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(name):'',done:false,meal:true}); n++; }

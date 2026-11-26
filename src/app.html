@@ -1115,7 +1115,7 @@ const guestPeople=()=>(!LOCAL&&SYNC.guestPeople?SYNC.guestPeople():[]);
 const traveller=()=>S.people.find(p=>p.traveller)||guestPeople().find(p=>p.traveller);
 const shop=id=>S.shops.find(s=>s.id===id)||S.shops[S.shops.length-1];
 const col=id=>{ const p=person(id); return p?p.color:'#e5e7eb'; };
-const nm=id=>{ const p=person(id); return p?p.name:''; };
+const nm=id=>{ if(id==='fs') return '📋 Family Screen'; const p=person(id); return p?p.name:''; };
 function toast(m){ const b=document.createElement('div'); b.className='banner'; b.textContent=m; document.body.appendChild(b); setTimeout(()=>b.remove(),2600); }
 function modal(draw){ const L=$('#layer'); L.innerHTML='<div class="scrim"><div class="modal"></div></div>'; const close=()=>{ L.innerHTML=''; relockSoon(); }; window.closeModal=close; L.querySelector('.scrim').onclick=e=>{ if(e.target.classList.contains('scrim')) close(); }; draw(L.querySelector('.modal'),close); }
 window.closeModal=()=>{ $('#layer').innerHTML=''; relockSoon(); };
@@ -1202,7 +1202,7 @@ function soonCard(f,tp,now){
 }
 // tonight's dinner and what to take out of the freezer, at the end of the row of names on the fridge
 function kitBarFill(now){ const kb=$('#kitBar'), all=typeof kitchenToday==='function'?kitchenToday(now||new Date()):[], kt=all.length>1?[all[Math.floor(Date.now()/15000)%all.length]]:all, t=kt.map(x=>x.k+x.t).join('|');   /* two notes take turns */ if(kb&&kb.dataset.t!==t){ kb.dataset.t=t; kb.innerHTML=kt.map(x=>`<button class="chip kline ${x.k}" data-kline="1">${esc(x.t)}</button>`).join(''); kb.querySelectorAll('[data-kline]').forEach(b=>b.onclick=()=>openMeals()); } }
-function renderClock(){
+function renderClock(){ if(!isPhone()&&typeof weekSumCheck==='function') weekSumCheck();
   const now=new Date(), hc=$('#homeClock'), tp=traveller();
   $('#globeLbl').textContent=tp?`WHERE'S ${tName(tp).toUpperCase()}?`:'WHERE?';
   const h=clockHTML('Pacific/Auckland','🏠 Home · Auckland',dateIn(now,'Pacific/Auckland'));
