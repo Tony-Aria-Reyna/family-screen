@@ -179,7 +179,7 @@ function listenGuest(g) {
   const G = guests[g] = {};
   unsub.push(listen(doc(db, 'households', g), snap => { if (!snap.exists()) return; const d = snap.data();
     G.people = d.people || []; G.owner = d.owner || ''; G.live = d.live || {}; S.live = S.live || {}; guestLive();
-    G.chatOff = d.chatOff || []; G.chatOnly = d.chatOnly || []; G.limited = d.limited || []; G.voiceUrl = d.voiceUrl || ''; G.voiceKey = d.voiceKey || ''; if (gMe(g)) listenGuestChat(g);
+    G.chatOff = d.chatOff || []; G.chatOnly = d.chatOnly || []; G.limited = d.limited || []; G.voiceUrl = d.voiceUrl || ''; G.voiceKey = d.voiceKey || ''; G.guestKey = d.guestKey || ''; if (gMe(g)) listenGuestChat(g);
     if (!S.vapidKey && d.vapidKey && owner === me()) { S.vapidKey = d.vapidKey; push(); }
     mergeGuest('events'); mergeGuest('flights'); onChange('settings');
   }, () => {}));
@@ -230,17 +230,42 @@ export function start(householdId, state, changed) {
   denied.clear(); rulesOld = false;
   synced = { settings: null, cols: Object.fromEntries(COLS.concat(SOFT).map(c => [c, new Map()])), priv: { events: new Map(), todos: new Map() } };
   privOk = true; subbed = false;
+  mainD = null; privD = null; privOn = false;
   unsub.push(listen(doc(db, 'households', hid), snap => {
     if (!snap.exists()) return;
-    const d = snap.data(); members = d.members || []; limitedList = d.limited || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
+    mainD = snap.data(); const lim0 = (mainD.limited || []).includes(me());
+    if (!lim0 && !privOn) { privOn = true; unsub.push(listen(doc(db, 'households', hid, 'priv', 'settings'), ps => { privD = ps.exists() ? ps.data() : {}; applyHouse(); privMove(); }, err => { console.warn('family settings: rules not updated yet', err && err.code); privD = {}; privOld = true; applyHouse(); })); }
+    if (lim0) privD = {};
+    applyHouse();
+  }, err => onChange('error', err)));
+}
+/* 4.4 The family's own settings (cards, keys, kitchen, bills…) live in households/{id}/priv/settings, which only full
+   members can read. The household record itself keeps just what linked families need: names, chats, the helper link. */
+let mainD = null, privD = null, privOn = false, privOld = false;
+const PUB = ['people', 'shops', 'vapidKey', 'chatOff', 'chatOnly', 'voiceUrl', 'guestKey', 'giftViewers'];
+const splitSet = o => { const a = {}, b = {}; for (const k in o) (PUB.includes(k) ? a : b)[k] = o[k]; return [a, b]; };
+let moving = false;
+function privMove() {   // once: move what's still in the household record into the private settings
+  if (moving || !mainD || privD == null || privOld || isLimited() || !me()) return;
+  const [, legacy] = splitSet(settingsOf(Object.assign({}, mainD))), present = Object.keys(legacy).concat(['billFolders', 'billsRootName', 'billSheet']).filter(k => k in mainD); if (!present.length) return;
+  const keep = {}; present.forEach(k => { if (!(k in privD)) keep[k] = mainD[k]; });
+  moving = true;
+  setDoc(doc(db, 'households', hid, 'priv', 'settings'), fixNest(keep), { merge: true })
+    .then(() => updateDoc(doc(db, 'households', hid), Object.fromEntries(present.map(k => [k, deleteField()]))))
+    .catch(e => console.warn('moving settings', e && e.code)).then(() => { moving = false; });
+}
+async function guestKeyOf(k) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k + '|guest')); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32); }
+function applyHouse() {
+    if (!mainD || privD == null) return;
+    const d = Object.assign({}, mainD, privD); members = d.members || []; limitedList = d.limited || []; owner = d.owner || null; devices = d.devices || {}; notifier = d.notifier || null;
     const hidden = localHidden();
     if (Array.isArray(d.people)) { mergeArray(S.people, d.people); S.people.forEach(p => p.show = !hidden.includes(p.id) && !(p.email && (d.chatOnly || []).includes(p.email))); }
     if (Array.isArray(d.shops)) mergeArray(S.shops, d.shops);
-    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; guestLive(); S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; S.aiKeyTail = d.aiKeyTail || ''; S.aiKeyAt = d.aiKeyAt || 0; S.voiceKey = d.voiceKey || ''; S.voiceUrl = d.voiceUrl || ''; S.voiceName = d.voiceName || ''; S.famNote = d.famNote || ''; S.aiProv = d.aiProv || ''; S.aiClaudeModel = d.aiClaudeModel || ''; S.aiEffort = d.aiEffort || ''; S.claudeKeyTail = d.claudeKeyTail || ''; S.wakeStyle = d.wakeStyle || ''; S.wakeSfx = d.wakeSfx !== false; S.billEmail = d.billEmail || ''; S.inboxEmail = d.inboxEmail || ''; S.inboxHelper = d.inboxHelper || null; S.billsRoot = d.billsRoot || ''; S.billFolders = d.billFolders || []; S.billsRootName = d.billsRootName || ''; S.billsHelper = d.billsHelper || null; S.billSheet = d.billSheet || ''; S.alexaFrom = d.alexaFrom || ''; S.evAt = d.evAt || 0; S.photoFolder = d.photoFolder || ''; S.photoRev = d.photoRev || 0; S.chatOff = d.chatOff || []; S.chatOnly = d.chatOnly || []; S.food = d.food || ''; S.foodLog = d.foodLog || []; S.foodKb = d.foodKb || ''; S.relayUse = d.relayUse || null; S.weekSum = d.weekSum || ''; S.ideaBoard = unNest(d.ideaBoard || []); if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
+    S.itemShop = d.itemShop || {}; S.override = d.override || null; S.linkHelper = d.linkHelper || null; S.vapidKey = d.vapidKey || ''; S.hideHotels = !!d.hideHotels; S.pinHash = d.pinHash || ''; S.live = d.live || {}; guestLive(); S.taxi = d.taxi || null; S.cards = d.cards || []; S.visited = d.visited || {}; S.wish = d.wish || []; S.tvOff = d.tvOff || []; S.favs = d.favs || []; S.recHide = d.recHide || []; S.mealAway = d.mealAway || {}; S.giftViewers = d.giftViewers || []; S.aiKeyTail = d.aiKeyTail || ''; S.aiKeyAt = d.aiKeyAt || 0; S.voiceKey = d.voiceKey || ''; S.voiceUrl = d.voiceUrl || ''; S.voiceName = d.voiceName || ''; S.famNote = d.famNote || ''; S.aiProv = d.aiProv || ''; S.aiClaudeModel = d.aiClaudeModel || ''; S.aiEffort = d.aiEffort || ''; S.claudeKeyTail = d.claudeKeyTail || ''; S.wakeStyle = d.wakeStyle || ''; S.wakeSfx = d.wakeSfx !== false; S.billEmail = d.billEmail || ''; S.inboxEmail = d.inboxEmail || ''; S.inboxHelper = d.inboxHelper || null; S.billsRoot = d.billsRoot || ''; S.billFolders = d.billFolders || []; S.billsRootName = d.billsRootName || ''; S.billsHelper = d.billsHelper || null; S.billSheet = d.billSheet || ''; S.alexaFrom = d.alexaFrom || ''; S.evAt = d.evAt || 0; S.photoFolder = d.photoFolder || ''; S.photoRev = d.photoRev || 0; S.chatOff = d.chatOff || []; S.chatOnly = d.chatOnly || []; S.food = d.food || ''; S.foodLog = d.foodLog || []; S.foodKb = d.foodKb || ''; S.relayUse = d.relayUse || null; S.guestKey = d.guestKey || ''; S.weekSum = d.weekSum || ''; S.ideaBoard = unNest(d.ideaBoard || []); if (S.giftViewers.includes(me()) && !softOk.gifts && hid) setTimeout(() => { if (!softOk.gifts) listenSoft('gifts'); }, 800);
     synced.settings = JSON.stringify(settingsOf(S));
     if (!subbed) { subbed = true; subCols(); }
+    if (S.voiceKey && !isLimited()) guestKeyOf(S.voiceKey).then(g => { if (S.guestKey !== g) { S.guestKey = g; push(); } }).catch(() => {});
     onChange('settings');
-  }, err => onChange('error', err)));
 }
 // the lists are opened once the family's record has said what this account may see
 function subCols() {
@@ -283,7 +308,7 @@ export function retrySoft() { if (hid) SOFT.forEach(listenSoft); }
 export const canSee = c => !!softOk[c];
 export const privateOk = () => privOk;
 export function stop() { unsub.forEach(u => { try { u(); } catch (e) {} }); unsub = []; hid = null; callsOn = false; clearTimeout(callRetry); }
-const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '', alexaFrom: s.alexaFrom || '', photoFolder: s.photoFolder || '', photoRev: s.photoRev || 0, chatOff: s.chatOff || [], chatOnly: s.chatOnly || [], food: s.food || '', foodLog: s.foodLog || [], foodKb: s.foodKb || '', relayUse: s.relayUse || null, weekSum: s.weekSum || '', ideaBoard: s.ideaBoard || [] });
+const settingsOf = s => clean({ people: stripPeople(s.people), shops: s.shops, itemShop: s.itemShop || {}, override: s.override || null, linkHelper: s.linkHelper || null, vapidKey: s.vapidKey || '', hideHotels: !!s.hideHotels, pinHash: s.pinHash || '', taxi: s.taxi || null, cards: s.cards || [], visited: s.visited || {}, wish: s.wish || [], tvOff: s.tvOff || [], favs: s.favs || [], recHide: s.recHide || [], mealAway: s.mealAway || {}, giftViewers: s.giftViewers || [], aiKeyTail: s.aiKeyTail || '', aiKeyAt: s.aiKeyAt || 0, voiceKey: s.voiceKey || '', guestKey: s.guestKey || '', voiceUrl: s.voiceUrl || '', voiceName: s.voiceName || '', famNote: s.famNote || '', aiProv: s.aiProv || '', aiClaudeModel: s.aiClaudeModel || '', aiEffort: s.aiEffort || '', claudeKeyTail: s.claudeKeyTail || '', wakeStyle: s.wakeStyle || '', wakeSfx: s.wakeSfx !== false, billEmail: s.billEmail || '', inboxEmail: s.inboxEmail || '', billsRoot: s.billsRoot || '', alexaFrom: s.alexaFrom || '', photoFolder: s.photoFolder || '', photoRev: s.photoRev || 0, chatOff: s.chatOff || [], chatOnly: s.chatOnly || [], food: s.food || '', foodLog: s.foodLog || [], foodKb: s.foodKb || '', relayUse: s.relayUse || null, weekSum: s.weekSum || '', ideaBoard: s.ideaBoard || [] });
 function localHidden() { try { return JSON.parse(localStorage.getItem('fs.hidden') || '[]'); } catch (e) { return []; } }
 
 /* ---------- who did what (v1.5) ----------
@@ -315,7 +340,10 @@ export function push() {
   const st = JSON.stringify(settingsOf(S)), lim = isLimited();
   if (!lim && guestIds.length) pushGuest();
   if (lim) synced.settings = st;
-  if (st !== synced.settings) { ops.push(['update', doc(db, 'households', hid), JSON.parse(st)]); synced.settings = st; }
+  if (st !== synced.settings && (lim || (privD != null && mainD))) { const [pub, pri] = splitSet(JSON.parse(st));
+    if (privOld) ops.push(['update', doc(db, 'households', hid), JSON.parse(st)]);   // rules not updated yet: the old way
+    else { ops.push(['update', doc(db, 'households', hid), pub]); setDoc(doc(db, 'households', hid, 'priv', 'settings'), fixNest(pri), { merge: true }).catch(e => { console.warn('family settings', e && e.code); if (e && e.code === 'permission-denied') { privOld = true; synced.settings = null; } }); }   // its own write: a problem there never holds up the rest
+    synced.settings = st; }
   // my private entries go to their own place (a separate batch, so a problem there never blocks the rest)
   const pops = [];
   if (me()) for (const c of PRIV.filter(c => !(lim && LIM_OWN.includes(c)))) {
@@ -498,5 +526,5 @@ export function guestMsgAdd(th, m, seenByAll) {
 }
 export const guestMsgSeen = id => { const g = gOf(id), mine = gMe(g); return mine ? updateDoc(doc(db, 'households', g, 'msgs', rawOf(id)), { seen: arrayUnion(mine) }).catch(() => {}) : Promise.resolve(); };
 // the other family's helper sends the alerts for their records (their record already lets a linked account read this)
-export const guestHelper = th => { const G = isG(th) ? guests[gOf(th)] : null; return G && G.voiceUrl && G.voiceKey ? { url: G.voiceUrl, key: G.voiceKey } : null; };
+export const guestHelper = th => { const G = isG(th) ? guests[gOf(th)] : null, k = G && (G.guestKey || G.voiceKey); return G && G.voiceUrl && k ? { url: G.voiceUrl, key: k } : null; };
 export const rawId = id => isG(id) ? rawOf(id) : id;

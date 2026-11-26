@@ -6,7 +6,7 @@
  * Live flight status (optional): add a Script property AERODATABOX_KEY with your free RapidAPI key
  * (⚙️ Project Settings → Script properties). The key stays here in your Google account, never on the website.
  */
-const HELPER_VERSION = 39;
+const HELPER_VERSION = 40;
 const PROJECT_ID = '__PROJECT_ID__';
 const APP_URL = '__APP_URL__';
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID + '/databases/(default)/documents';
@@ -20,7 +20,7 @@ function setup() {
 }
 /* send a test to every phone that has notifications on */
 function testAllPhones() {
-  listDocs('households').forEach(h => Object.keys(h.devices || {}).forEach(k => send(h, k, '🔔 Family Screen', 'Test from the helper — notifications are working.', 'test')));
+  homes().forEach(h => Object.keys(h.devices || {}).forEach(k => send(h, k, '🔔 Family Screen', 'Test from the helper — notifications are working.', 'test')));
 }
 
 /* ---------- every 5 minutes ---------- */
@@ -32,7 +32,7 @@ function tick() {
   const rules = syncRules(props, now);
   let upd = null; try { upd = selfUpdate(props, now, false); } catch (e) { Logger.log('Self-update: ' + e); }
   let homes;
-  try { homes = listDocs('households'); healthGlobal(props, now, ''); }
+  try { homes = homes(); healthGlobal(props, now, ''); }
   catch (e) { healthGlobal(props, now, String(e && e.message || e)); throw e; }
   const lent = lentDevices(homes);
   for (const h of homes) {
@@ -605,6 +605,10 @@ function enc(x) {
   if (Array.isArray(x)) return { arrayValue: { values: x.map(enc) } };
   const f = {}; Object.keys(x).forEach(k => f[k] = enc(x[k])); return { mapValue: { fields: f } };
 }
+// 4.4 each family's own settings sit in households/{id}/priv/settings (only full members can read them): merged back in here
+function homes() { return listDocs('households').map(function (h) { let p = null; try { p = getDoc('households/' + h._id + '/priv/settings'); } catch (e) {} return p ? Object.assign({}, h, p, { _id: h._id }) : h; }); }
+// a linked family (Masako, Nana, Pop) holds a weaker key: it can only ask for a message or call alert to be sent
+function guestKeyOf(k) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, k + '|guest', Utilities.Charset.UTF_8).map(function (b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('').slice(0, 32); }
 function listDocs(path) {
   const out = []; let token = '';
   do {
@@ -847,7 +851,7 @@ function inboxArrivals(h, fresh, msgs) {
 }
 /* run this by hand in the editor to read the family inbox straight away (and to approve Gmail the first time) */
 function inboxCheckNow() { const props = PropertiesService.getScriptProperties();
-  for (const h of listDocs('households')) { const out = inboxTick(h, props, new Date(), true); Logger.log((h.inboxEmail || '(no inbox address set)') + ': ' + out.length + ' new emails with things in them. ' + ((getDoc('households/' + h._id).inboxHelper || {}).error || 'OK')); } }
+  for (const h of homes()) { const out = inboxTick(h, props, new Date(), true); Logger.log((h.inboxEmail || '(no inbox address set)') + ': ' + out.length + ' new emails with things in them. ' + ((getDoc('households/' + h._id).inboxHelper || {}).error || 'OK')); } }
 
 /* ================= Family messages =================
    The app writes each message to households/{id}/msgs. This sends the notification: to the phones signed in as the person
@@ -1058,13 +1062,13 @@ function billsTick(h, props, now, force) {
     // 4) the folder list the app offers (refreshed hourly or after filing)
     if (!props.getProperty('BILL_FOLDERS_AT') || now.getTime() - Number(props.getProperty('BILL_FOLDERS_AT')) > 60 * 60e3) {
       const inRoot = [], top = []; listFolders(root, '', 3, inRoot); listFolders(DriveApp.getRootFolder(), '/', 2, top);
-      patch('households/' + h._id, { billFolders: inRoot.concat(top.filter(p => p !== '/' + root.getName() && p.indexOf('/' + root.getName() + '/') !== 0)).slice(0, 500), billsRootName: root.getName() });
+      patch('households/' + h._id + '/priv/settings', { billFolders: inRoot.concat(top.filter(p => p !== '/' + root.getName() && p.indexOf('/' + root.getName() + '/') !== 0)).slice(0, 500), billsRootName: root.getName() });
       props.setProperty('BILL_FOLDERS_AT', String(now.getTime()));
     }
     // 5) the register in Google Sheets
     const live = bills.filter(b => ['check', 'due', 'paid'].indexOf(b.status) >= 0).sort((a, b) => String(b.due || b.date).localeCompare(String(a.due || a.date)));
     const sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(live.map(b => [b._id, b.status, b.biller, b.amount, b.due, b.paidAt, b.paidHow, b.category, b.pdf && b.pdf.link, b.directDebit]))));
-    if (sig !== props.getProperty('BILL_SHEET_SIG_' + h._id)) { const url = writeRegister(h, root, live, props); props.setProperty('BILL_SHEET_SIG_' + h._id, sig); if (url !== h.billSheet) patch('households/' + h._id, { billSheet: url }); }
+    if (sig !== props.getProperty('BILL_SHEET_SIG_' + h._id)) { const url = writeRegister(h, root, live, props); props.setProperty('BILL_SHEET_SIG_' + h._id, sig); if (url !== h.billSheet) patch('households/' + h._id + '/priv/settings', { billSheet: url }); }
   } catch (e) { err = String(e && e.message || e).slice(0, 240); if (/permission|authori[sz]/i.test(err)) err = 'The helper needs permission for Gmail, Drive and Sheets: update appsscript.json and run billsCheckNow once (⚙️ → 🧰 Helpers). ' + err; }
   if (mail) mailDone(props, 'BILL', h, now, err);
   patch('households/' + h._id, { billsHelper: { lastRun: now.getTime(), error: err, added: (prev.added || 0) + added, version: HELPER_VERSION } });
@@ -1105,7 +1109,8 @@ function doPost(e) {
   const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
   let b; try { b = JSON.parse(e.postData.contents); } catch (x) { return out({ error: 'bad request' }); }
   const key = String(b.key || ''); if (key.length < 12) return out({ error: 'not allowed' });
-  let h; try { h = listDocs('households').filter(x => String(x.voiceKey || '') === key)[0]; }
+  let h; try { const all = homes(); h = all.filter(x => String(x.voiceKey || '') === key)[0];
+    if (!h && ['msg_push', 'call_ring'].indexOf(String(b.action || '')) >= 0) h = all.filter(x => x.voiceKey && guestKeyOf(String(x.voiceKey)) === key)[0]; }
   catch (err) { const full = /429|quota/i.test(String(err)), say = full ? 'The family database has reached its free limit for today. Try again later.' : 'I can’t reach the family database right now. Try again in a minute.'; return out({ error: say, speech: say }); }
   if (!h) return out({ error: 'not allowed' });
   const t0 = Date.now(), act = String(b.action || '');
@@ -1404,7 +1409,7 @@ function voiceMsgRead(h, b, now) {
   const ppl = vPeople(h), named = b.person ? vFind(h, b.person) : null, me = named || voiceMsgFrom(h, b, '');
   if (!me) return { speech: 'Add the family in the app first.' };
   const list = runQuery('households/' + h._id, 'msgs', fOp('at', 'GREATER_THAN', now.getTime() - 2 * 864e5))
-    .filter(function (m) { return m.from !== me.id && (m.th === 'fam' || String(m.th).split('|').indexOf(me.id) >= 0); })
+    .filter(function (m) { return m.from !== me.id && m.from !== 'fs' && (m.th === 'fam' || String(m.th).split('|').indexOf(me.id) >= 0); })
     .sort(function (a, c) { return a.at - c.at; }).slice(-3);
   if (!list.length) return { speech: 'No new messages for ' + me.name + ' in the last two days.' };
   const nameOf = function (id) { const p = ppl.filter(function (x) { return x.id === id; })[0]; return p ? (p.nick || p.name) : 'Someone'; };
@@ -1530,7 +1535,7 @@ function voiceContext(h, now) {
 }
 function billsCheckNow() {
   const props = PropertiesService.getScriptProperties(), now = new Date();
-  for (const h of listDocs('households')) { const out = billsTick(h, props, now, true); Logger.log((h.billEmail || '(no bills address set)') + ': ' + out.length + ' bills. ' + ((getDoc('households/' + h._id).billsHelper || {}).error || 'OK')); }
+  for (const h of homes()) { const out = billsTick(h, props, now, true); Logger.log((h.billEmail || '(no bills address set)') + ': ' + out.length + ' bills. ' + ((getDoc('households/' + h._id).billsHelper || {}).error || 'OK')); }
 }
 
 if (typeof module !== 'undefined') module.exports = { planNotifications, occursOn, checkEvery, parseFlight, flightAlerts, trackFlights, tick, nearEvents, jobTodos, mailDue };
