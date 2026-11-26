@@ -3002,7 +3002,8 @@ function renderClock(){
 
 /* ================= people bar + calendar navigation ================= */
 // Whose entries this device shows. Remembered per device (never synced), so hiding someone here doesn't hide them anywhere else.
-const hiddenPeople=()=>S.people.concat(guestPeople()).filter(p=>!p.show);
+const notChat=p=>!(p&&p.email&&(S.chatOnly||[]).includes(p.email));   // Nana, Pop: messages only, never on the calendar
+const hiddenPeople=()=>S.people.filter(notChat).concat(guestPeople()).filter(p=>!p.show);
 function showEveryone(){ S.people.forEach(p=>p.show=true); if(!LOCAL&&SYNC.setHiddenG) SYNC.setHiddenG([]); savePrefs(); renderAll(); toast('Showing everyone'); }
 function toggleShow(id){ const p=person(id); if(!p) return;
   if(p.guest){ const h=hiddenPeople().filter(x=>x.guest).map(x=>x.id); SYNC.setHiddenG(h.includes(id)?h.filter(x=>x!==id):h.concat([id])); renderAll(); return; } p.show=!p.show; if(!S.people.some(x=>x.show)){ p.show=true; toast('Keep at least one person showing'); return; } savePrefs(); renderAll(); }
@@ -3240,7 +3241,7 @@ function wireTimeline(box,key){
   document.addEventListener('touchstart',e=>{ const t=e.touches[0], z=e.target.closest&&e.target.closest('#pcSheet,#pwSheet,#cal .fday,#cal .fweek,#cal .mbody,#pcGrid');
     st=z&&e.touches.length===1&&!e.target.closest('.wheel,input,textarea,.scrim,.lifted')&&!drag?{z,x:t.clientX,y:t.clientY,t:Date.now()}:null; },{passive:true});
   document.addEventListener('touchend',e=>{ if(!st) return; const t=e.changedTouches[0], dx=t.clientX-st.x, dy=t.clientY-st.y, z=st.z; st=null;
-    if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.7||Date.now()-st0()>800||(drag&&drag.live)) return;
+    if(Math.abs(dx)<(z.id==='pcGrid'?45:70)||Math.abs(dx)<Math.abs(dy)*1.5||Date.now()-st0()>800||(drag&&drag.live)) return;
     const next=dx<0, id=z.id==='pcSheet'?(next?'#psNext':'#psPrev'):z.id==='pwSheet'?(next?'#pwDNext':'#pwDPrev'):z.id==='pcGrid'?(next?'#pcNext':'#pcPrev'):(next?'#next':'#prev');
     const b=$(id); if(!b) return; suppressClick=false; b.click(); suppressClick=true; setTimeout(()=>suppressClick=false,350);
     const box=$(z.id==='pcSheet'?'#pcSheet':z.id==='pwSheet'?'#pwSheet':z.id==='pcGrid'?'#pcGrid':'#cal > *'); if(box){ box.classList.remove('slideL','slideR'); void box.offsetWidth; box.classList.add(next?'slideL':'slideR'); } },{passive:true});
@@ -3736,7 +3737,6 @@ function makeWheel(values,idx,onPick,cls,opt){
   requestAnimationFrame(()=>w.setTo(idx));
   return w;
 }
-const notChat=p=>!(p&&p.email&&(S.chatOnly||[]).includes(p.email));   // Nana, Pop: messages only, never on the calendar
 const toMin=hm=>{ const [h,m]=hm.split(':').map(Number); return h*60+m; };
 const fromMin=n=>{ n=((n%1440)+1440)%1440; return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); };
 const durTxt=n=>{ const h=Math.floor(n/60), m=n%60; return (h?h+' hr'+(h>1?'s':''):'')+(h&&m?' ':'')+(m?m+' min':''); };
@@ -7618,7 +7618,7 @@ const pvSeg=()=>`<div class="pv-seg"><button data-pv="month" class="${pView==='m
 function wirePvSeg(el){
   el.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{ if(pView===b.dataset.pv) return; pView=b.dataset.pv; lsSet('fs.pview',pView); pwScroll=null; renderPCal(); });
   const w=el.querySelector('#pcWho'); if(w) w.onclick=openWhoFilter;
-  const head=el.querySelector('.pc-head'); if(head&&hiddenPeople().length){ head.insertAdjacentHTML('afterend',filterNote()); }
+  const head=el.querySelector('.pc-head'); if(head&&hiddenPeople().length&&!el.querySelector('.fnote')){ head.insertAdjacentHTML('afterend',filterNote()); }
   el.querySelectorAll('[data-showall]').forEach(b=>b.onclick=showEveryone);
 }
 // phone week: 7 columns on a time grid (like Samsung's week view)
@@ -7708,8 +7708,9 @@ function renderPCal(){
       <div class="ps-head" id="psHead"><b>${sel.getDate()}</b><span>${fmtD(sel,{weekday:'short'})}${pSel===todayK?' · Today':''}</span><span class="ps-mon">${fmtD(sel,{month:'short'})}</span><button id="psPrev" aria-label="Previous day">‹</button><button id="psNext" aria-label="Next day">›</button></div>
       ${T.allday?`<div class="ps-allday">${T.allday}</div>`:''}
       <div class="ps-scroll" id="psScroll">${T.tl}</div></div>`;
-  // geometry
-  const H=el.clientHeight, head=el.querySelector('.pc-head').offsetHeight, gridTop=head+el.querySelector('.pc-dow').offsetHeight;
+  // geometry (the 'Hiding …' note goes in first, so the grid's position counts it)
+  { const hd=el.querySelector('.pc-head'); if(hd&&hiddenPeople().length&&!el.querySelector('.fnote')) hd.insertAdjacentHTML('afterend',filterNote()); }
+  const H=el.clientHeight, head=el.querySelector('.pc-head').offsetHeight, dow=el.querySelector('.pc-dow'), gridTop=Math.round(dow.getBoundingClientRect().bottom-el.getBoundingClientRect().top);   // counts anything above the grid (e.g. the 'Hiding …' note)
   pSnaps={day:head, week:gridTop+ROW+6, split:gridTop+rows*ROW+6, month:H-96};
   if(pSnaps.month<pSnaps.split+40) pSnaps.month=pSnaps.split+40;
   const layout=(y,anim)=>{ pY=y; const sheet=$('#pcSheet'), wrap=$('#pcWrap'), grid=$('#pcGrid'); if(!sheet) return;
@@ -7764,7 +7765,7 @@ function updateFab(){ const f=$('#pcFab'); if(!f) return; const d=kd(pSel); f.in
 const TABS=['cal','todo','shop','where'];
 (function(){ let sx=0,sy=0,ok=false,t0=0;
   document.addEventListener('touchstart',e=>{ if(!isPhone()||e.touches.length!==1){ ok=false; return; }
-    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate,.pw-top,.pw-days,.pc-sheet,.fday')&&!(drag&&drag.live);
+    const el=e.target&&e.target.closest?e.target:document.body; ok=!el.closest('.scrim,.wheel,.space svg,input,textarea,.pc-grab,.instOffer,#gate,.pw-top,.pw-days,.pc-sheet,.fday,#pcGrid,.pc-gridwrap')&&!(drag&&drag.live);
     sx=e.touches[0].clientX; sy=e.touches[0].clientY; t0=Date.now(); },{passive:true});
   document.addEventListener('touchend',e=>{ if(!ok||(drag&&drag.live)) return; const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
     if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.8&&Date.now()-t0<700){ const i=TABS.indexOf(document.body.dataset.tab||'cal'), n=i+(dx<0?1:-1); if(n>=0&&n<TABS.length) setTab(TABS[n]); } },{passive:true});
@@ -7868,7 +7869,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwuzf1y6';
+const FS_VERSION='fs-mwx5ew0s';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
