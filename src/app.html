@@ -1500,7 +1500,9 @@ const shown=whos=>!whos.length||whos.some(id=>{ const p=person(id); return !p||p
 function itemsForDay(key){
   const out=[];
   for(const e of S.events) if(vis(e)&&shown(e.whos)){ if(occursOn(e,key)) out.push({k:'ev',sort:e.time||'00:00',e,key});
-    else if(!e.rpt&&e.time&&e.dur&&key>e.date){ const off=Math.round((kd(key)-kd(e.date))/DAYMS), end=toMin(e.time)+e.dur; if(end>off*1440) out.push({k:'ev',sort:'00:00',e,key,off}); } }
+    else if(e.time&&e.dur&&toMin(e.time)+e.dur>1440&&key>e.date){ const end=toMin(e.time)+e.dur, span=Math.floor((end-1)/1440);
+      if(!e.rpt){ const off=Math.round((kd(key)-kd(e.date))/DAYMS); if(off<=span) out.push({k:'ev',sort:'00:00',e,key,off}); }
+      else for(let off=1;off<=Math.min(span,6);off++){ const from=dk(addDays(kd(key),-off)); if(occursOn(e,from)){ out.push({k:'ev',sort:'00:00',e,key,off}); break; } } } }   // repeating ones too: a night shift every Friday shows on Saturday morning
   for(const b of S.bills||[]) if(b.due===key&&['check','due','paid'].includes(b.status)) out.push({k:'ev',sort:'00:00',e:{id:'bl-'+b.id,title:(b.status==='paid'?'✅ ':b.directDebit?'💳 ':'🧾 ')+b.biller+' '+$m(b.amount)+(b.status==='paid'?' paid':b.directDebit?' direct debit':' due'),whos:[],date:key,time:''},key});
   for(const r of S.renewals||[]) if(r.due===key) out.push({k:'ev',sort:'00:00',e:{id:'rn-'+r.id,title:renewTitle(r)+' due',whos:[],date:key,time:''},key});
   const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
