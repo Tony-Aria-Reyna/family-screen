@@ -181,6 +181,7 @@ body.dragging [data-drop],body.dragging [data-shopdrop]{outline:2px dashed #cfe9
 .item .when{font-size:13px;color:#2f8f82;font-weight:700;display:block}
 .ev.task.check{outline:3px dashed #f59e0b;outline-offset:-3px}
 .ev.done-ev{opacity:.6;text-decoration:line-through}
+#kitBar{display:contents}#bar .kline.thaw{background:#e0f2ff}#bar .kline{font-weight:800;margin-left:auto;background:#fff4e0;min-width:140px;flex:1 1 0;max-width:max-content;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .cc .sub2{font-size:13px;font-weight:700;opacity:.9;position:relative;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cc .bar2{height:6px;border-radius:99px;background:rgba(255,255,255,.6);margin-top:4px;position:relative;z-index:2;overflow:hidden}
 .cc .bar2 i{display:block;height:100%;background:#2b2f3a;border-radius:99px}
@@ -1199,10 +1200,13 @@ function soonCard(f,tp,now){
   return `<button class="cc day" id="awayBtn"><span class="city">✈️ ${esc(tName(tp))} flies ${whenWord(d,now)}</span><span class="time">${fmtTime(d,'Pacific/Auckland').replace(/(am|pm)$/,'<small>$1</small>')}</span>
     <span class="sub">${esc(f.flight||'')} to ${esc(b?b[0]:f.to)} ${b?b[3]:''} · in ${relTime(d,now)}</span>${tag?`<span class="sub2">${tag}</span>`:''}</button>`;
 }
+// tonight's dinner and what to take out of the freezer, at the end of the row of names on the fridge
+function kitBarFill(now){ const kb=$('#kitBar'), all=typeof kitchenToday==='function'?kitchenToday(now||new Date()):[], kt=all.length>1?[all[Math.floor(Date.now()/15000)%all.length]]:all, t=kt.map(x=>x.k+x.t).join('|');   /* two notes take turns */ if(kb&&kb.dataset.t!==t){ kb.dataset.t=t; kb.innerHTML=kt.map(x=>`<button class="chip kline ${x.k}" data-kline="1">${esc(x.t)}</button>`).join(''); kb.querySelectorAll('[data-kline]').forEach(b=>b.onclick=()=>openMeals()); } }
 function renderClock(){
   const now=new Date(), hc=$('#homeClock'), tp=traveller();
   $('#globeLbl').textContent=tp?`WHERE'S ${tName(tp).toUpperCase()}?`:'WHERE?';
   const h=clockHTML('Pacific/Auckland','🏠 Home · Auckland',dateIn(now,'Pacific/Auckland'));
+  kitBarFill(now);
   hc.className=h.cls; hc.innerHTML=h.html;
   const r=travellerNow(now), box=$('#awayBox');
   if(!r){ const sc=tp&&soonFlight(tp,now); box.innerHTML=sc?soonCard(sc,tp,now):''; const b=$('#awayBtn'); if(b) b.onclick=()=>openFlight(sc); return; }
@@ -1245,7 +1249,7 @@ function openWhoFilter(){
 }
 const filterNote=()=>{ const h=hiddenPeople(); return h.length?`<div class="fnote">👁️ Hiding ${esc(h.map(p=>p.name).join(', '))}<button data-showall>Show everyone</button></div>`:''; };
 function renderBar(){
-  $('#bar').innerHTML=S.people.concat(guestPeople()).map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')+(hiddenPeople().length?'<button class="chip showall" data-showall>👁️ Show everyone</button>':'');
+  $('#bar').innerHTML=S.people.filter(notChat).concat(guestPeople()).map(p=>`<button class="chip ${p.show?'':'off'}" data-p="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${p.traveller?' ✈️':''}</button>`).join('')+(hiddenPeople().length?'<button class="chip showall" data-showall>👁️ Show everyone</button>':'')+'<span id="kitBar"></span>'; kitBarFill();
   $('#bar').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>toggleShow(b.dataset.p));
   $('#bar').querySelectorAll('[data-showall]').forEach(b=>b.onclick=showEveryone);
   renderCalHead();

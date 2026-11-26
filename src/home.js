@@ -1697,10 +1697,26 @@ function stockAdd(items,where){ let n=0; S.stock=S.stock||[];
   if(n) save(); return n; }
 // dinners that have been cooked use up what they were planned from; week-old "used" lines are forgotten
 function stockSettle(){ const today=dk(new Date()), late=new Date().getHours()>=20; let ch=false;
-  (S.meals||[]).forEach(m=>{ if(m.uses&&m.uses.length&&!m.settled&&(m.date<today||(m.date===today&&late))){ m.settled=true; ch=true; (S.stock||[]).forEach(x=>{ if(m.uses.includes(x.id)&&!x.used) x.used=Date.now(); }); } });
+  (S.meals||[]).forEach(m=>{ if(m.uses&&m.uses.length&&!m.settled&&(m.date<today||(m.date===today&&late))){ m.settled=true; ch=true; const g=[]; (S.stock||[]).forEach(x=>{ if(m.uses.includes(x.id)&&!x.used){ x.used=Date.now(); g.push(x); } }); if(g.length) setTimeout(()=>stapleGone(g),0); } });
   const n=(S.stock||[]).length; S.stock=(S.stock||[]).filter(x=>!x.used||Date.now()-x.used<7*864e5); if(S.stock.length!==n) ch=true;
   if(ch) save(); }
 setInterval(()=>{ try{ if(S.people.length) stockSettle(); }catch(e){} },30*60e3);
+/* Staples: when the last one is used up, it goes on the shopping list by itself. Everyday basics count automatically;
+   tap an item in Kitchen stock to switch ⭐ on or off. */
+const STAPLE_RE=/\b(rice|eggs?|milk|butter|bread|onions?|garlic|flour|sugar|oil|cheese|yog(h)?urt|tamari|soy sauce|coffee|tea|potato(es)?|kumara|carrots?|bananas?|apples?|oats|pasta|noodles|nori|miso|mayo(nnaise)?|tortillas?|wraps?|toilet paper)\b/i;
+const isStaple=x=>x&&x.where!=='sauce'&&(x.staple!=null?!!x.staple:STAPLE_RE.test(x.name||''));
+function stapleGone(list){ const names=[]; for(const x of list){ if(!isStaple(x)) continue; const k=x.name.toLowerCase();
+    if((S.stock||[]).some(y=>y!==x&&!y.used&&y.where!=='sauce'&&y.name.toLowerCase()===k)) continue; names.push(x.name); }
+  const n=buyAdd(names); if(n) toast('🛒 Running out: '+names.slice(0,3).join(', ')+(names.length>3?'…':'')+' added to shopping'); return n; }
+// for the fridge's home clock: tonight's dinner, and what to take out of the freezer for tomorrow
+function kitchenToday(now){ now=now||new Date(); const tk=dk(now), mk=dk(addDays(now,1)), out=[];
+  const nameOf=m=>{ const r=m.rid&&recipeById(m.rid); return r?r.name:(m.note||m.text||''); };
+  const din=mealsOn(tk,'dinner').map(nameOf).filter(Boolean); if(din.length&&now.getHours()<21) out.push({k:'din',t:'🍽️ Tonight: '+din.join(' + ')});
+  if(now.getHours()>=12){ const ms=(S.meals||[]).filter(m=>m.date===mk); const ids=[].concat(...ms.map(m=>m.uses||[]));
+    const frozen=(S.stock||[]).filter(x=>ids.includes(x.id)&&!x.used&&/freez/.test(x.where||'')).map(x=>x.name);
+    if(frozen.length) out.push({k:'thaw',t:'🧊 Take out: '+frozen.slice(0,3).join(', ')});
+    else { const tw=ms.map(m=>{ const r=m.rid&&recipeById(m.rid); return r&&r.thaw; }).filter(Boolean)[0]; if(tw) out.push({k:'thaw',t:'🧊 '+tw}); } }
+  return out; }
 function buyAdd(names){ let n=0; for(const raw of names||[]){ const name=String(raw||'').trim(); if(!name) continue;
     if(S.groceries.some(g=>!g.done&&g.name.toLowerCase().startsWith(name.toLowerCase()))) continue; const sid=suggestShop(name);
     S.groceries.push({id:uid(),name:name.charAt(0).toUpperCase()+name.slice(1),shop:sid,aisle:shop(sid).aisles?guessAisle(name):'',done:false,meal:true}); n++; }
@@ -1957,8 +1973,8 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
       <div class="opts">${STOCK_PLACES.map(p=>`<button class="opt sm ${where===p[0]?'on':''}" data-w="${p[0]}">${p[1]} ${p[2]}</button>`).join('')}</div>
       <div class="addany" style="margin-top:8px"><div class="aarow"><input type="text" class="aain" id="sin" placeholder="e.g. 2 kg chicken thighs, lamb chops, mince" autocomplete="off">${AA_SR?'<button class="aaic aamic" id="smic" aria-label="Hold to talk">🎤</button>':''}<button class="aaic" id="scam" aria-label="Photo">📷</button><button class="save aago" id="sgo">✨ List it</button></div><input type="file" id="sf" accept="image/*" multiple hidden><input type="file" id="sfc" accept="image/*" capture="environment" hidden></div>
       <p class="note">Hold 🎤 and say everything, let go, then tap ✨ List it. Or type a list, or 📷 a shelf or a handwritten list. A chest freezer photo only shows the top layer, so a list is more accurate for that one.</p>
-      ${STOCK_PLACES.map(p=>{ const l=now.filter(x=>x.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return l.length?`<div class="step">${p[1]} ${p[2]} <span style="font-weight:500">(${l.length})</span></div><div class="stk">${l.map(x=>`<span class="stki">${esc(x.name)}${x.qty?` <small>${esc(x.qty)}</small>`:''}${stockAge(x)?` <small class="old">${stockAge(x)}</small>`:''}<button data-used="${x.id}" aria-label="Used">✕</button></span>`).join('')}</div>`:''; }).join('')}
-      ${now.length?'':'<p class="note"><b>Nothing listed yet.</b> Start with the deep freezer.</p>'}
+      ${STOCK_PLACES.map(p=>{ const l=now.filter(x=>x.where===p[0]).sort((a,b)=>(a.at||0)-(b.at||0)); return l.length?`<div class="step">${p[1]} ${p[2]} <span style="font-weight:500">(${l.length})</span></div><div class="stk">${l.map(x=>`<span class="stki" data-stp="${x.id}" role="button">${isStaple(x)?'⭐ ':''}${esc(x.name)}${x.qty?` <small>${esc(x.qty)}</small>`:''}${stockAge(x)?` <small class="old">${stockAge(x)}</small>`:''}<button data-used="${x.id}" aria-label="Used">✕</button></span>`).join('')}</div>`:''; }).join('')}
+      ${now.length?`<p class="note" style="margin:2px 0 6px">⭐ = a staple: when the last one is used (✕), it goes on the shopping list by itself. Tap an item to switch ⭐ on or off.</p>`:'<p class="note"><b>Nothing listed yet.</b> Start with the deep freezer.</p>'}
       ${used.length?`<div class="step">Used lately <span style="font-weight:500">(tap to put back)</span></div><div class="stk">${used.map(x=>`<button class="stki gone" data-back="${x.id}">${esc(x.name)}</button>`).join('')}</div>`:''}
       <div class="step">🥫 Sauce shelf <span style="font-weight:500">(tap when one runs out: it goes on the shopping list)</span></div>
       ${sh.length?SAUCES.map(g=>g[0]).concat(['Ours']).map(g=>{ const l=sh.filter(x=>(x.grp||'Ours')===g); return l.length?`<div class="note" style="margin:6px 0 2px"><b>${g}</b></div><div class="stk">${l.map(x=>`<button class="stki sauce ${x.out?'out':''}" data-sc="${x.id}">${x.out?'🛒 ':'✓ '}${esc(x.name)}</button>`).join('')}</div>`:''; }).join('')+`<div class="row" style="margin-top:8px;gap:8px"><input class="txt" id="snew" placeholder="Add a sauce or staple" style="flex:1"><button class="xbtn" id="sadd">Add</button></div>`
@@ -1983,7 +1999,8 @@ function openStock(w0){ stockSettle(); let where=w0||'freezer';
     m.querySelector('#sgo').onclick=()=>add(); m.querySelector('#sin').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } };
     const sf=m.querySelector('#sf'), sfc=m.querySelector('#sfc'); m.querySelector('#scam').onclick=()=>photoChoice(sfc,sf);
     sf.onchange=sfc.onchange=async e=>{ const inp=e.target, fs=[]; for(const f of [...inp.files].slice(0,4)){ try{ fs.push(await fileForAI(f)); }catch(x){} } inp.value=''; if(fs.length) add(fs); };
-    m.querySelectorAll('[data-used]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.used); if(x){ x.used=Date.now(); save(); draw(); } });
+    m.querySelectorAll('[data-used]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const x=S.stock.find(y=>y.id===b.dataset.used); if(x){ x.used=Date.now(); stapleGone([x]); save(); draw(); } });
+    m.querySelectorAll('[data-stp]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.stp); if(!x) return; x.staple=!isStaple(x); save(); draw(); toast(x.staple?'⭐ '+x.name+': goes on the shopping list when it runs out':x.name+': won’t be added by itself'); });
     m.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.back); if(x){ delete x.used; save(); draw(); } });
     m.querySelectorAll('[data-sc]').forEach(b=>b.onclick=()=>{ const x=S.stock.find(y=>y.id===b.dataset.sc); if(!x) return; x.out=!x.out; if(x.out){ const n=buyAdd([x.name]); toast(x.name+(n?' added to the shopping list':' is already on the shopping list')); } save(); draw(); });
     const seed=m.querySelector('#seed'); if(seed) seed.onclick=()=>{ SAUCES.forEach(g=>g[1].forEach(n=>S.stock.push({id:uid(),name:n,where:'sauce',grp:g[0],out:false,at:Date.now()}))); save(); draw(); toast('Tap any you don’t have and it goes on the shopping list'); };
