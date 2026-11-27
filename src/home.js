@@ -1178,7 +1178,7 @@ const MSG_QUICK=['I’m home 🏠','Can you call me? 📞','I’m hungry 😋','
 let msgAs='', msgOpen=null, msgSeenAt=Date.now(), msgCtx=null;
 const msgFolk=()=>S.people.filter(p=>p.id!=='all');
 // who can write from this device: on a phone it is you; on the shared screen it is the people with no sign-in of their own (the kids)
-function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me].concat(S.people.filter(p=>p.id!=='all'&&p.id!==me&&!p.email&&p.show!==false).map(p=>p.id));   // a child without a phone can write from a parent's
+function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me].concat(S.people.filter(p=>p.id!=='all'&&p.id!==me&&!p.email).map(p=>p.id));   // a child without a phone can write from a parent's
   const kids=msgFolk().filter(p=>!p.email).map(p=>p.id); if(!isPhone()&&kids.length) return kids;
   return me?[me]:msgFolk().map(p=>p.id); }
 const msgThread=(a,b)=>b==='fam'||b==='fam2'?b:[a,b].sort().join('|');
