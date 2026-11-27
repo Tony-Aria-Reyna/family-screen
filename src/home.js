@@ -660,11 +660,11 @@ function addMonths(d,n){ const x=new Date(d); const day=x.getDate(); x.setDate(1
 const GIFT_ST=[['idea','💡 Idea'],['bought','🛍️ Bought'],['given','🎁 Given']];
 function giftAllowed(){ if(LOCAL) return true; const me=SYNC.me(); return (S.giftViewers||[]).includes(me); }
 function openGifts(){ requirePin(()=>giftsMain()); }
-function giftsMain(){
+function giftsMain(w){
   if(!LOCAL&&!(S.giftViewers||[]).length){ giftViewers(true); return; }
   if(!giftAllowed()){ modal((m,close)=>{ m.innerHTML=`<h2>🎁 Gift ideas</h2><p style="font-size:18px">Only ${esc((S.giftViewers||[]).join(', '))} can see gift ideas.</p><div class="mact"><button class="save" id="c">OK</button></div>`; m.querySelector('#c').onclick=close; }); return; }
   if(!LOCAL&&!SYNC.canSee('gifts')){ SYNC.retrySoft(); }
-  let who=lsGet('fs.giftFor','')||((eaters().find(p=>/aria/i.test(p.name))||eaters()[0]||{}).id);
+  let who=w||lsGet('fs.giftFor','')||((eaters().find(p=>/aria/i.test(p.name))||eaters()[0]||{}).id);
   modal((m,close)=>{ m.classList.add('wide','tvsheet'); const draw=()=>{ const list=(S.gifts||[]).filter(g=>g.for===who).sort((a,b)=>GIFT_ST.findIndex(s=>s[0]===a.status)-GIFT_ST.findIndex(s=>s[0]===b.status)||(b.at||0)-(a.at||0));
     m.innerHTML=`<div class="tvhead"><h2>🎁 Gift ideas</h2><button class="save" id="x">Done</button></div>
       <div class="opts mtabs">${eaters().map(p=>{ const n=(S.gifts||[]).filter(g=>g.for===p.id&&g.status!=='given').length; return `<button class="opt sm ${who===p.id?'on':''}" data-w="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}${n?` <b>${n}</b>`:''}</button>`; }).join('')}</div>
@@ -683,13 +683,15 @@ function editGift(g){
     m.innerHTML=`<h2>🎁 For ${esc(nm(g.for))}</h2><div class="rform"><label>Idea<input class="txt" id="i" value="${esc(g.idea)}"></label>
       <div class="row"><label>Price $<input class="txt" id="p" inputmode="decimal" value="${esc(g.price||'')}" style="width:120px"></label><label>For <small>(birthday, Christmas…)</small><input class="txt" id="o" value="${esc(g.occ||'')}"></label></div>
       <label>Notes or where to buy<input class="txt" id="n" value="${esc(g.notes||'')}"></label></div>
+      <div class="step">Who it’s for</div><div class="opts">${eaters().map(p=>`<button class="opt sm ${g.for===p.id?'on':''}" data-f="${p.id}"><span class="dot" style="background:${p.color}"></span> ${esc(p.name)}</button>`).join('')}</div>
       <div class="step">Status</div><div class="opts">${GIFT_ST.map(([v,l])=>`<button class="opt sm ${g.status===v?'on':''}" data-s="${v}">${l}</button>`).join('')}</div>
       <div class="mact"><button class="del" id="d">Delete</button><button class="cancel" id="c">Back</button><button class="save" id="s">Save</button></div>`;
     const grab=()=>{ g.idea=m.querySelector('#i').value.trim()||g.idea; g.price=m.querySelector('#p').value.trim(); g.occ=m.querySelector('#o').value.trim(); g.notes=m.querySelector('#n').value.trim(); };
     m.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ grab(); g.status=b.dataset.s; draw(); });
+    m.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ grab(); g.for=b.dataset.f; draw(); });
     m.querySelector('#d').onclick=()=>{ S.gifts=S.gifts.filter(x=>x.id!==g.id); save(); close(); giftsMain(); };
-    m.querySelector('#c').onclick=()=>{ close(); giftsMain(); };
-    m.querySelector('#s').onclick=()=>{ grab(); save(); close(); giftsMain(); };
+    m.querySelector('#c').onclick=()=>{ close(); giftsMain(g.for); };
+    m.querySelector('#s').onclick=()=>{ grab(); save(); close(); giftsMain(g.for); };
   }; draw(); });
 }
 function giftViewers(first){
