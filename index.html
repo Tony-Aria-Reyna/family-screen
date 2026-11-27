@@ -5575,7 +5575,7 @@ function openMsgs(th){
         m.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ msgOpen.th=b.dataset.th; draw(); }); return; }
       const t=msgOpen.th, fam=msgIsFam(t), other=msgOther(t,me), ms=msgIn(t), also=t==='fam'?msgLinkedIn():t==='fam2'?msgOnly():[]; msgMarkSeen(me,t);
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let lastDay='';
-      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${esc(msgName(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>${isPhone()&&mePerson()&&me!==mePerson()?`<div class="masbar">✍️ Writing as <b>${esc(nm(me))}</b><button class="cancel" id="asBack">Back to ${esc(nm(mePerson()))}</button></div>`:''}
+      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${esc(msgName(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>${isPhone()&&mePerson()&&me!==mePerson()?`<div class="masbar"><span>✍️ Writing as <b>${esc(nm(me))}</b></span><button class="cancel" id="asBack">Back to ${esc(nm(mePerson()))}</button></div>`:''}
         <div class="mbubs" id="mb">${also.length?`<div class="mday">👥 Everyone at home, and ${esc(also.join(', '))}</div>`:''}${ms.length?ms.map(x=>{ const d=dk(new Date(x.at)), sep=d!==lastDay?`<div class="mday">${d===dk(new Date())?'Today':fmtD(new Date(x.at),{weekday:'long',day:'numeric',month:'short'})}</div>`:''; lastDay=d; const mine=x.from===me;
           if(x.call) return sep+`<div class="mcall ${x.call.ok?'':'miss'}">${x.call.kind==='video'?'🎥':'📞'} ${esc(x.call.ok?(x.call.kind==='video'?'Video call':'Voice call')+' · '+callDur(x.call.dur):mine?'No answer':'Missed '+(x.call.kind==='video'?'video':'voice')+' call')} <small>${msgTime(x.at).replace(/^.* /,'')}</small>${x.call.ok?'':`<button class="cancel" data-cb="${x.call.kind==='video'?'video':'audio'}">${mine?'Call again':'Call back'}</button>`}</div>`;
           const pic=x.pic&&/^[\w-]+$/.test(x.pic.id||'')?`<span class="mpic" data-pic="${x.pic.id}" data-pg="${/^[\w-]+$/.test(x.g||'')?x.g:''}" style="aspect-ratio:${Math.max(1,+x.pic.w||4)}/${Math.max(1,+x.pic.h||3)};${picTiny(x.pic.t)?`background-image:url(${picTiny(x.pic.t)})`:''}">${picUrls[x.pic.id]?`<img src="${picUrls[x.pic.id]}" alt="Photo">`:''}</span>`:'';
@@ -7916,7 +7916,7 @@ else {
 }
 setInterval(()=>{ renderClock(); renderPhoneTop(); },15000);
 /* stay up to date: when a new version is published, reload by itself (waits if someone is mid-edit) */
-const FS_VERSION='fs-mwzkzrwh';
+const FS_VERSION='fs-mwzl0ahw';
 let updateReady=false;
 async function checkUpdate(){
   if(location.protocol!=='https:'||/[?&]demo/.test(location.search)) return;
