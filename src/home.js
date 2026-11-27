@@ -1442,9 +1442,9 @@ async function sortAdds(text,photo){
   const shops=S.shops.map(s=>`${s.id} = ${s.name}`).join('; ');
   const prompt=`Sort what a family member ${photo?'wrote on the attached photo of a paper note or list'+(text?' (and typed: """'+text+'""")':''):'typed: """'+text+'"""'} into calendar entries, jobs and shopping.
 People (id = names): ${ppl}. Shops (id = name): ${shops}. Today is ${dk(new Date())} (${fmtD(new Date(),{weekday:'long'})}), New Zealand.
-Return JSON only: {"bill":true or false,"items":[{"type":"event|todo|shop","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":["person ids, or empty"],"shop":"shop id or empty"}]}
+Return JSON only: {"bill":true or false,"items":[{"type":"event|todo|shop|gift","title":"short, in the language it was written in, without the date or time words","date":"YYYY-MM-DD or empty","time":"HH:MM (24 hour) or empty","mins":minutes or 0,"who":["person ids, or empty"],"shop":"shop id or empty"}]}
 "bill" is true when the photo or text is an invoice, statement or bill to pay (power, water, rates, phone, insurance and so on); then items can be empty.
-Rules: each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. One thing for several people is ONE item with all of them in who ("Tony and Aria to Nora's at 2pm" is one event, who = both): never repeat it per person. Never translate. Leave out anything crossed out.`;
+Rules: a present or gift idea for someone ("gift idea for Aria: Lego", "Reyna would love a scarf", "birthday present for Masako") is type gift, with who = the person it is for: NEVER put a gift on the shopping list. Each thing to buy is its own shop item ("milk and eggs" is two). Something happening at a day and time is an event. A thing to do is a todo (date = when it is due, if said). "for Aria", "Aria's" or "Aria:" sets who. One thing for several people is ONE item with all of them in who ("Tony and Aria to Nora's at 2pm" is one event, who = both): never repeat it per person. Never translate. Leave out anything crossed out.`;
   const out=await aiAsk({prompt:withMemory(prompt,text),json:true,file:photo||undefined});
   if(out&&out.bill&&photo){ const r=await billFromFile(photo); if(r){ const e=new Error(r.msg); e.bill=r.bill; throw e; } }
   const items=Array.isArray(out)?out:(out&&out.items)||[]; return items.filter(x=>x&&x.title);
@@ -1461,7 +1461,8 @@ function addRules(text){
     const t=low.match(/\b(\d{1,2})(?:[:.](\d\d))?\s*(am|pm)\b/); if(t){ let h=+t[1]%12; if(t[3]==='pm') h+=12; time=String(h).padStart(2,'0')+':'+(t[2]||'00'); if(!date) date=dk(now); }
     const clean=line.replace(/\b(by\s+|on\s+|at\s+)?(today|tomorrow|(sun|mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?)(day)?)\b/ig,'').replace(/\b(at\s+)?\d{1,2}([:.]\d\d)?\s*(am|pm)\b/ig,'').replace(/\s{2,}/g,' ').replace(/[\s,.-]+$/,'').trim()||line;
     const parts=line.replace(/^(buy|get|need|pick up)\s+/i,'').split(/,|\band\b|、|と/).map(x=>x.trim()).filter(Boolean);
-    if(date&&time) out.push({type:'event',title:clean,date,time,who});
+    if(/\b(gift|present)s?\b|プレゼント/i.test(line)) out.push({type:'gift',title:line.replace(/^\s*(a\s+)?(gift|present)( idea)?s?\s*(for\s+\S+)?\s*[:\-]?\s*/i,'').trim()||line,who});
+    else if(date&&time) out.push({type:'event',title:clean,date,time,who});
     else if(!date&&(/^(buy|get|need|pick up)\s+/i.test(line)||parts.every(x=>x.length<30&&guessAisle(x)!=='Other'))) parts.forEach(x=>out.push({type:'shop',title:x}));
     else out.push({type:'todo',title:clean,date,who});
   });
@@ -1472,6 +1473,10 @@ function applyAdds(items){
   for(const it of items||[]){
     const title=String(it.title||'').trim().slice(0,110); if(!title) continue;
     const whos=[...new Set([].concat(it.who||[]).filter(w=>S.people.some(p=>p.id===w&&p.id!=='all')))], who=whos[0]||'';
+    if(it.type==='gift'){   // gift ideas stay private to the people who can see them: the note never shows the idea itself
+      if(!LOCAL&&SYNC.canSee&&!SYNC.canSee('gifts')){ added.push({k:'',id:'',label:'🎁 '+tr('Gift ideas aren’t open on this account, so that wasn’t saved')}); continue; }
+      const fr=whos[0]||(eaters()[0]||{}).id||''; S.gifts=S.gifts||[]; const g={id:uid(),for:fr,idea:title.charAt(0).toUpperCase()+title.slice(1),status:'idea',at:Date.now(),by:mePerson()||''}; S.gifts.unshift(g);
+      added.push({k:'gifts',id:g.id,label:'🎁 '+tr('Gift idea saved')+(fr?' · '+tr('for')+' '+nm(fr):'')}); continue; }
     if(it.type==='shop'){ const sid=S.shops.some(s=>s.id===it.shop)?it.shop:suggestShop(title);
       const ex=S.groceries.find(x=>x.shop===sid&&x.name.toLowerCase()===title.toLowerCase());
       if(ex){ if(ex.done){ ex.done=false; added.push({k:'groceries',id:ex.id,undone:true,label:'🛒 '+ex.name+' ('+shop(sid).name+')'}); } continue; }
@@ -1491,7 +1496,7 @@ function applyAdds(items){
   return added;
 }
 function undoAdds(added){
-  added.forEach(a=>{ const l=S[a.k]||[], i=l.findIndex(x=>x.id===a.id); if(i<0) return; if(a.undone) l[i].done=true; else l.splice(i,1); });
+  added.forEach(a=>{ if(!a.k) return; const l=S[a.k]||[], i=l.findIndex(x=>x.id===a.id); if(i<0) return; if(a.undone) l[i].done=true; else l.splice(i,1); });
   save(); renderAll();
 }
 
