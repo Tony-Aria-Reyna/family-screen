@@ -1178,7 +1178,7 @@ const MSG_QUICK=['I’m home 🏠','Can you call me? 📞','I’m hungry 😋','
 let msgAs='', msgOpen=null, msgSeenAt=Date.now(), msgCtx=null;
 const msgFolk=()=>S.people.filter(p=>p.id!=='all');
 // who can write from this device: on a phone it is you; on the shared screen it is the people with no sign-in of their own (the kids)
-function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me];
+function msgWho(){ const me=mePerson(); if(isPhone()&&me) return [me].concat(S.people.filter(p=>p.id!=='all'&&p.id!==me&&!p.email&&p.show!==false).map(p=>p.id));   // a child without a phone can write from a parent's
   const kids=msgFolk().filter(p=>!p.email).map(p=>p.id); if(!isPhone()&&kids.length) return kids;
   return me?[me]:msgFolk().map(p=>p.id); }
 const msgThread=(a,b)=>b==='fam'||b==='fam2'?b:[a,b].sort().join('|');
@@ -1244,10 +1244,11 @@ function picView(id){ const u=picUrls[id]; if(!u) return; const v=document.creat
   v.querySelector('#va').onclick=async e=>{ const b=e.currentTarget; b.disabled=true; b.textContent='Adding…'; try{ const bl=await (await fetch(u)).blob(); await albumAdd([new File([bl],'From messages.jpg',{type:'image/jpeg'})]); }catch(x){ toast('Couldn’t add it to the album'); } v.remove(); }; }
 const picTiny=t=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(t||'')?t:'';
 function openMsgs(th){
-  const who=msgWho(); if(!msgAs||!who.includes(msgAs)) msgAs=who.length===1?who[0]:'';
+  const who=msgWho(); if(isPhone()&&mePerson()&&!msgOpen) msgAs=mePerson();   // a phone always opens as its owner
+  if(!msgAs||!who.includes(msgAs)) msgAs=who.length===1?who[0]:'';
   msgOpen={th:th||null};
   modal((m,close)=>{ m.classList.add('msgm'); m.id='msgBox';
-    const shut=()=>{ msgOpen=null; close(); renderAll(); };
+    const shut=()=>{ msgOpen=null; if(isPhone()&&mePerson()) msgAs=mePerson(); close(); renderAll(); };   // the phone is back to its owner when Messages closes
     const draw=()=>{
       if(!msgAs){ m.innerHTML=`<div class="tvhead"><h2>✉️ Messages</h2><button class="cancel" id="x">Close</button></div><p class="note">Who’s writing?</p><div class="mlist">${who.map(id=>`<button class="mrow" data-as="${id}">${msgFace(id)}<b>${esc(nm(id))}</b>${msgUnread(id)?`<i class="mdot">${msgUnread(id)}</i>`:''}</button>`).join('')}</div>`;
         m.querySelector('#x').onclick=shut; m.querySelectorAll('[data-as]').forEach(b=>b.onclick=()=>{ msgAs=b.dataset.as; draw(); }); return; }
@@ -1258,13 +1259,15 @@ function openMsgs(th){
         gc.forEach(c=>{ if(c.fam) list.push({o:c.fam,t:c.fam}); c.people.forEach(p=>list.push({o:p.id,t:p.th})); });
         const rows=list.map(({o,t})=>{ const ms=msgIn(t), last=ms[ms.length-1], n=msgUnread(me,t); return {o,t,last,n}; })
           .sort((a,b)=>(b.last?b.last.at:0)-(a.last?a.last.at:0));
-        m.innerHTML=`<div class="tvhead"><h2>✉️ Messages${who.length>1?` <small class="mas" id="sw">${esc(nm(me))} ▾</small>`:''}</h2><button class="cancel" id="x">Close</button></div>
+        m.innerHTML=`<div class="tvhead"><h2>✉️ Messages${who.length>1?(isPhone()&&mePerson()?` <span class="mas2">${who.map(id=>`<button class="opt sm ${id===me?'on':''}" data-as2="${id}">${esc(nm(id))}</button>`).join('')}</span>`:` <small class="mas" id="sw">${esc(nm(me))} ▾</small>`):''}</h2><button class="cancel" id="x">Close</button></div>
           <div class="mlist">${rows.map(r=>`<button class="mrow ${r.n?'unread':''}" data-th="${r.t}">${msgFace(r.o)}<span class="mmid"><b>${esc(msgName(r.o))}</b><small>${r.last?esc((r.last.from===me?'You: ':msgIsFam(r.t)?nm(r.last.from)+': ':'')+r.last.text):'Say hello 👋'}</small></span><span class="mend">${r.last?`<small>${msgTime(r.last.at)}</small>`:''}${r.n?`<i class="mdot">${r.n}</i>`:''}</span></button>`).join('')}</div>`;
         m.querySelector('#x').onclick=shut; const sw=m.querySelector('#sw'); if(sw) sw.onclick=()=>{ msgAs=''; draw(); };
+        { const ab=m.querySelector('#asBack'); if(ab) ab.onclick=()=>{ msgAs=mePerson(); msgOpen.th=null; draw(); }; }
+        m.querySelectorAll('[data-as2]').forEach(b=>b.onclick=()=>{ msgAs=b.dataset.as2; draw(); });
         m.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ msgOpen.th=b.dataset.th; draw(); }); return; }
       const t=msgOpen.th, fam=msgIsFam(t), other=msgOther(t,me), ms=msgIn(t), also=t==='fam'?msgLinkedIn():t==='fam2'?msgOnly():[]; msgMarkSeen(me,t);
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let lastDay='';
-      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${esc(msgName(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>
+      m.innerHTML=`<div class="tvhead mhead"><button class="cancel" id="bk" aria-label="Back">‹</button>${msgFace(other)}<h2>${esc(msgName(other))}</h2>${other!==me?`<button class="cancel mcallb" id="cA" aria-label="Voice call">📞</button><button class="cancel mcallb" id="cV" aria-label="Video call">🎥</button>`:''}<button class="cancel" id="x">Close</button></div>${isPhone()&&mePerson()&&me!==mePerson()?`<div class="masbar">✍️ Writing as <b>${esc(nm(me))}</b><button class="cancel" id="asBack">Back to ${esc(nm(mePerson()))}</button></div>`:''}
         <div class="mbubs" id="mb">${also.length?`<div class="mday">👥 Everyone at home, and ${esc(also.join(', '))}</div>`:''}${ms.length?ms.map(x=>{ const d=dk(new Date(x.at)), sep=d!==lastDay?`<div class="mday">${d===dk(new Date())?'Today':fmtD(new Date(x.at),{weekday:'long',day:'numeric',month:'short'})}</div>`:''; lastDay=d; const mine=x.from===me;
           if(x.call) return sep+`<div class="mcall ${x.call.ok?'':'miss'}">${x.call.kind==='video'?'🎥':'📞'} ${esc(x.call.ok?(x.call.kind==='video'?'Video call':'Voice call')+' · '+callDur(x.call.dur):mine?'No answer':'Missed '+(x.call.kind==='video'?'video':'voice')+' call')} <small>${msgTime(x.at).replace(/^.* /,'')}</small>${x.call.ok?'':`<button class="cancel" data-cb="${x.call.kind==='video'?'video':'audio'}">${mine?'Call again':'Call back'}</button>`}</div>`;
           const pic=x.pic&&/^[\w-]+$/.test(x.pic.id||'')?`<span class="mpic" data-pic="${x.pic.id}" data-pg="${/^[\w-]+$/.test(x.g||'')?x.g:''}" style="aspect-ratio:${Math.max(1,+x.pic.w||4)}/${Math.max(1,+x.pic.h||3)};${picTiny(x.pic.t)?`background-image:url(${picTiny(x.pic.t)})`:''}">${picUrls[x.pic.id]?`<img src="${picUrls[x.pic.id]}" alt="Photo">`:''}</span>`:'';
